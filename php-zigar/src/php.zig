@@ -1,105 +1,134 @@
 const std = @import("std");
 
+pub const c = @import("c");
+pub const ArgInfo = c.zend_arg_info;
+pub const Array = c.zend_array;
+pub const ClassEntry = c.zend_class_entry;
+pub const CompilerGlobals = c.zend_compiler_globals;
+pub const DirEntry = c.php_stream_dirent;
+pub const ExecutorGlobals = c.zend_executor_globals;
+pub const ExecuteData = c.zend_execute_data;
+pub const Fiber = c.zend_fiber;
+pub const FiberTransfer = c.zend_fiber_transfer;
+pub const Function = c.zend_function;
+pub const FunctionInfo = c.zend_internal_function_info;
+pub const HashPosition = c.HashPosition;
+pub const HashTable = c.HashTable;
+pub const IniEntryDef = c.zend_ini_entry_def;
+pub const IniEntry = c.zend_ini_entry;
+pub const InternalArgInfo = c.zend_internal_arg_info;
+pub const Long = c.zend_long;
+pub const Object = c.zend_object;
+pub const ObjectHandlers = c.zend_object_handlers;
+pub const ObjectIterator = c.zend_object_iterator;
+pub const ObjectIteratorFunctions = c.zend_object_iterator_funcs;
+pub const RefCounted = c.zend_refcounted;
+pub const Reference = c.zend_reference;
+pub const Resource = c.zend_resource;
+pub const Result = c.zend_result;
+pub const Stream = c.php_stream;
+pub const StreamContext = c.php_stream_context;
+pub const String = c.zend_string;
+pub const Uchar = c.zend_uchar;
+pub const Ulong = c.zend_ulong;
+pub const Value = c.zval;
+pub const SUCCESS = c.SUCCESS;
+pub const FAILURE = c.FAILURE;
+pub const BP_VAR_R = c.BP_VAR_R;
+pub const BP_VAR_W = c.BP_VAR_W;
+pub const BP_VAR_RW = c.BP_VAR_RW;
+pub const BP_VAR_IS = c.BP_VAR_IS;
+pub const BP_VAR_FUNC_ARG = c.BP_VAR_FUNC_ARG;
+pub const BP_VAR_UNSET = c.BP_VAR_UNSET;
+pub const MAY_BE_UNDEF = c.MAY_BE_UNDEF;
+pub const MAY_BE_NULL = c.MAY_BE_NULL;
+pub const MAY_BE_BOOL = c.MAY_BE_BOOL;
+pub const MAY_BE_LONG = c.MAY_BE_LONG;
+pub const MAY_BE_DOUBLE = c.MAY_BE_DOUBLE;
+pub const MAY_BE_STRING = c.MAY_BE_STRING;
+pub const MAY_BE_ARRAY = c.MAY_BE_ARRAY;
+pub const MAY_BE_OBJECT = c.MAY_BE_OBJECT;
+pub const INTERNAL_CLASS = c.ZEND_INTERNAL_CLASS;
+pub const USER_CLASS = c.ZEND_USER_CLASS;
+pub const INTERNAL_FUNCTION = c.ZEND_INTERNAL_FUNCTION;
+pub const USER_FUNCTION = c.ZEND_USER_FUNCTION;
+pub const ANON_CLASS = c.ZEND_ACC_ANON_CLASS;
+pub const FINAL = c.ZEND_ACC_FINAL;
+pub const LINKED = c.ZEND_ACC_LINKED;
+pub const NO_DYNAMIC_PROPERTIES = c.ZEND_ACC_NO_DYNAMIC_PROPERTIES;
+pub const NOT_SERIALIZABLE = c.ZEND_ACC_NOT_SERIALIZABLE;
+pub const RESOLVED_INTERFACES = c.ZEND_ACC_RESOLVED_INTERFACES;
+pub const STRICT_TYPES = c.ZEND_ACC_STRICT_TYPES;
+pub const initializeClassData = c.zend_initialize_class_data;
+pub const initializeIterator = c.zend_iterator_init;
+pub const freeIterator = c.zend_iterator_dtor;
+pub const initializeStandardObject = c.zend_object_std_init;
+pub const initializeObjectProperties = c.object_properties_init;
+pub const traceToString = c.zend_trace_to_string;
+pub const pipe = c.pipe;
+pub const utimbuf = c.utimbuf;
+pub const reportWrongParamCount = c.zend_wrong_param_count;
+pub const INI_USER = c.ZEND_INI_USER;
+pub const INI_PERDIR = c.ZEND_INI_PERDIR;
+pub const INI_SYSTEM = c.ZEND_INI_SYSTEM;
+pub const INI_ALL = c.ZEND_INI_ALL;
+pub const registerIniEntries = c.zend_register_ini_entries;
+pub const unregisterIniEntries = c.zend_unregister_ini_entries;
+pub const displayIniEntries = c.display_ini_entries;
+pub const onUpdateBool = c.OnUpdateBool;
+pub const onUpdateLong = c.OnUpdateLong;
+pub const onUpdateLongGEZero = c.OnUpdateLongGEZero;
+pub const onUpdateString = c.OnUpdateString;
+pub const onUpdateStringUnempty = c.OnUpdateStringUnempty;
+pub const iniBooleanDisplayer = c.zend_ini_boolean_displayer_cb;
+pub const infoTableStart = c.php_info_print_table_start;
+pub const infoTableHeader = c.php_info_print_table_header;
+pub const infoTableEnd = c.php_info_print_table_end;
+
 const debug = @import("debug.zig");
 const failure = @import("failure.zig");
 const fn_transform = @import("zigft/fn-transform.zig");
 
-pub const php_h = @cImport({
-    @cInclude("php.h");
-    @cInclude("zend_builtin_functions.h");
-    @cInclude("zend_exceptions.h");
-    @cInclude("zend_fibers.h");
-    @cInclude("zend_interfaces.h");
-    @cInclude("zend_closures.h");
-    @cInclude("ext/standard/info.h");
-});
+fn argCount(func: anytype) usize {
+    const Func = @TypeOf(func);
+    return @typeInfo(Func).@"fn".params.len;
+}
 
-pub const ArgInfo = php_h.zend_arg_info;
-pub const Array = php_h.zend_array;
-pub const ClassEntry = php_h.zend_class_entry;
-pub const CompilerGlobals = php_h.zend_compiler_globals;
-pub const DirEntry = php_h.php_stream_dirent;
-pub const ExecutorGlobals = php_h.zend_executor_globals;
-pub const ExecuteData = php_h.zend_execute_data;
-pub const Fiber = php_h.zend_fiber;
-pub const FiberTransfer = php_h.zend_fiber_transfer;
-pub const Function = php_h.zend_function;
 pub const FunctionEntry = extern struct {
     // zig_handler for some reason causes a "dependency loop detected" error
     // need to change it to *const anyopaque
     fname: [*c]const u8,
     handler: *const anyopaque,
-    arg_info: [*c]const php_h.zend_internal_arg_info,
+    arg_info: [*c]const c.zend_internal_arg_info,
     num_args: u32,
     flags: u32,
 };
-pub const FunctionInfo = php_h.zend_internal_function_info;
-pub const HashPosition = php_h.HashPosition;
-pub const HashTable = php_h.HashTable;
-pub const IniEntryDef = php_h.zend_ini_entry_def;
-pub const IniEntry = php_h.zend_ini_entry;
-pub const InternalArgInfo = php_h.zend_internal_arg_info;
-pub const Long = php_h.zend_long;
 pub const ModuleEntry = extern struct {
     size: c_ushort,
     zend_api: c_uint,
     zend_debug: u8,
     zts: u8,
-    ini_entry: [*c]const php_h.zend_ini_entry,
-    deps: [*c]const php_h.zend_module_dep,
+    ini_entry: [*c]const c.zend_ini_entry,
+    deps: [*c]const c.zend_module_dep,
     name: [*c]const u8,
     functions: [*c]const FunctionEntry,
-    module_startup_func: ?*const fn (c_int, c_int) callconv(.c) php_h.zend_result,
-    module_shutdown_func: ?*const fn (c_int, c_int) callconv(.c) php_h.zend_result,
-    request_startup_func: ?*const fn (c_int, c_int) callconv(.c) php_h.zend_result,
-    request_shutdown_func: ?*const fn (c_int, c_int) callconv(.c) php_h.zend_result,
+    module_startup_func: ?*const fn (c_int, c_int) callconv(.c) c.zend_result,
+    module_shutdown_func: ?*const fn (c_int, c_int) callconv(.c) c.zend_result,
+    request_startup_func: ?*const fn (c_int, c_int) callconv(.c) c.zend_result,
+    request_shutdown_func: ?*const fn (c_int, c_int) callconv(.c) c.zend_result,
     info_func: ?*const fn ([*c]@This()) callconv(.c) void,
     version: [*c]const u8,
     globals_size: usize,
     globals_ptr: ?*anyopaque,
     globals_ctor: ?*const fn (?*anyopaque) callconv(.c) void,
     globals_dtor: ?*const fn (?*anyopaque) callconv(.c) void,
-    post_deactivate_func: ?*const fn () callconv(.c) php_h.zend_result,
+    post_deactivate_func: ?*const fn () callconv(.c) c.zend_result,
     module_started: c_int,
     type: u8,
     handle: ?*anyopaque,
     module_number: c_int,
     build_id: [*c]const u8,
 };
-pub const Object = php_h.zend_object;
-pub const ObjectHandlers = php_h.zend_object_handlers;
-pub const ObjectIterator = php_h.zend_object_iterator;
-pub const ObjectIteratorFunctions = php_h.zend_object_iterator_funcs;
-pub const RefCounted = php_h.zend_refcounted;
-pub const Reference = php_h.zend_reference;
-pub const Resource = php_h.zend_resource;
-pub const Result = php_h.zend_result;
-pub const Stream = php_h.php_stream;
-pub const StreamContext = php_h.php_stream_context;
-pub const String = php_h.zend_string;
-pub const Uchar = php_h.zend_uchar;
-pub const Ulong = php_h.zend_ulong;
-pub const Value = php_h.zval;
-
-pub const SUCCESS = php_h.SUCCESS;
-pub const FAILURE = php_h.FAILURE;
-
-pub const BP_VAR_R = php_h.BP_VAR_R;
-pub const BP_VAR_W = php_h.BP_VAR_W;
-pub const BP_VAR_RW = php_h.BP_VAR_RW;
-pub const BP_VAR_IS = php_h.BP_VAR_IS;
-pub const BP_VAR_FUNC_ARG = php_h.BP_VAR_FUNC_ARG;
-pub const BP_VAR_UNSET = php_h.BP_VAR_UNSET;
-
-pub const MAY_BE_UNDEF = php_h.MAY_BE_UNDEF;
-pub const MAY_BE_NULL = php_h.MAY_BE_NULL;
-pub const MAY_BE_BOOL = php_h.MAY_BE_BOOL;
-pub const MAY_BE_LONG = php_h.MAY_BE_LONG;
-pub const MAY_BE_DOUBLE = php_h.MAY_BE_DOUBLE;
-pub const MAY_BE_STRING = php_h.MAY_BE_STRING;
-pub const MAY_BE_ARRAY = php_h.MAY_BE_ARRAY;
-pub const MAY_BE_OBJECT = php_h.MAY_BE_OBJECT;
-
 pub const PURPOSE_DEBUG = 0;
 pub const PURPOSE_ARRAY_CAST = 1;
 pub const PURPOSE_SERIALIZE = 2;
@@ -107,35 +136,22 @@ pub const PURPOSE_VAR_EXPORT = 3;
 pub const PURPOSE_JSON = 4;
 pub const PURPOSE_NON_EXHAUSTIVE_ENUM = 5;
 
-pub const INTERNAL_CLASS = php_h.ZEND_INTERNAL_CLASS;
-pub const USER_CLASS = php_h.ZEND_USER_CLASS;
-pub const INTERNAL_FUNCTION = php_h.ZEND_INTERNAL_FUNCTION;
-pub const USER_FUNCTION = php_h.ZEND_USER_FUNCTION;
+pub const std_object_handlers = &c.std_object_handlers;
+pub const empty_array = &c.zend_empty_array;
 
-pub const ANON_CLASS = php_h.ZEND_ACC_ANON_CLASS;
-pub const FINAL = php_h.ZEND_ACC_FINAL;
-pub const LINKED = php_h.ZEND_ACC_LINKED;
-pub const NO_DYNAMIC_PROPERTIES = php_h.ZEND_ACC_NO_DYNAMIC_PROPERTIES;
-pub const NOT_SERIALIZABLE = php_h.ZEND_ACC_NOT_SERIALIZABLE;
-pub const RESOLVED_INTERFACES = php_h.ZEND_ACC_RESOLVED_INTERFACES;
-pub const STRICT_TYPES = php_h.ZEND_ACC_STRICT_TYPES;
-
-pub const std_object_handlers = &php_h.std_object_handlers;
-pub const empty_array = &php_h.zend_empty_array;
-
-pub const empty_value: Value = .{ .u1 = .{ .type_info = php_h.IS_NULL } };
+pub const empty_value: Value = .{ .u1 = .{ .type_info = c.IS_NULL } };
 
 pub const use_tsrm = false;
 
 fn Globals(comptime name: []const u8) type {
-    return @TypeOf(&@field(php_h, name));
+    return @TypeOf(&@field(c, name));
 }
 
 pub fn getGlobals(comptime name: []const u8) Globals(name) {
     if (use_tsrm) {
         @compileError("TODO");
     } else {
-        return &@field(php_h, name);
+        return &@field(c, name);
     }
 }
 
@@ -330,32 +346,30 @@ pub fn removeError(retval: anytype) switch (@typeInfo(@TypeOf(retval))) {
     };
 }
 
-pub const initializeClassData = php_h.zend_initialize_class_data;
-
 pub fn findClassEntry(comptime name: []const u8) ?*ClassEntry {
-    return php_h.zend_lookup_class(getStaticString(name));
+    return c.zend_lookup_class(getStaticString(name));
 }
 
 pub const ValueType = enum(u8) {
-    undefined = php_h.IS_UNDEF, // 0
-    null = php_h.IS_NULL, // 1
-    false = php_h.IS_FALSE, // 2
-    true = php_h.IS_TRUE, // 3
-    long = php_h.IS_LONG, // 4
-    double = php_h.IS_DOUBLE, // 5
-    string = php_h.IS_STRING, // 6
-    array = php_h.IS_ARRAY, // 7
-    object = php_h.IS_OBJECT, // 8
-    resource = php_h.IS_RESOURCE, // 9
-    reference = php_h.IS_REFERENCE, // 10
-    constant_ast = php_h.IS_CONSTANT_AST, // 11
-    callable = php_h.IS_CALLABLE, // 12
-    pointer = php_h.IS_PTR, // 13
+    undefined = c.IS_UNDEF, // 0
+    null = c.IS_NULL, // 1
+    false = c.IS_FALSE, // 2
+    true = c.IS_TRUE, // 3
+    long = c.IS_LONG, // 4
+    double = c.IS_DOUBLE, // 5
+    string = c.IS_STRING, // 6
+    array = c.IS_ARRAY, // 7
+    object = c.IS_OBJECT, // 8
+    resource = c.IS_RESOURCE, // 9
+    reference = c.IS_REFERENCE, // 10
+    constant_ast = c.IS_CONSTANT_AST, // 11
+    callable = c.IS_CALLABLE, // 12
+    pointer = c.IS_PTR, // 13
 
     // fake types
-    @"error" = php_h._IS_ERROR, // 15
-    boolean = php_h._IS_BOOL, // 18
-    number = php_h._IS_NUMBER, // 19
+    @"error" = c._IS_ERROR, // 15
+    boolean = c._IS_BOOL, // 18
+    number = c._IS_NUMBER, // 19
 
     pub fn fromInt(n: c_int) !@This() {
         return std.meta.intToEnum(@This(), n);
@@ -382,7 +396,7 @@ pub const GarbageCollectionColor = enum(u2) {
 };
 
 pub fn isGarbage(arg: anytype) bool {
-    return php_h.GC_INFO(arg) != 0;
+    return c.GC_INFO(arg) != 0;
 }
 
 pub fn isGmpObject(obj: *Object) bool {
@@ -397,20 +411,20 @@ pub fn getValueType(value: *const Value) ValueType {
 
 pub fn createValueNull() Value {
     var result: Value = .{};
-    result.u1.type_info = php_h.IS_NULL;
+    result.u1.type_info = c.IS_NULL;
     return result;
 }
 
 pub fn createValueBool(b: bool) Value {
     var result: Value = .{};
-    result.u1.type_info = if (b) php_h.IS_TRUE else php_h.IS_FALSE;
+    result.u1.type_info = if (b) c.IS_TRUE else c.IS_FALSE;
     return result;
 }
 
 pub fn createValueLong(l: Long) Value {
     var result: Value = .{};
     result.value.lval = l;
-    result.u1.type_info = php_h.IS_LONG;
+    result.u1.type_info = c.IS_LONG;
     return result;
 }
 
@@ -440,7 +454,7 @@ pub fn createValueAnyInt(i: anytype) Value {
 pub fn createValueDouble(d: f64) Value {
     var result: Value = .{};
     result.value.dval = d;
-    result.u1.type_info = php_h.IS_DOUBLE;
+    result.u1.type_info = c.IS_DOUBLE;
     return result;
 }
 
@@ -448,9 +462,9 @@ pub fn createValueString(s: *String) Value {
     var result: Value = .{};
     result.value.str = s;
     // non-interned string need to be gc'ed
-    result.u1.type_info = switch (s.gc.u.type_info & php_h.IS_STR_INTERNED) {
-        0 => php_h.IS_STRING_EX,
-        else => php_h.IS_STRING,
+    result.u1.type_info = switch (s.gc.u.type_info & c.IS_STR_INTERNED) {
+        0 => c.IS_STRING_EX,
+        else => c.IS_STRING,
     };
     return result;
 }
@@ -466,29 +480,29 @@ pub inline fn createValuePersistentString(sc: []const u8) Value {
 pub fn createValueObject(object: ?*Object) Value {
     var result: Value = .{};
     result.value.obj = object orelse createStandardObject();
-    result.u1.type_info = php_h.IS_OBJECT_EX;
+    result.u1.type_info = c.IS_OBJECT_EX;
     return result;
 }
 
 pub fn createValueReference(target: *const Value) Value {
     var result: Value = .{};
     const ref: *Reference = @ptrCast(@alignCast(emalloc(@sizeOf(Reference))));
-    ref.gc = .{ .refcount = 1, .u = .{ .type_info = php_h.GC_REFERENCE } };
+    ref.gc = .{ .refcount = 1, .u = .{ .type_info = c.GC_REFERENCE } };
     ref.val = target.*;
     ref.sources = .{ .ptr = null };
     result.value.ref = ref;
-    result.u1.type_info = php_h.IS_REFERENCE_EX;
+    result.u1.type_info = c.IS_REFERENCE_EX;
     return result;
 }
 
 pub fn createValueNewObject(name: *const String, params: []const Value) !Value {
     var result: Value = undefined;
-    const ce = php_h.zend_lookup_class(@constCast(name)) orelse return error.NonexistentClass;
-    if (php_h.object_init_ex(&result, ce) != php_h.SUCCESS) return error.CannotCreateObject;
+    const ce = c.zend_lookup_class(@constCast(name)) orelse return error.NonexistentClass;
+    if (c.object_init_ex(&result, ce) != c.SUCCESS) return error.CannotCreateObject;
     const obj = result.value.obj;
     const ctor = obj.*.handlers.*.get_constructor.?(obj);
     if (ctor) |f| {
-        php_h.zend_call_known_function(
+        c.zend_call_known_function(
             f,
             obj,
             obj.*.ce,
@@ -504,14 +518,14 @@ pub fn createValueNewObject(name: *const String, params: []const Value) !Value {
 pub fn createValuePointer(ptr: ?*anyopaque) Value {
     var result: Value = .{};
     result.value.ptr = ptr;
-    result.u1.type_info = php_h.IS_PTR;
+    result.u1.type_info = c.IS_PTR;
     return result;
 }
 
 pub fn createValueArray(arr: ?*Array) Value {
     var result: Value = .{};
     result.value.arr = arr orelse createArray();
-    result.u1.type_info = php_h.IS_ARRAY_EX;
+    result.u1.type_info = c.IS_ARRAY_EX;
     return result;
 }
 
@@ -529,15 +543,15 @@ pub fn createValueDebug(value: *const Value) Value {
 
 fn StringWithLength(comptime len: usize) type {
     return extern struct {
-        gc: php_h.zend_refcounted_h = undefined,
-        h: php_h.zend_ulong = undefined,
+        gc: c.zend_refcounted_h = undefined,
+        h: c.zend_ulong = undefined,
         len: usize = len,
         val: [len + 1]u8 = undefined,
     };
 }
 
 pub fn calculateStringHash(s: []const u8) Ulong {
-    return php_h.zend_inline_hash_func(s.ptr, s.len);
+    return c.zend_inline_hash_func(s.ptr, s.len);
 }
 
 pub fn getStaticString(comptime s: []const u8) *String {
@@ -547,7 +561,7 @@ pub fn getStaticString(comptime s: []const u8) *String {
             .gc = .{
                 .refcount = 0,
                 .u = .{
-                    .type_info = php_h.IS_STRING | php_h.IS_STR_PERMANENT | php_h.IS_STR_INTERNED | php_h.GC_NOT_COLLECTABLE,
+                    .type_info = c.IS_STRING | c.IS_STR_PERMANENT | c.IS_STR_INTERNED | c.GC_NOT_COLLECTABLE,
                 },
             },
             .h = calculateStringHash(s),
@@ -572,70 +586,70 @@ pub fn createValueStream(strm: *Stream) Value {
 
 pub fn createValueClosure(func: *Function, scope: ?*ClassEntry, called_scope: ?*ClassEntry, this_ptr: ?*const Value) Value {
     var result: Value = undefined;
-    php_h.zend_create_closure(&result, func, scope, called_scope, @constCast(this_ptr));
+    c.zend_create_closure(&result, func, scope, called_scope, @constCast(this_ptr));
     return result;
 }
 
 pub fn empty(comptime T: type) *T {
     return switch (T) {
-        String => php_h.zend_empty_string,
-        Array => @constCast(&php_h.zend_empty_array),
+        String => c.zend_empty_string,
+        Array => @constCast(&c.zend_empty_array),
         else => @compileError("No empty version: " ++ @typeName(T)),
     };
 }
 
 pub fn convertValue(value: *Value, desired_type: ValueType) !void {
     switch (desired_type) {
-        .boolean => php_h.convert_to_boolean(value),
-        .long => php_h.convert_to_long(value),
-        .string => php_h._convert_to_string(value),
-        .array => php_h.convert_to_array(value),
-        .object => php_h.convert_to_object(value),
-        .double => php_h.convert_to_double(value),
-        .null => php_h.convert_to_null(value),
+        .boolean => c.convert_to_boolean(value),
+        .long => c.convert_to_long(value),
+        .string => c._convert_to_string(value),
+        .array => c.convert_to_array(value),
+        .object => c.convert_to_object(value),
+        .double => c.convert_to_double(value),
+        .null => c.convert_to_null(value),
         else => return error.Unexpected,
     }
 }
 
 pub fn compareValues(a: *const Value, b: *const Value) c_int {
-    return php_h.zend_compare(@constCast(a), @constCast(b));
+    return c.zend_compare(@constCast(a), @constCast(b));
 }
 
 pub fn isValueNull(value: *const Value) bool {
-    return value.u1.v.type == php_h.IS_NULL;
+    return value.u1.v.type == c.IS_NULL;
 }
 
 pub fn getValueNull(value: *const Value) !void {
     return switch (value.u1.v.type) {
-        php_h.IS_NULL => {},
+        c.IS_NULL => {},
         else => error.NotNull,
     };
 }
 
 pub fn getValueBool(value: *const Value) !bool {
     return switch (value.u1.v.type) {
-        php_h.IS_TRUE => true,
-        php_h.IS_FALSE => false,
+        c.IS_TRUE => true,
+        c.IS_FALSE => false,
         else => error.NotBoolean,
     };
 }
 
 pub fn getValueLong(value: *const Value) !Long {
     return switch (value.u1.v.type) {
-        php_h.IS_LONG => value.value.lval,
-        php_h.IS_STRING => convert: {
+        c.IS_LONG => value.value.lval,
+        c.IS_STRING => convert: {
             const s: [*c]u8 = &value.value.str.*.val;
             const len = value.value.str.*.len;
             var long: Long = undefined;
             var double: f64 = undefined;
-            const result = php_h.is_numeric_string(s, len, &long, &double, false);
+            const result = c.is_numeric_string(s, len, &long, &double, false);
             break :convert switch (result) {
-                php_h.IS_LONG => long,
-                php_h.IS_DOUBLE => try doubleToLong(double),
+                c.IS_LONG => long,
+                c.IS_DOUBLE => try doubleToLong(double),
                 else => error.NotInteger,
             };
         },
-        php_h.IS_DOUBLE => convert: {
+        c.IS_DOUBLE => convert: {
             break :convert try doubleToLong(value.value.dval);
         },
         else => error.NotInteger,
@@ -665,20 +679,20 @@ pub fn getValueUsize(value: *const Value) !usize {
 
 pub fn getValueDouble(value: *const Value) !f64 {
     return switch (value.u1.v.type) {
-        php_h.IS_DOUBLE => value.value.dval,
-        php_h.IS_STRING => convert: {
+        c.IS_DOUBLE => value.value.dval,
+        c.IS_STRING => convert: {
             const s: [*c]u8 = &value.value.str.*.val;
             const len = value.value.str.*.len;
             var long: Long = undefined;
             var double: f64 = undefined;
-            const result = php_h.is_numeric_string(s, len, &long, &double, false);
+            const result = c.is_numeric_string(s, len, &long, &double, false);
             break :convert switch (result) {
-                php_h.IS_DOUBLE => double,
-                php_h.IS_LONG => try longToDouble(long),
+                c.IS_DOUBLE => double,
+                c.IS_LONG => try longToDouble(long),
                 else => error.NotDouble,
             };
         },
-        php_h.IS_LONG => convert: {
+        c.IS_LONG => convert: {
             break :convert try longToDouble(value.value.lval);
         },
         else => error.NotDouble,
@@ -697,32 +711,32 @@ fn longToDouble(value: Long) !f64 {
 
 pub fn getValueString(value: *const Value) !*String {
     return switch (value.u1.v.type) {
-        php_h.IS_STRING => value.value.str,
+        c.IS_STRING => value.value.str,
         else => error.NotString,
     };
 }
 
 pub fn getValueStringContent(value: *const Value) ![]const u8 {
     return switch (value.u1.v.type) {
-        php_h.IS_STRING => getStringContent(value.value.str),
+        c.IS_STRING => getStringContent(value.value.str),
         else => error.NotString,
     };
 }
 
 pub fn getValueArray(value: *const Value) !*Array {
     return switch (value.u1.v.type) {
-        php_h.IS_ARRAY => value.value.arr,
+        c.IS_ARRAY => value.value.arr,
         else => error.NotArray,
     };
 }
 
 pub fn getValueStream(value: *const Value) !*Stream {
-    if (value.u1.v.type == php_h.IS_RESOURCE) {
-        const res_ptr = php_h.zend_fetch_resource2_ex(
+    if (value.u1.v.type == c.IS_RESOURCE) {
+        const res_ptr = c.zend_fetch_resource2_ex(
             @constCast(value),
             "stream",
-            php_h.php_file_le_stream(),
-            php_h.php_file_le_pstream(),
+            c.php_file_le_stream(),
+            c.php_file_le_pstream(),
         );
         if (res_ptr) |ptr| return @ptrCast(@alignCast(ptr));
     }
@@ -731,29 +745,29 @@ pub fn getValueStream(value: *const Value) !*Stream {
 
 pub fn getValueHashTable(value: *const Value) !*HashTable {
     return switch (value.u1.v.type) {
-        php_h.IS_ARRAY => value.value.arr,
-        php_h.IS_OBJECT => value.value.obj.*.properties orelse error.NotArrayOrObject,
+        c.IS_ARRAY => value.value.arr,
+        c.IS_OBJECT => value.value.obj.*.properties orelse error.NotArrayOrObject,
         else => error.NotArrayOrObject,
     };
 }
 
 pub fn getValueObject(value: *const Value) !*Object {
     return switch (value.u1.v.type) {
-        php_h.IS_OBJECT => value.value.obj,
+        c.IS_OBJECT => value.value.obj,
         else => error.NotObject,
     };
 }
 
 pub fn getValueReference(value: *const Value) !*Reference {
     return switch (value.u1.v.type) {
-        php_h.IS_REFERENCE => value.value.ref,
+        c.IS_REFERENCE => value.value.ref,
         else => error.NotReference,
     };
 }
 
 pub fn getValuePointer(comptime T: type, value: *const Value) !T {
     return switch (value.u1.v.type) {
-        php_h.IS_PTR => if (value.value.ptr) |p|
+        c.IS_PTR => if (value.value.ptr) |p|
             @ptrCast(@alignCast(p))
         else
             error.NullPointer,
@@ -798,10 +812,10 @@ pub fn addElementRef(array: *Value, element: *Value) !void {
 
 pub fn createString(s: []const u8) *String {
     return switch (s.len) {
-        0 => php_h.zend_empty_string,
-        1 => php_h.zend_one_char_string[s[0]],
+        0 => c.zend_empty_string,
+        1 => c.zend_one_char_string[s[0]],
         else => create: {
-            const zs = php_h.zend_string_alloc(s.len, false);
+            const zs = c.zend_string_alloc(s.len, false);
             const ds: [*]u8 = @ptrCast(&zs.*.val[0]);
             @memcpy(ds[0..s.len], s);
             ds[s.len] = '\x00';
@@ -811,24 +825,24 @@ pub fn createString(s: []const u8) *String {
 }
 
 pub fn dupliateString(str: *String) *String {
-    return php_h.zend_string_dup(str, false);
+    return c.zend_string_dup(str, false);
 }
 
 pub fn isStringInterned(str: *String) bool {
-    return (str.gc.u.type_info & php_h.IS_STR_INTERNED) != 0;
+    return (str.gc.u.type_info & c.IS_STR_INTERNED) != 0;
 }
 
 pub fn createStringWithLength(len: usize) *String {
     const zs = switch (len) {
-        0 => php_h.zend_empty_string,
-        else => php_h.zend_string_alloc(len, false),
+        0 => c.zend_empty_string,
+        else => c.zend_string_alloc(len, false),
     };
     if (@intFromPtr(zs) == 0x00007f8beb601c40) @breakpoint();
     return zs;
 }
 
 pub fn createInternedString(s: []const u8) *String {
-    return php_h.zend_string_init_interned.?(s.ptr, s.len, false);
+    return c.zend_string_init_interned.?(s.ptr, s.len, false);
 }
 
 pub fn getStringContent(str: *const String) []const u8 {
@@ -849,19 +863,19 @@ pub fn matchString(s: *const String, text: []const u8) bool {
 }
 
 pub fn createStandardObject() *Object {
-    const obj = php_h.zend_objects_new(php_h.zend_standard_class_def);
-    obj.*.properties = php_h._zend_new_array_0();
+    const obj = c.zend_objects_new(c.zend_standard_class_def);
+    obj.*.properties = c._zend_new_array_0();
     return obj;
 }
 
 pub fn createArray() *Array {
-    return php_h._zend_new_array_0();
+    return c._zend_new_array_0();
 }
 
 pub fn createNonDestructiveArray() *Array {
     const bytes = emalloc(@sizeOf(HashTable));
     const ht: *HashTable = @ptrCast(@alignCast(bytes));
-    php_h._zend_hash_init(ht, php_h.HT_MIN_SIZE, null, false);
+    c._zend_hash_init(ht, c.HT_MIN_SIZE, null, false);
     return ht;
 }
 
@@ -875,7 +889,7 @@ pub fn convertIterator(value: *const Value) Value {
         const ce: *ClassEntry = obj.ce;
         if (ce.get_iterator) |get_iterator| {
             if (get_iterator(ce, @constCast(value), 0)) |iter| {
-                defer php_h.zend_iterator_dtor(iter);
+                defer c.zend_iterator_dtor(iter);
                 const new_array = createArray();
                 const handlers = iter.*.funcs.?;
                 const rewind = handlers.*.rewind.?;
@@ -898,18 +912,18 @@ pub fn convertIterator(value: *const Value) Value {
 }
 
 pub const destructor = struct {
-    pub const function = php_h.zend_function_dtor;
-    pub const value = php_h.zval_ptr_dtor;
+    pub const function = c.zend_function_dtor;
+    pub const value = c.zval_ptr_dtor;
 };
 
-pub fn createHashTable(dtor: php_h.dtor_func_t) HashTable {
+pub fn createHashTable(dtor: c.dtor_func_t) HashTable {
     var result: HashTable = undefined;
-    php_h._zend_hash_init(&result, php_h.HT_MIN_SIZE, dtor, false);
+    c._zend_hash_init(&result, c.HT_MIN_SIZE, dtor, false);
     return result;
 }
 
 pub fn destroyHashTable(ht: *HashTable) void {
-    php_h.zend_hash_destroy(ht);
+    c.zend_hash_destroy(ht);
 }
 
 pub fn getHashLength(ht: *const HashTable) usize {
@@ -926,11 +940,11 @@ pub fn getHashEntry(ht: *const HashTable, key: anytype) !*Value {
         };
     }
     return if (comptime isStringContent(KT))
-        php_h.zend_hash_str_find(ht, key.ptr, key.len) orelse error.Missing
+        c.zend_hash_str_find(ht, key.ptr, key.len) orelse error.Missing
     else if (comptime isString(KT))
-        php_h.zend_hash_find(ht, @constCast(key)) orelse error.Missing
+        c.zend_hash_find(ht, @constCast(key)) orelse error.Missing
     else if (comptime isInt(KT))
-        php_h.zend_hash_index_find(ht, @intCast(key)) orelse error.Missing
+        c.zend_hash_index_find(ht, @intCast(key)) orelse error.Missing
     else
         @compileError("Invalid key: " ++ @typeName(KT));
 }
@@ -987,13 +1001,13 @@ pub fn insertHashEntry(ht: *HashTable, key: anytype, value: *const Value) *Value
             else => @panic("Invalid key"),
         };
     }
-    ht.*.u.flags |= php_h.HASH_FLAG_ALLOW_COW_VIOLATION;
+    ht.*.u.flags |= c.HASH_FLAG_ALLOW_COW_VIOLATION;
     const result = if (comptime isStringContent(KT))
-        php_h.zend_hash_str_update(ht, key.ptr, key.len, @constCast(value))
+        c.zend_hash_str_update(ht, key.ptr, key.len, @constCast(value))
     else if (comptime isInt(KT))
-        php_h.zend_hash_index_update(ht, @intCast(key), @constCast(value))
+        c.zend_hash_index_update(ht, @intCast(key), @constCast(value))
     else if (comptime isString(KT))
-        php_h.zend_hash_update(ht, key, @constCast(value))
+        c.zend_hash_update(ht, key, @constCast(value))
     else
         @compileError("Invalid key: " ++ @typeName(KT));
     return @ptrCast(result);
@@ -1013,9 +1027,9 @@ pub fn getHashNextKey(ht: *HashTable) Long {
 }
 
 pub fn appendHashEntry(ht: *HashTable, value: *const Value) usize {
-    ht.*.u.flags |= php_h.HASH_FLAG_ALLOW_COW_VIOLATION;
-    _ = php_h.zend_hash_next_index_insert(ht, @constCast(value));
-    return php_h.zend_hash_num_elements(ht);
+    ht.*.u.flags |= c.HASH_FLAG_ALLOW_COW_VIOLATION;
+    _ = c.zend_hash_next_index_insert(ht, @constCast(value));
+    return c.zend_hash_num_elements(ht);
 }
 
 pub fn appendHashEntryRef(ht: *HashTable, value: *const Value) usize {
@@ -1025,13 +1039,13 @@ pub fn appendHashEntryRef(ht: *HashTable, value: *const Value) usize {
 
 pub fn removeHashEntry(ht: *HashTable, key: anytype) bool {
     const KT = @TypeOf(key);
-    ht.*.u.flags |= php_h.HASH_FLAG_ALLOW_COW_VIOLATION;
+    ht.*.u.flags |= c.HASH_FLAG_ALLOW_COW_VIOLATION;
     const result = if (comptime isStringContent(KT))
-        php_h.zend_hash_str_del(ht, key.ptr, key.len)
+        c.zend_hash_str_del(ht, key.ptr, key.len)
     else if (comptime isString(KT))
-        php_h.zend_hash_del(ht, key)
+        c.zend_hash_del(ht, key)
     else if (comptime isInt(KT))
-        php_h.zend_hash_index_del(ht, @intCast(key))
+        c.zend_hash_index_del(ht, @intCast(key))
     else
         @compileError("Invalid key: " ++ @typeName(KT));
     return result == SUCCESS;
@@ -1044,11 +1058,11 @@ pub fn deleteHashEntry(ht: *HashTable, key: anytype) void {
 pub fn hasHashEntry(ht: *HashTable, key: anytype) bool {
     const KT = @TypeOf(key);
     return if (comptime isStringContent(KT))
-        php_h.zend_hash_str_exists(ht, key.ptr, key.len)
+        c.zend_hash_str_exists(ht, key.ptr, key.len)
     else if (comptime isString(KT))
-        php_h.zend_hash_exists(ht, key)
+        c.zend_hash_exists(ht, key)
     else if (comptime isInt(KT))
-        php_h.zend_hash_index_exists(ht, @intCast(key))
+        c.zend_hash_index_exists(ht, @intCast(key))
     else
         @compileError("Invalid key: " ++ @typeName(KT));
 }
@@ -1070,8 +1084,8 @@ pub const HashTableIterator = struct {
         var pos: HashPosition = undefined;
         const nc_ht = @constCast(ht);
         switch (options.dir) {
-            .forward => php_h.zend_hash_internal_pointer_reset_ex(nc_ht, &pos),
-            .backward => php_h.zend_hash_internal_pointer_end_ex(nc_ht, &pos),
+            .forward => c.zend_hash_internal_pointer_reset_ex(nc_ht, &pos),
+            .backward => c.zend_hash_internal_pointer_end_ex(nc_ht, &pos),
         }
         return .{
             .ht = nc_ht,
@@ -1083,8 +1097,8 @@ pub const HashTableIterator = struct {
 
     pub fn reset(self: *@This()) void {
         switch (self.dir) {
-            .forward => php_h.zend_hash_internal_pointer_reset_ex(self.ht, &self.pos),
-            .backward => php_h.zend_hash_internal_pointer_end_ex(self.ht, &self.pos),
+            .forward => c.zend_hash_internal_pointer_reset_ex(self.ht, &self.pos),
+            .backward => c.zend_hash_internal_pointer_end_ex(self.ht, &self.pos),
         }
         self.returned = false;
     }
@@ -1093,18 +1107,18 @@ pub const HashTableIterator = struct {
         defer self.returned = true;
         if (self.returned) {
             switch (self.dir) {
-                .forward => _ = php_h.zend_hash_move_forward_ex(self.ht, &self.pos),
-                .backward => _ = php_h.zend_hash_move_backwards_ex(self.ht, &self.pos),
+                .forward => _ = c.zend_hash_move_forward_ex(self.ht, &self.pos),
+                .backward => _ = c.zend_hash_move_backwards_ex(self.ht, &self.pos),
             }
         }
         self.key = null;
-        return php_h.zend_hash_get_current_data_ex(self.ht, &self.pos);
+        return c.zend_hash_get_current_data_ex(self.ht, &self.pos);
     }
 
     pub fn currentKey(self: *@This()) *Value {
         if (self.key == null) {
             var key: Value = undefined;
-            php_h.zend_hash_get_current_key_zval_ex(self.ht, &key, &self.pos);
+            c.zend_hash_get_current_key_zval_ex(self.ht, &key, &self.pos);
             self.key = key;
             // don't increment the key's refcount
             if (getValueType(&key) == .string) release(&key);
@@ -1156,12 +1170,9 @@ pub fn HashTableObjectIterator(comptime T: type) type {
     };
 }
 
-pub const initializeIterator = php_h.zend_iterator_init;
-pub const freeIterator = php_h.zend_iterator_dtor;
-
 pub fn readObjectProperty(obj: *const Object, name: *const String) Value {
     var value: Value = createValueNull();
-    _ = php_h.zend_read_property_ex(obj.ce, @constCast(obj), @constCast(name), true, &value);
+    _ = c.zend_read_property_ex(obj.ce, @constCast(obj), @constCast(name), true, &value);
     return value;
 }
 
@@ -1169,15 +1180,15 @@ pub fn addRef(value: anytype) void {
     const T = @TypeOf(value);
     switch (T) {
         *Value, *const Value, [*c]Value => {
-            if (value.u1.type_info & php_h.Z_TYPE_FLAGS_MASK != 0) {
-                _ = php_h.zval_addref_p(@constCast(value));
+            if (value.u1.type_info & c.Z_TYPE_FLAGS_MASK != 0) {
+                _ = c.zval_addref_p(@constCast(value));
             }
         },
         *String, [*c]String => {
-            _ = php_h.zend_string_addref(value);
+            _ = c.zend_string_addref(value);
         },
         *Object, [*c]Object, *HashTable, [*c]HashTable, *Resource, [*c]Resource => {
-            _ = php_h.GC_ADDREF(value);
+            _ = c.GC_ADDREF(value);
         },
         else => @compileError("Unexpected type: " ++ @typeName(T)),
     }
@@ -1187,12 +1198,12 @@ pub fn delRef(value: anytype) void {
     const T = @TypeOf(value);
     switch (T) {
         *Value, *const Value, [*c]Value => {
-            if (value.u1.type_info & php_h.Z_TYPE_FLAGS_MASK != 0) {
-                _ = php_h.zval_delref_p(@constCast(value));
+            if (value.u1.type_info & c.Z_TYPE_FLAGS_MASK != 0) {
+                _ = c.zval_delref_p(@constCast(value));
             }
         },
         *String, [*c]String, *Object, [*c]Object, *HashTable, [*c]HashTable, *Resource, [*c]Resource => {
-            _ = php_h.GC_DELREF(value);
+            _ = c.GC_DELREF(value);
         },
         else => {},
     }
@@ -1201,11 +1212,11 @@ pub fn delRef(value: anytype) void {
 pub fn release(value: anytype) void {
     const T = @TypeOf(value);
     switch (T) {
-        *Value, *const Value, [*c]Value => php_h.zval_ptr_dtor(@constCast(value)),
-        *String, [*c]String => php_h.zend_string_release(value),
-        *Object, [*c]Object => php_h.zend_object_release(value),
-        *HashTable, [*c]HashTable => php_h.zend_hash_release(value),
-        *Resource, [*c]Resource => _ = php_h.zend_list_delete(value),
+        *Value, *const Value, [*c]Value => c.zval_ptr_dtor(@constCast(value)),
+        *String, [*c]String => c.zend_string_release(value),
+        *Object, [*c]Object => c.zend_object_release(value),
+        *HashTable, [*c]HashTable => c.zend_hash_release(value),
+        *Resource, [*c]Resource => _ = c.zend_list_delete(value),
         else => @compileError("Unexpected type: " ++ @typeName(T)),
     }
 }
@@ -1219,7 +1230,7 @@ pub fn reuse(value: anytype) @TypeOf(value) {
 }
 
 pub fn isObjectFreed(obj: *Object) bool {
-    return (obj.gc.u.type_info & php_h.IS_OBJ_FREE_CALLED) != 0;
+    return (obj.gc.u.type_info & c.IS_OBJ_FREE_CALLED) != 0;
 }
 
 pub fn invokeMethod(container: ?*const Value, fn_name: *const Value, arguments: []const Value) !Value {
@@ -1230,7 +1241,7 @@ pub fn invokeMethodEx(container: ?*const Value, fn_name: *const Value, arguments
     var retval: Value = undefined;
     const args = @constCast(arguments.ptr);
     const len: u32 = @intCast(arguments.len);
-    if (php_h._call_user_function_impl(@constCast(container), @constCast(fn_name), &retval, len, args, named_params) != php_h.SUCCESS) {
+    if (c._call_user_function_impl(@constCast(container), @constCast(fn_name), &retval, len, args, named_params) != c.SUCCESS) {
         return error.Failure;
     }
     if (getValueType(&retval) == .undefined) {
@@ -1248,17 +1259,17 @@ pub fn invokeFunction(comptime name: []const u8, arguments: []const Value) !Valu
 }
 
 pub const FunctionCallCache = struct {
-    fci: php_h.zend_fcall_info,
-    fcc: php_h.zend_fcall_info_cache,
+    fci: c.zend_fcall_info,
+    fcc: c.zend_fcall_info_cache,
 
     pub fn init(callable: *const Value) !@This() {
-        var fci: php_h.zend_fcall_info = undefined;
-        var fcc: php_h.zend_fcall_info_cache = undefined;
+        var fci: c.zend_fcall_info = undefined;
+        var fcc: c.zend_fcall_info_cache = undefined;
         fci.retval = null;
         fci.param_count = 0;
         fci.params = null;
         var err_msg: [*c]u8 = undefined;
-        const result = php_h.zend_fcall_info_init(@constCast(callable), 0, &fci, &fcc, null, &err_msg);
+        const result = c.zend_fcall_info_init(@constCast(callable), 0, &fci, &fcc, null, &err_msg);
         if (result != SUCCESS) {
             if (err_msg != null) {
                 defer efree(err_msg);
@@ -1271,10 +1282,10 @@ pub const FunctionCallCache = struct {
     }
 
     pub fn deinit(self: *@This()) void {
-        php_h.zend_fcall_info_args_clear(&self.fci, true);
+        c.zend_fcall_info_args_clear(&self.fci, true);
     }
 
-    pub fn argumentInfo(self: *@This()) []php_h.zend_arg_info {
+    pub fn argumentInfo(self: *@This()) []c.zend_arg_info {
         const common = &self.fcc.function_handler.*.common;
         return if (common.num_args > 0) common.arg_info[0..common.num_args] else &.{};
     }
@@ -1284,12 +1295,12 @@ pub const FunctionCallCache = struct {
     }
 
     pub fn invoke(self: *@This(), args: []const Value) !Value {
-        php_h.zend_fcall_info_argp(&self.fci, @truncate(args.len), @constCast(args.ptr));
-        defer php_h.zend_fcall_info_args_clear(&self.fci, false);
+        c.zend_fcall_info_argp(&self.fci, @truncate(args.len), @constCast(args.ptr));
+        defer c.zend_fcall_info_args_clear(&self.fci, false);
         defer self.fci.named_params = null;
         var retval: Value = undefined;
         self.fci.retval = &retval;
-        const result = php_h.zend_call_function(&self.fci, &self.fcc);
+        const result = c.zend_call_function(&self.fci, &self.fcc);
         if (result != SUCCESS) return error.Failure;
         if (getValueType(&retval) == .undefined) {
             const eg = getExecutorGlobals();
@@ -1375,7 +1386,7 @@ pub fn emptyArgInfo(comptime count: usize) []const InternalArgInfo {
 }
 
 pub fn createFunction(
-    func_ptr: php_h.zif_handler,
+    func_ptr: c.zif_handler,
     comptime name: []const u8,
     comptime arg_count: usize,
     comptime is_variadic: bool,
@@ -1384,17 +1395,17 @@ pub fn createFunction(
 }
 
 pub fn createFunctionEx(
-    func_ptr: php_h.zif_handler,
+    func_ptr: c.zif_handler,
     name: ?*String,
     comptime arg_count: usize,
     comptime is_variadic: bool,
 ) Function {
     const arg_info = emptyArgInfo(arg_count + if (is_variadic) 1 else 0);
-    var fn_flags: u32 = php_h.ZEND_ACC_PUBLIC;
-    if (is_variadic) fn_flags |= php_h.ZEND_ACC_VARIADIC;
+    var fn_flags: u32 = c.ZEND_ACC_PUBLIC;
+    if (is_variadic) fn_flags |= c.ZEND_ACC_VARIADIC;
     return .{
         .internal_function = .{
-            .type = php_h.ZEND_INTERNAL_FUNCTION,
+            .type = c.ZEND_INTERNAL_FUNCTION,
             .function_name = name orelse getStaticString("fn"),
             .handler = func_ptr,
             .num_args = arg_count,
@@ -1419,11 +1430,11 @@ pub fn destroyFunction(func: *Function) void {
 }
 
 pub fn registerConstant(name: *String, value: *const Value) !void {
-    var constant: php_h.zend_constant = .{
+    var constant: c.zend_constant = .{
         .name = reuse(name),
         .value = reuse(value).*,
     };
-    const result = php_h.zend_register_constant(&constant);
+    const result = c.zend_register_constant(&constant);
     if (result != SUCCESS) return error.Failure;
 }
 
@@ -1452,7 +1463,7 @@ pub fn unregisterFunction(name: *String) void {
 }
 
 pub fn registerClass(name: *String, ce: *ClassEntry) !void {
-    if (!php_h.zend_is_valid_class_name(name)) return error.InvalidName;
+    if (!c.zend_is_valid_class_name(name)) return error.InvalidName;
     const lc_name = createLowercaseName(name);
     defer release(lc_name);
     const cg = getGlobals("compiler_globals");
@@ -1473,34 +1484,30 @@ pub fn unregisterClass(name: *String) void {
 pub fn createLowercaseName(name: *String) *String {
     const str = createString(getStringContent(name));
     const sc = @constCast(getStringContent(str));
-    php_h.zend_str_tolower(sc.ptr, sc.len);
+    c.zend_str_tolower(sc.ptr, sc.len);
     return str;
 }
 
 pub fn instanceOf(obj: *Object, ce: *ClassEntry) bool {
-    return php_h.instanceof_function(obj.ce, ce);
+    return c.instanceof_function(obj.ce, ce);
 }
 
 pub fn subclassOf(subclass: *ClassEntry, ce: *ClassEntry) bool {
-    return php_h.instanceof_function(subclass, ce);
+    return c.instanceof_function(subclass, ce);
 }
 
-pub const initializeStandardObject = php_h.zend_object_std_init;
-pub const initializeObjectProperties = php_h.object_properties_init;
-pub const traceToString = php_h.zend_trace_to_string;
-
 pub fn registerInternalClass(ce: *ClassEntry, parent_ce: *ClassEntry) !*ClassEntry {
-    return php_h.zend_register_internal_class_ex(ce, parent_ce) orelse error.ClassRegistrationFailure;
+    return c.zend_register_internal_class_ex(ce, parent_ce) orelse error.ClassRegistrationFailure;
 }
 
 pub fn registerInternalInterface(ce: *ClassEntry) !*ClassEntry {
-    return php_h.zend_register_internal_interface(ce) orelse error.ClassRegistrationFailure;
+    return c.zend_register_internal_interface(ce) orelse error.ClassRegistrationFailure;
 }
 
 pub fn unregisterInternalClass(ce: *ClassEntry) void {
     const cg = getGlobals("compiler_globals");
     const list = cg.class_table;
-    const lc_name = php_h.zend_string_tolower_ex(ce.name, false);
+    const lc_name = c.zend_string_tolower_ex(ce.name, false);
     defer release(lc_name);
     // the destructor will free the memory
     _ = removeHashEntry(list, lc_name);
@@ -1510,12 +1517,12 @@ pub const unregisterInternalInterface = unregisterInternalClass;
 
 pub fn getObjectProperty(obj: *Object, name: *String) ?Value {
     var retval: Value = undefined;
-    _ = php_h.zend_std_read_property(obj, name, BP_VAR_R, null, &retval);
+    _ = c.zend_std_read_property(obj, name, BP_VAR_R, null, &retval);
     return retval;
 }
 
 pub fn getObjectPropertySize(ce: *ClassEntry) isize {
-    return @bitCast(php_h.zend_object_properties_size(ce));
+    return @bitCast(c.zend_object_properties_size(ce));
 }
 
 pub const InterfaceName = enum {
@@ -1531,14 +1538,14 @@ pub const InterfaceName = enum {
 
 pub fn getInterface(itype: InterfaceName) *ClassEntry {
     const ptr = switch (itype) {
-        .aggregate => php_h.zend_ce_aggregate,
-        .array_access => php_h.zend_ce_arrayaccess,
-        .countable => php_h.zend_ce_countable,
-        .iterator => php_h.zend_ce_iterator,
-        .serializable => php_h.zend_ce_serializable,
-        .stringable => php_h.zend_ce_stringable,
-        .traversable => php_h.zend_ce_traversable,
-        .throwable => php_h.zend_ce_throwable,
+        .aggregate => c.zend_ce_aggregate,
+        .array_access => c.zend_ce_arrayaccess,
+        .countable => c.zend_ce_countable,
+        .iterator => c.zend_ce_iterator,
+        .serializable => c.zend_ce_serializable,
+        .stringable => c.zend_ce_stringable,
+        .traversable => c.zend_ce_traversable,
+        .throwable => c.zend_ce_throwable,
     };
     return @ptrCast(ptr);
 }
@@ -1550,18 +1557,18 @@ pub const ClassEntryName = enum {
 
 pub fn getClassEntry(ctype: ClassEntryName) *ClassEntry {
     const ptr = switch (ctype) {
-        .standard => php_h.zend_standard_class_def,
-        .exception => php_h.zend_ce_exception,
+        .standard => c.zend_standard_class_def,
+        .exception => c.zend_ce_exception,
     };
     return @ptrCast(ptr);
 }
 
 pub const PropPurpose = enum(c_uint) {
-    debug = php_h.ZEND_PROP_PURPOSE_DEBUG,
-    array_cast = php_h.ZEND_PROP_PURPOSE_ARRAY_CAST,
-    serialize = php_h.ZEND_PROP_PURPOSE_SERIALIZE,
-    var_export = php_h.ZEND_PROP_PURPOSE_VAR_EXPORT,
-    json = php_h.ZEND_PROP_PURPOSE_JSON,
+    debug = c.ZEND_PROP_PURPOSE_DEBUG,
+    array_cast = c.ZEND_PROP_PURPOSE_ARRAY_CAST,
+    serialize = c.ZEND_PROP_PURPOSE_SERIALIZE,
+    var_export = c.ZEND_PROP_PURPOSE_VAR_EXPORT,
+    json = c.ZEND_PROP_PURPOSE_JSON,
 
     pub fn fromInt(n: c_uint) !@This() {
         return std.meta.intToEnum(@This(), n);
@@ -1573,12 +1580,12 @@ pub fn throwError(err: anytype) void {
     if (failure.match(err, error.ExceptionThrown)) return;
     const msg = failure.acquireMessage(err);
     defer failure.freeMessage(msg);
-    _ = php_h.zend_throw_exception_ex(null, 0, "%s (zig)", msg.ptr);
+    _ = c.zend_throw_exception_ex(null, 0, "%s (zig)", msg.ptr);
 }
 
 pub fn throwException(obj: *Object) error{ExceptionThrown} {
     var value = createValueObject(obj);
-    php_h.zend_throw_exception_object(&value);
+    c.zend_throw_exception_object(&value);
     return error.ExceptionThrown;
 }
 
@@ -1603,22 +1610,22 @@ pub fn captureException() !*Object {
     const eg = getExecutorGlobals();
     const ex = eg.exception orelse return error.Unexpected;
     addRef(ex);
-    php_h.zend_clear_exception();
+    c.zend_clear_exception();
     return ex;
 }
 
 pub fn triggerWarning(err: anytype) void {
     const msg = failure.acquireMessage(err);
     defer failure.freeMessage(msg);
-    php_h.zend_error(php_h.E_WARNING, "%s (zig)", msg.ptr);
+    c.zend_error(c.E_WARNING, "%s (zig)", msg.ptr);
 }
 
 pub fn getCurrentLine() u32 {
-    return php_h.zend_get_executed_lineno();
+    return c.zend_get_executed_lineno();
 }
 
 pub fn getCurrentFile() *String {
-    const path = php_h.zend_get_executed_filename();
+    const path = c.zend_get_executed_filename();
     const len = std.mem.len(path);
     return createString(path[0..len]);
 }
@@ -1626,48 +1633,50 @@ pub fn getCurrentFile() *String {
 pub fn getBacktrace() !*Array {
     const eg = getExecutorGlobals();
     var trace: Value = undefined;
-    php_h.zend_fetch_debug_backtrace(
+    c.zend_fetch_debug_backtrace(
         &trace,
         0,
-        if (eg.exception_ignore_args) php_h.DEBUG_BACKTRACE_IGNORE_ARGS else 0,
+        if (eg.exception_ignore_args) c.DEBUG_BACKTRACE_IGNORE_ARGS else 0,
         0,
     );
     return try getValueArray(&trace);
 }
 
 pub fn emalloc(size: usize) ?*anyopaque {
-    if (php_h.ZEND_DEBUG == 1) {
-        const src = @src();
-        const ptr = php_h._emalloc(size, src.file, src.line + 1, null, 0);
-        return ptr;
-    } else {
-        return php_h._emalloc(size);
-    }
+    const src = @src();
+    const ptr = switch (comptime argCount(c._emalloc)) {
+        5 => c._emalloc(size, src.file, src.line, null, 0),
+        1 => c._emalloc(size),
+        else => @compileError("Unexpected _emalloc argument count"),
+    };
+    return ptr;
 }
 
 pub fn efree(ptr: ?*anyopaque) void {
-    if (php_h.ZEND_DEBUG == 1) {
-        php_h._efree(ptr, "zig", 0, null, 0);
-    } else {
-        php_h.efree(ptr);
+    const src = @src();
+    switch (comptime argCount(c._efree)) {
+        5 => c._efree(ptr, src.file, src.line, null, 0),
+        1 => c._efree(ptr),
+        else => @compileError("Unexpected ptr argument count"),
     }
 }
 
 pub fn estrdup(s: [*:0]const u8) [*:0]const u8 {
-    if (php_h.ZEND_DEBUG == 1) {
-        return php_h._estrdup(s, "zig", 0, null, 0);
-    } else {
-        return php_h._estrdup(s);
-    }
+    const src = @src();
+    return switch (comptime argCount(c.estrdup)) {
+        5 => c._estrdup(s, src.file, src.line + 1, null, 0),
+        1 => c._estrdup(s),
+        else => @compileError("Unexpected _estrdup argument count"),
+    };
 }
 
 pub fn malloc(size: usize) ?*anyopaque {
-    const ptr = php_h.__zend_malloc(size);
+    const ptr = c.__zend_malloc(size);
     return ptr;
 }
 
 pub fn free(ptr: ?*anyopaque) void {
-    php_h.free(ptr);
+    c.free(ptr);
 }
 
 pub const allocator: std.mem.Allocator = .{
@@ -1769,21 +1778,17 @@ fn isInt(comptime T: type) bool {
 
 pub fn open(path: *const String, mode: [*c]const u8, context: ?*StreamContext, options: c_int) !*Stream {
     const p = getStringContent(path);
-    var strm: ?*Stream = undefined;
-    if (php_h.ZEND_DEBUG == 1) {
-        const src = @src();
-        strm = php_h._php_stream_open_wrapper_ex(p.ptr, mode, options, null, context, 1, src.file, src.line, src.file, src.line);
-    } else {
-        strm = php_h._php_stream_open_wrapper_ex(p.ptr, mode, options, null, context);
-    }
-    return strm orelse error.Failure;
+    const src = @src();
+    return switch (comptime argCount(c._php_stream_open_wrapper_ex)) {
+        10 => c._php_stream_open_wrapper_ex(p.ptr, mode, options, null, context, 1, src.file, src.line, src.file, src.line),
+        5 => c._php_stream_open_wrapper_ex(p.ptr, mode, options, null, context),
+        else => @compileError("Unexpected _php_stream_open_wrapper_ex argument count"),
+    } orelse error.Failure;
 }
-
-pub const pipe = php_h.pipe;
 
 extern fn get_stream_path(strm: *Stream) ?[*:0]const u8;
 extern fn get_stream_flags(strm: *Stream) u32;
-extern fn get_stream_handlers(strm: *Stream) *const php_h.php_stream_ops;
+extern fn get_stream_handlers(strm: *Stream) *const c.php_stream_ops;
 extern fn get_stream_mode(strm: *Stream) ?[*:0]const u8;
 extern fn get_stream_wrapper_data(strm: *Stream) *Value;
 extern fn set_stream_no_close(strm: *Stream) void;
@@ -1806,42 +1811,43 @@ pub fn preserveStream(strm: *Stream) void {
 }
 
 pub fn openDescriptor(fd: c_int, mode: [*c]const u8) !*Stream {
-    var strm: ?*Stream = undefined;
-    if (php_h.ZEND_DEBUG == 1) {
-        const src = @src();
-        strm = php_h._php_stream_fopen_from_fd(fd, mode, null, 1, src.file, src.line, src.file, src.line);
-    } else {
-        strm = php_h._php_stream_fopen_from_fd(fd, mode, null);
-    }
-    return strm orelse error.Failure;
+    const src = @src();
+    // arg count varies depending on PHP version and whether debug is enabled
+    return switch (comptime argCount(c._php_stream_fopen_from_fd)) {
+        3 => c._php_stream_fopen_from_fd(fd, mode, null),
+        4 => c._php_stream_fopen_from_fd(fd, mode, null, false),
+        8 => c._php_stream_fopen_from_fd(fd, mode, null, 1, src.file, src.line, src.file, src.line),
+        9 => c._php_stream_fopen_from_fd(fd, mode, null, 1, src.file, src.line, src.file, src.line, false),
+        else => @compileError("Unexpected _php_stream_fopen_from_fd argument count"),
+    } orelse error.Failure;
 }
 
 pub fn getDescriptor(strm: *Stream) ?c_int {
     if (!is_stdio_stream(strm)) return null;
-    return inline for (.{ php_h.PHP_STREAM_AS_FD_FOR_SELECT, php_h.PHP_STREAM_AS_FD }) |as| {
+    return inline for (.{ c.PHP_STREAM_AS_FD_FOR_SELECT, c.PHP_STREAM_AS_FD }) |as| {
         var fd: c_int align(@alignOf(*anyopaque)) = undefined;
-        if (php_h._php_stream_cast(strm, as, @ptrCast(&fd), 0) == SUCCESS) {
+        if (c._php_stream_cast(strm, as, @ptrCast(&fd), 0) == SUCCESS) {
             break fd;
         }
     } else null;
 }
 
 pub fn close(strm: *Stream) void {
-    _ = php_h.php_stream_close(strm);
+    _ = c.php_stream_close(strm);
 }
 
 pub fn flush(strm: *Stream) void {
-    _ = php_h.php_stream_flush(strm);
+    _ = c.php_stream_flush(strm);
 }
 
 pub fn read(strm: *Stream, buf: [*]const u8, size: usize) !usize {
-    const r = php_h._php_stream_read(strm, @constCast(buf), size);
+    const r = c._php_stream_read(strm, @constCast(buf), size);
     if (r < 0) return error.Failure;
     return @intCast(r);
 }
 
 pub fn write(strm: *Stream, buf: [*]const u8, size: usize) !usize {
-    const w = php_h._php_stream_write(strm, buf, size);
+    const w = c._php_stream_write(strm, buf, size);
     if (w < 0) return error.Failure;
     return @intCast(w);
 }
@@ -1850,22 +1856,22 @@ pub fn seek(strm: *Stream, offset: i64, whence: u32) !void {
     const ops = get_stream_handlers(strm);
     const flags = get_stream_flags(strm);
     if (ops.seek == null) return error.Unseekable;
-    if (flags & php_h.PHP_STREAM_FLAG_NO_SEEK != 0) return error.Unseekable;
-    const pos = php_h._php_stream_seek(strm, offset, @intCast(whence));
+    if (flags & c.PHP_STREAM_FLAG_NO_SEEK != 0) return error.Unseekable;
+    const pos = c._php_stream_seek(strm, offset, @intCast(whence));
     if (pos < 0) return error.Failure;
 }
 
 pub fn stat(path: *const String, context: ?*StreamContext, _: std.os.wasi.lookupflags_t, out: *std.os.wasi.filestat_t) !void {
     const p = getStringContent(path);
-    var stat_buf: php_h.php_stream_statbuf = undefined;
-    const result = php_h._php_stream_stat_path(p.ptr, 0, &stat_buf, context);
+    var stat_buf: c.php_stream_statbuf = undefined;
+    const result = c._php_stream_stat_path(p.ptr, 0, &stat_buf, context);
     if (result != SUCCESS) return error.Failure;
     copyStat(&stat_buf.sb, out);
 }
 
 pub fn fstat(strm: *Stream, out: *std.os.wasi.filestat_t) !void {
-    var stat_buf: php_h.php_stream_statbuf = undefined;
-    const result = php_h._php_stream_stat(strm, &stat_buf);
+    var stat_buf: c.php_stream_statbuf = undefined;
+    const result = c._php_stream_stat(strm, &stat_buf);
     if (result != SUCCESS) return error.Failure;
     copyStat(&stat_buf.sb, out);
 }
@@ -1873,9 +1879,9 @@ pub fn fstat(strm: *Stream, out: *std.os.wasi.filestat_t) !void {
 pub fn performOperation(opcode: c_int, op1: *const Value, op2: *const Value) !Value {
     var value: Value = undefined;
     var result: Result = undefined;
-    if (php_h.get_unary_op(opcode)) |unary_handler| {
+    if (c.get_unary_op(opcode)) |unary_handler| {
         result = unary_handler(&value, @constCast(op1));
-    } else if (php_h.get_binary_op(opcode)) |binary_handler| {
+    } else if (c.get_binary_op(opcode)) |binary_handler| {
         result = binary_handler(&value, @constCast(op1), @constCast(op2));
     } else {
         result = FAILURE;
@@ -1883,22 +1889,40 @@ pub fn performOperation(opcode: c_int, op1: *const Value, op2: *const Value) !Va
     return if (result == SUCCESS) value else error.Failure;
 }
 
-fn copyStat(in: *php_h.zend_stat_t, out: *std.os.wasi.filestat_t) void {
-    out.size = convertSize(in.st_size);
-    out.atim = convertTimespec(&in.st_atim);
-    out.ctim = convertTimespec(&in.st_ctim);
-    out.mtim = convertTimespec(&in.st_mtim);
-    out.ino = @intCast(in.st_ino);
-    out.dev = @intCast(in.st_dev);
-    out.filetype = switch (in.st_mode & php_h.S_IFMT) {
-        php_h.S_IFSOCK => .SOCKET_STREAM,
-        php_h.S_IFLNK => .SYMBOLIC_LINK,
-        php_h.S_IFREG => .REGULAR_FILE,
-        php_h.S_IFBLK => .BLOCK_DEVICE,
-        php_h.S_IFDIR => .DIRECTORY,
-        php_h.S_IFCHR => .CHARACTER_DEVICE,
-        else => .UNKNOWN,
-    };
+fn copyStat(in: *c.zend_stat_t, out: *std.os.wasi.filestat_t) void {
+    if (@hasField(c.zend_stat_t, "atim")) {
+        out.size = convertSize(in.st_size);
+        out.atim = convertTimespec(&in.st_atim);
+        out.ctim = convertTimespec(&in.st_ctim);
+        out.mtim = convertTimespec(&in.st_mtim);
+        out.ino = @intCast(in.st_ino);
+        out.dev = @intCast(in.st_dev);
+        out.filetype = switch (in.st_mode & c.S_IFMT) {
+            c.S_IFSOCK => .SOCKET_STREAM,
+            c.S_IFLNK => .SYMBOLIC_LINK,
+            c.S_IFREG => .REGULAR_FILE,
+            c.S_IFBLK => .BLOCK_DEVICE,
+            c.S_IFDIR => .DIRECTORY,
+            c.S_IFCHR => .CHARACTER_DEVICE,
+            else => .UNKNOWN,
+        };
+    } else if (@hasField(c.zend_stat_t, "atime")) {
+        out.size = convertSize(in.st_size);
+        out.atime = convertTimespec(&in.st_atime);
+        out.ctime = convertTimespec(&in.st_ctime);
+        out.mtime = convertTimespec(&in.st_mtime);
+        out.ino = @intCast(in.st_ino);
+        out.dev = @intCast(in.st_dev);
+        out.filetype = switch (in.st_mode & c.S_IFMT) {
+            c.S_IFSOCK => .SOCKET_STREAM,
+            c.S_IFLNK => .SYMBOLIC_LINK,
+            c.S_IFREG => .REGULAR_FILE,
+            c.S_IFBLK => .BLOCK_DEVICE,
+            c.S_IFDIR => .DIRECTORY,
+            c.S_IFCHR => .CHARACTER_DEVICE,
+            else => .UNKNOWN,
+        };
+    }
 }
 
 fn convertSize(value: anytype) usize {
@@ -1906,7 +1930,7 @@ fn convertSize(value: anytype) usize {
     return @intCast(value);
 }
 
-fn convertTimespec(t: *php_h.timespec) u64 {
+fn convertTimespec(t: *c.timespec) u64 {
     const s: i64 = t.tv_sec;
     if (s < 0) return 0;
     const ns: i64 = t.tv_nsec;
@@ -1930,70 +1954,68 @@ pub fn rename(path: *const String, new_path: *const String, context: ?*StreamCon
 }
 
 pub fn tell(strm: *Stream) !usize {
-    const pos = php_h._php_stream_tell(strm);
+    const pos = c._php_stream_tell(strm);
     if (pos < 0) return error.Failure;
     return @intCast(pos);
 }
 
 pub fn truncate(strm: *Stream, len: u64) !void {
-    const result = php_h._php_stream_truncate_set_size(strm, @intCast(len));
+    const result = c._php_stream_truncate_set_size(strm, @intCast(len));
     if (result != 0) return error.Failure;
 }
 
 pub fn mkdir(path: *const String, mode: u32, context: ?*StreamContext) !void {
     const p = getStringContent(path);
-    const result = php_h._php_stream_mkdir(p.ptr, @intCast(mode), 0, context);
+    const result = c._php_stream_mkdir(p.ptr, @intCast(mode), 0, context);
     if (result == 0) return error.Failure;
 }
 
 pub fn rmdir(path: *const String, context: ?*StreamContext) !void {
     const p = getStringContent(path);
-    const result = php_h._php_stream_rmdir(p.ptr, 0, context);
+    const result = c._php_stream_rmdir(p.ptr, 0, context);
     if (result == 0) return error.Failure;
 }
 
 pub fn opendir(path: *String, options: c_int, context: ?*StreamContext) !*Stream {
     const p = getStringContent(path);
-    var strm: ?*Stream = undefined;
-    if (php_h.ZEND_DEBUG == 1) {
-        const src = @src();
-        strm = php_h._php_stream_opendir(p.ptr, options, context, 1, src.file, src.line, src.file, src.line);
-    } else {
-        strm = php_h._php_stream_opendir(p.ptr, options, context);
-    }
-    return strm orelse error.Failure;
+    const src = @src();
+    return switch (comptime argCount(c._php_stream_opendir)) {
+        8 => c._php_stream_opendir(p.ptr, options, context, 1, src.file, src.line, src.file, src.line),
+        3 => c._php_stream_opendir(p.ptr, options, context),
+        else => @compileError("Unexpected _php_stream_opendir argument count"),
+    } orelse error.Failure;
 }
 
 pub fn readdir(strm: *Stream, ent: *DirEntry) bool {
-    return php_h._php_stream_readdir(strm, ent) != null;
+    return c._php_stream_readdir(strm, ent) != null;
 }
 
 pub fn closedir(strm: *Stream) void {
-    _ = php_h.php_stream_closedir(strm);
+    _ = c.php_stream_closedir(strm);
 }
 
 pub fn sendfile(out_strm: *Stream, in_strm: *Stream, offset: ?*i64, len: u32) !u32 {
     var original_pos: i64 = 0;
     var copied: i64 = 0;
     if (offset) |ptr| {
-        original_pos = php_h._php_stream_tell(in_strm);
+        original_pos = c._php_stream_tell(in_strm);
         if (original_pos < 0) return error.Failure;
-        const pos = php_h._php_stream_seek(in_strm, ptr.*, php_h.SEEK_SET);
+        const pos = c._php_stream_seek(in_strm, ptr.*, c.SEEK_SET);
         if (pos < 0) return error.InvalidOffset;
     }
     var buf: [8192]u8 = undefined;
     var remaining = len;
     while (remaining > 0) {
-        const bytes_read = php_h._php_stream_read(in_strm, &buf, @min(remaining, buf.len));
+        const bytes_read = c._php_stream_read(in_strm, &buf, @min(remaining, buf.len));
         if (bytes_read == 0) break;
-        const written = php_h._php_stream_write(out_strm, &buf, @intCast(bytes_read));
+        const written = c._php_stream_write(out_strm, &buf, @intCast(bytes_read));
         if (written < 0) return error.Failure;
         copied += bytes_read;
         remaining -= @intCast(bytes_read);
     }
     if (offset) |ptr| {
         ptr.* += copied;
-        _ = php_h._php_stream_seek(in_strm, original_pos, php_h.SEEK_SET);
+        _ = c._php_stream_seek(in_strm, original_pos, c.SEEK_SET);
     }
     return @intCast(copied);
 }
@@ -2003,44 +2025,44 @@ pub fn copyFileRange(in_strm: *Stream, out_strm: *Stream, in_offset: ?*i64, out_
     var original_out_pos: i64 = 0;
     var copied: i64 = 0;
     if (in_offset) |ptr| {
-        original_in_pos = php_h._php_stream_tell(in_strm);
+        original_in_pos = c._php_stream_tell(in_strm);
         if (original_in_pos < 0) return error.Failure;
-        const pos = php_h._php_stream_seek(in_strm, ptr.*, php_h.SEEK_SET);
+        const pos = c._php_stream_seek(in_strm, ptr.*, c.SEEK_SET);
         if (pos < 0) return error.InvalidOffset;
     }
     if (out_offset) |ptr| {
-        original_out_pos = php_h._php_stream_tell(out_strm);
+        original_out_pos = c._php_stream_tell(out_strm);
         if (original_out_pos < 0) return error.Failure;
-        const pos = php_h._php_stream_seek(out_strm, ptr.*, php_h.SEEK_SET);
+        const pos = c._php_stream_seek(out_strm, ptr.*, c.SEEK_SET);
         if (pos < 0) return error.InvalidOffset;
     }
     var buf: [8192]u8 = undefined;
     var remaining = len;
     while (remaining > 0) {
-        const bytes_read = php_h._php_stream_read(in_strm, &buf, @min(remaining, buf.len));
+        const bytes_read = c._php_stream_read(in_strm, &buf, @min(remaining, buf.len));
         if (bytes_read == 0) break;
-        const written = php_h._php_stream_write(out_strm, &buf, @intCast(bytes_read));
+        const written = c._php_stream_write(out_strm, &buf, @intCast(bytes_read));
         if (written < 0) return error.Failure;
         copied += bytes_read;
         remaining -= @intCast(bytes_read);
     }
     if (in_offset) |ptr| {
         ptr.* += copied;
-        _ = php_h._php_stream_seek(in_strm, original_in_pos, php_h.SEEK_SET);
+        _ = c._php_stream_seek(in_strm, original_in_pos, c.SEEK_SET);
     }
     if (out_offset) |ptr| {
         ptr.* += copied;
-        _ = php_h._php_stream_seek(out_strm, original_out_pos, php_h.SEEK_SET);
+        _ = c._php_stream_seek(out_strm, original_out_pos, c.SEEK_SET);
     }
     return @intCast(copied);
 }
 
 pub fn resolve(name: []const u8, parent_path: []const u8) !*String {
-    return php_h.php_resolve_path(name.ptr, name.len, parent_path.ptr) orelse error.Failure;
+    return c.php_resolve_path(name.ptr, name.len, parent_path.ptr) orelse error.Failure;
 }
 
 pub fn rewinddir(strm: *Stream) !void {
-    if (php_h.php_stream_rewinddir(strm) < 0) return error.Failure;
+    if (c.php_stream_rewinddir(strm) < 0) return error.Failure;
 }
 
 extern fn get_stream_context(strm: *Stream) ?*StreamContext;
@@ -2060,22 +2082,20 @@ pub fn getStreamWrapperProperty(strm: *Stream, name: []const u8) !*Value {
 }
 
 pub fn setBlocking(strm: *Stream, set: bool) !void {
-    const id = php_h.PHP_STREAM_OPTION_BLOCKING;
+    const id = c.PHP_STREAM_OPTION_BLOCKING;
     const value: c_int = if (set) 1 else 0;
-    const result = php_h._php_stream_set_option(strm, id, value, null);
+    const result = c._php_stream_set_option(strm, id, value, null);
     if (result < 0) return error.Failure;
 }
 
 pub fn setLock(strm: *Stream, lock_type: c_int) !void {
-    const id = php_h.PHP_STREAM_OPTION_LOCKING;
-    const result = php_h._php_stream_set_option(strm, id, lock_type, null);
+    const id = c.PHP_STREAM_OPTION_LOCKING;
+    const result = c._php_stream_set_option(strm, id, lock_type, null);
     if (result != SUCCESS) return error.Failure;
 }
 
-pub const utimbuf = php_h.utimbuf;
-
-pub fn touch(path: *String, timebuf: *const php_h.utimbuf, context: ?*StreamContext) !void {
-    return try setMetadata(path, php_h.PHP_STREAM_META_TOUCH, timebuf, context);
+pub fn touch(path: *String, timebuf: *const c.utimbuf, context: ?*StreamContext) !void {
+    return try setMetadata(path, c.PHP_STREAM_META_TOUCH, timebuf, context);
 }
 
 fn setMetadata(path: *String, op: c_int, param_ptr: ?*const anyopaque, context: ?*StreamContext) !void {
@@ -2085,36 +2105,15 @@ fn setMetadata(path: *String, op: c_int, param_ptr: ?*const anyopaque, context: 
 }
 
 fn getStreamWrapper(path: []const u8, comptime name: []const u8) !std.meta.Tuple(&.{
-    *php_h.php_stream_wrapper,
-    @FieldType(php_h.php_stream_wrapper_ops, name),
+    *c.php_stream_wrapper,
+    @FieldType(c.php_stream_wrapper_ops, name),
 }) {
-    const wrapper = php_h.php_stream_locate_url_wrapper(path.ptr, null, 0);
+    const wrapper = c.php_stream_locate_url_wrapper(path.ptr, null, 0);
     if (wrapper == null or wrapper.*.wops == null or @field(wrapper.*.wops.*, name) == null) {
         return error.Failure;
     }
     return .{ wrapper, @field(wrapper.*.wops.*, name) };
 }
-
-pub const reportWrongParamCount = php_h.zend_wrong_param_count;
-
-pub const INI_USER = php_h.ZEND_INI_USER;
-pub const INI_PERDIR = php_h.ZEND_INI_PERDIR;
-pub const INI_SYSTEM = php_h.ZEND_INI_SYSTEM;
-pub const INI_ALL = php_h.ZEND_INI_ALL;
-
-pub const registerIniEntries = php_h.zend_register_ini_entries;
-pub const unregisterIniEntries = php_h.zend_unregister_ini_entries;
-pub const displayIniEntries = php_h.display_ini_entries;
-pub const onUpdateBool = php_h.OnUpdateBool;
-pub const onUpdateLong = php_h.OnUpdateLong;
-pub const onUpdateLongGEZero = php_h.OnUpdateLongGEZero;
-pub const onUpdateString = php_h.OnUpdateString;
-pub const onUpdateStringUnempty = php_h.OnUpdateStringUnempty;
-pub const iniBooleanDisplayer = php_h.zend_ini_boolean_displayer_cb;
-
-pub const infoTableStart = php_h.php_info_print_table_start;
-pub const infoTableHeader = php_h.php_info_print_table_header;
-pub const infoTableEnd = php_h.php_info_print_table_end;
 
 pub const OnModified = fn (*IniEntry, *String, *anyopaque, *anyopaque, *anyopaque, c_int) c_int;
 

@@ -8,4 +8,6 @@
 
 #define _pid_t int
 
+#define __forceinline
+
 #endif 

@@ -1,7 +1,4 @@
-#include "extension.h"
-#ifdef HAVE_CONFIG_H
-    #include "config.h"
-#endif
+#include "include/extension.h"
 
 PHP_MINIT_FUNCTION(zigar) {
     return php_zigar_mod_init(type, module_number);

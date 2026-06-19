@@ -1,6 +1,7 @@
 const std = @import("std");
 const c_allocator = std.heap.c_allocator;
 const builtin = @import("builtin");
+const c = @import("c");
 
 const DynLib = @import("dyn-lib.zig").DynLib;
 const syscall = @import("syscall.zig");
@@ -11,17 +12,6 @@ const os = switch (builtin.target.os.tag) {
     .windows => .windows,
     else => .unknown,
 };
-const windows_h = @cImport({
-    @cInclude("windows.h");
-    @cInclude("imagehlp.h");
-});
-const dlfcn_h = @cImport({
-    @cDefine("_GNU_SOURCE", {});
-    @cInclude("dlfcn.h");
-});
-const prctl_h = @cImport({
-    @cInclude("sys/prctl.h");
-});
 
 pub fn Controller(comptime Host: type) type {
     const bits = @bitSizeOf(usize);
@@ -269,13 +259,13 @@ pub fn Controller(comptime Host: type) type {
                 }
                 return .{};
             } else if (os == .windows) {
-                const ThunkData = windows_h.IMAGE_THUNK_DATA;
-                const ImportDescriptor = windows_h.IMAGE_IMPORT_DESCRIPTOR;
-                const ImportByName = windows_h.IMAGE_IMPORT_BY_NAME;
-                const directoryEntryToDataEx = windows_h.ImageDirectoryEntryToDataEx;
-                const snapByOrdinal = windows_h.IMAGE_SNAP_BY_ORDINAL;
-                const directory_entry_import = windows_h.IMAGE_DIRECTORY_ENTRY_IMPORT;
-                const TRUE = windows_h.TRUE;
+                const ThunkData = c.IMAGE_THUNK_DATA;
+                const ImportDescriptor = c.IMAGE_IMPORT_DESCRIPTOR;
+                const ImportByName = c.IMAGE_IMPORT_BY_NAME;
+                const directoryEntryToDataEx = c.ImageDirectoryEntryToDataEx;
+                const snapByOrdinal = c.IMAGE_SNAP_BY_ORDINAL;
+                const directory_entry_import = c.IMAGE_DIRECTORY_ENTRY_IMPORT;
+                const TRUE = c.TRUE;
 
                 const hmodule = lib.inner.dll;
                 const bytes: [*]u8 = @ptrCast(hmodule);
@@ -452,8 +442,8 @@ pub fn Controller(comptime Host: type) type {
                 // the signal handler (otherwise sigreturn() would trigger SIGSYS inside a SIGSYS)
                 const libc = try getLibcExtent();
                 if (std.c.prctl(
-                    prctl_h.PR_SET_SYSCALL_USER_DISPATCH,
-                    prctl_h.PR_SYS_DISPATCH_ON,
+                    c.PR_SET_SYSCALL_USER_DISPATCH,
+                    c.PR_SYS_DISPATCH_ON,
                     libc.address,
                     libc.len,
                     @intFromPtr(ptr),
@@ -466,8 +456,8 @@ pub fn Controller(comptime Host: type) type {
         pub fn uninstallSyscallTrap() void {
             if (syscall_user_dispatch) {
                 _ = std.c.prctl(
-                    prctl_h.PR_SET_SYSCALL_USER_DISPATCH,
-                    prctl_h.PR_SYS_DISPATCH_OFF,
+                    c.PR_SET_SYSCALL_USER_DISPATCH,
+                    c.PR_SYS_DISPATCH_OFF,
                     @as(usize, 0),
                     @as(usize, 0),
                     @as(usize, 0),
@@ -516,8 +506,8 @@ pub fn Controller(comptime Host: type) type {
                 const Elf_Phdr = if (bits == 64) elf.Elf64_Phdr else elf.Elf32_Phdr;
 
                 // look for libc's path and base address
-                var dl_info: dlfcn_h.Dl_info = undefined;
-                const dladdr_res = dlfcn_h.dladdr(&std.c.sigaction, &dl_info);
+                var dl_info: c.Dl_info = undefined;
+                const dladdr_res = c.dladdr(&std.c.sigaction, &dl_info);
                 if (dladdr_res == 0) {
                     return error.Unexpected;
                 }
