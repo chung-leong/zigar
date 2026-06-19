@@ -12,6 +12,7 @@ const php = @import("php.zig");
 const Array = php.Array;
 const ClassEntry = php.ClassEntry;
 const HashTable = php.HashTable;
+const Long = php.Long;
 const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
@@ -230,7 +231,7 @@ pub const ModuleHost = struct {
         return ZigException.fromValue(entry) catch unreachable;
     }
 
-    pub fn addException(self: *@This(), name: *String, code: c_long) !*ZigException {
+    pub fn addException(self: *@This(), name: *String, code: Long) !*ZigException {
         const ex_obj: *Object = try ZigException.create(name, code);
         defer php.release(ex_obj);
         const ex_struct = ZigException.fromObject(ex_obj);

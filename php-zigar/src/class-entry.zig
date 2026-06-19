@@ -23,6 +23,7 @@ const Function = php.Function;
 const HashTable = php.HashTable;
 const HashTableIterator = php.HashTableIterator;
 const HashTableObjectIterator = php.HashTableObjectIterator;
+const Long = php.Long;
 const Object = php.Object;
 const ObjectIterator = php.ObjectIterator;
 const String = php.String;
@@ -39,7 +40,7 @@ pub const ZigClassEntry = struct {
     purpose: StructurePurpose,
     flags: StructureFlags,
     alignment: std.mem.Alignment,
-    signature: c_long,
+    signature: Long,
     length: ?usize,
     byte_size: ?usize,
     instance: Scope = undefined,

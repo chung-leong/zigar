@@ -5,6 +5,8 @@ const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const Error = @import("../failure.zig").Error;
 const failure = @import("../failure.zig");
 const php = @import("../php.zig");
+const Long = php.Long;
+const Ulong = php.Ulong;
 const Value = php.Value;
 
 const Attributes = struct {
@@ -46,7 +48,7 @@ pub fn Int(comptime attrs: Attributes) type {
                 const ptr: *align(1) T = @ptrCast(&bytes[self.byte_offset]);
                 ptr.* = switch (attrs.signedness) {
                     .signed => @truncate(number),
-                    .unsigned => @truncate(@as(c_ulong, @bitCast(number))),
+                    .unsigned => @truncate(@as(Ulong, @bitCast(number))),
                 };
             }
         },
@@ -95,14 +97,14 @@ pub fn Int(comptime attrs: Attributes) type {
                 const ptr: *align(1) AT = @ptrCast(&bytes[self.byte_offset]);
                 ptr.value = switch (attrs.signedness) {
                     .signed => @truncate(number),
-                    .unsigned => @truncate(@as(c_ulong, @bitCast(number))),
+                    .unsigned => @truncate(@as(Ulong, @bitCast(number))),
                 };
             }
         },
     };
 }
 
-fn check(comptime T: type, value: c_long) error{FailureReported}!void {
+fn check(comptime T: type, value: Long) error{FailureReported}!void {
     if (value < std.math.minInt(T) or value > std.math.maxInt(T)) {
         return failure.report("{s} cannot represent the value given: {d}", .{ @typeName(T), value });
     }

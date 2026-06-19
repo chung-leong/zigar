@@ -7,6 +7,7 @@ const php = @import("php.zig");
 const FunctionCallCache = php.FunctionCallCache;
 const MethodCallCaches = php.MethodCallCaches;
 const N = php.getStaticString;
+const Long = php.Long;
 const String = php.String;
 const ExecuteData = php.ExecuteData;
 const Value = php.Value;
@@ -119,9 +120,9 @@ pub fn EventLoop(comptime cb: fn () void) type {
                 }
             }
             if (pause) |nanosecs| {
-                const s_u64 = @min(std.math.maxInt(c_long), nanosecs / 1_000_000_000);
-                const s: c_long = @intCast(s_u64);
-                const us: c_long = @intCast(((nanosecs - s_u64 * 1_000_000_000) + 999) / 1000);
+                const s_u64 = @min(std.math.maxInt(Long), nanosecs / 1_000_000_000);
+                const s: Long = @intCast(s_u64);
+                const us: Long = @intCast(((nanosecs - s_u64 * 1_000_000_000) + 999) / 1000);
                 return .{ php.createValueLong(s), php.createValueLong(us) };
             } else {
                 return .{ php.createValueNull(), php.createValueNull() };

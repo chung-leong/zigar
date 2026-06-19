@@ -8,12 +8,14 @@ const getSharedLibraryPath = @import("compilation.zig").getSharedLibraryPath;
 const js_compat = @import("js-compat.zig");
 const ModuleHost = @import("host.zig").ModuleHost;
 const php = @import("php.zig");
+const fixEnvironment = @import("dyn-lib.zig").fixEnvironment;
 const ArgumentIterator = php.ArgumentIterator;
 const FunctionInfo = php.FunctionInfo;
 const ExecuteData = php.ExecuteData;
 const FunctionEntry = php.FunctionEntry;
 const InteralArgInfo = php.InternalArgInfo;
 const ModuleEntry = php.ModuleEntry;
+const Long = php.Long;
 const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
@@ -43,16 +45,7 @@ pub fn removeRequestShutdownCallback(ptr: *anyopaque, fn_ptr: *const fn (*anyopa
 }
 
 export fn php_zigar_mod_init(_: c_int, module_number: c_int) php.Result {
-    // fixed missing environ due to RTLD_DEEPBIND option to
-    if (@intFromPtr(std.c.environ) == 0) {
-        if (std.c.dlopen(null, .{ .LAZY = true, .NOLOAD = true })) |handle| {
-            defer _ = std.c.dlclose(handle);
-            if (std.c.dlsym(handle, "environ")) |symbol| {
-                const environ_ptr: @TypeOf(&std.c.environ) = @ptrCast(@alignCast(symbol));
-                std.c.environ = environ_ptr.*;
-            }
-        }
-    }
+    fixEnvironment();
     registerIniEntries(module_number) catch return php.FAILURE;
     registerClasses() catch return php.FAILURE;
     return php.SUCCESS;
@@ -108,7 +101,7 @@ const Options = extern struct {
     zig_path: [*:0]const u8 = "zig",
     zig_args: [*:0]const u8 = "",
     build_dir: [*:0]const u8 = "",
-    build_dir_size: c_long = 4294967296,
+    build_dir_size: php.Long = 4294967296,
     optimize: [*:0]const u8 = "Debug",
     clean: bool = false,
 
@@ -363,9 +356,9 @@ fn registerIniEntries(module_number: c_int) !void {
                     }
                     break :init "";
                 },
-                c_long => {
+                Long => {
                     if (field.default_value_ptr) |ptr| {
-                        const long_ptr: *const c_long = @ptrCast(@alignCast(ptr));
+                        const long_ptr: *const Long = @ptrCast(@alignCast(ptr));
                         break :init std.fmt.comptimePrint("{d}", .{long_ptr.*});
                     }
                     break :init "";
@@ -393,7 +386,7 @@ fn registerIniEntries(module_number: c_int) !void {
                 true => php.transform(@field(Options.on_modified, field.name)),
                 false => switch (field.type) {
                     bool => php.onUpdateBool,
-                    c_long => php.onUpdateLong,
+                    Long => php.onUpdateLong,
                     [*:0]const u8 => php.onUpdateString,
                     else => unreachable,
                 },

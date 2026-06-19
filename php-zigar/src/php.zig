@@ -407,7 +407,7 @@ pub fn createValueBool(b: bool) Value {
     return result;
 }
 
-pub fn createValueLong(l: c_long) Value {
+pub fn createValueLong(l: Long) Value {
     var result: Value = .{};
     result.value.lval = l;
     result.u1.type_info = php_h.IS_LONG;
@@ -416,18 +416,18 @@ pub fn createValueLong(l: c_long) Value {
 
 pub fn createValueAnyInt(i: anytype) Value {
     const T = @TypeOf(i);
-    var long: c_long = undefined;
+    var long: Long = undefined;
     switch (@typeInfo(T)) {
         .int => |int| {
             if (int.signedness == .signed) {
-                long = if (int.bits > @bitSizeOf(c_long)) @truncate(i) else i;
+                long = if (int.bits > @bitSizeOf(Long)) @truncate(i) else i;
             } else {
-                const ulong: c_ulong = if (int.bits > @bitSizeOf(c_ulong)) @truncate(i) else i;
+                const ulong: Ulong = if (int.bits > @bitSizeOf(Ulong)) @truncate(i) else i;
                 long = @bitCast(ulong);
             }
         },
         .comptime_int => {
-            if (i < std.math.minInt(c_long) or i > std.math.maxInt(c_long)) {
+            if (i < std.math.minInt(Long) or i > std.math.maxInt(Long)) {
                 @compileError("Integer overflow");
             }
             long = i;
@@ -536,7 +536,7 @@ fn StringWithLength(comptime len: usize) type {
     };
 }
 
-pub fn calculateStringHash(s: []const u8) c_ulong {
+pub fn calculateStringHash(s: []const u8) Ulong {
     return php_h.zend_inline_hash_func(s.ptr, s.len);
 }
 
@@ -620,7 +620,7 @@ pub fn getValueBool(value: *const Value) !bool {
     };
 }
 
-pub fn getValueLong(value: *const Value) !c_long {
+pub fn getValueLong(value: *const Value) !Long {
     return switch (value.u1.v.type) {
         php_h.IS_LONG => value.value.lval,
         php_h.IS_STRING => convert: {
@@ -652,7 +652,7 @@ fn doubleToLong(value: f64) !Long {
     };
 }
 
-pub fn getValueUlong(value: *const Value) !c_ulong {
+pub fn getValueUlong(value: *const Value) !Ulong {
     const long = try getValueLong(value);
     if (long < 0) return error.NegativeValue;
     return @intCast(long);
@@ -1112,7 +1112,7 @@ pub const HashTableIterator = struct {
         return &self.key.?;
     }
 
-    pub fn currentIndex(self: *@This()) ?c_long {
+    pub fn currentIndex(self: *@This()) ?Long {
         const key = self.currentKey();
         return getValueLong(key) catch null;
     }
@@ -1146,7 +1146,7 @@ pub fn HashTableObjectIterator(comptime T: type) type {
             return self.iter.currentKey();
         }
 
-        pub fn currentIndex(self: *@This()) ?c_long {
+        pub fn currentIndex(self: *@This()) ?Long {
             return self.iter.currentIndex();
         }
 
@@ -1220,10 +1220,6 @@ pub fn reuse(value: anytype) @TypeOf(value) {
 
 pub fn isObjectFreed(obj: *Object) bool {
     return (obj.gc.u.type_info & php_h.IS_OBJ_FREE_CALLED) != 0;
-}
-
-pub fn isCallable(callable: *const Value) bool {
-    return php_h.zend_is_callable(@constCast(callable), php_h.IS_CALLABLE_CHECK_SILENT, null);
 }
 
 pub fn invokeMethod(container: ?*const Value, fn_name: *const Value, arguments: []const Value) !Value {

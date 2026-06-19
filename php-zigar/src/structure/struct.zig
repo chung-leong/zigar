@@ -27,6 +27,7 @@ const ClassEntry = php.ClassEntry;
 const Function = php.Function;
 const HashTable = php.HashTable;
 const HashTableIterator = php.HashTableIterator;
+const Long = php.Long;
 const Object = php.Object;
 const ObjectIterator = php.ObjectIterator;
 const Stream = php.Stream;
@@ -693,7 +694,8 @@ pub const Struct = struct {
             if (class.host.dispatcher.addStream(strm, is_dir) catch null) |fd| {
                 if (builtin.target.os.tag == .windows) {
                     // the fake win32 handle for a virtual file is its descriptor left-shifted by 1
-                    const handle: *anyopaque = @ptrFromInt(fd << 1);
+                    const address: usize = @intCast(fd);
+                    const handle: *anyopaque = @ptrFromInt(address << 1);
                     return php.createValuePointer(handle);
                 } else {
                     return php.createValueAnyInt(fd);
@@ -703,7 +705,7 @@ pub const Struct = struct {
         return null;
     }
 
-    fn getDescriptor(value: *const Value) !c_long {
+    fn getDescriptor(value: *const Value) !Long {
         if (builtin.target.os.tag == .windows) {
             const ptr_struct = try structure.Pointer.fromValue(value);
             const address = try ptr_struct.getAddress();

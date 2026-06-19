@@ -11,6 +11,7 @@ const ClassEntry = php.ClassEntry;
 const ExecuteData = php.ExecuteData;
 const Function = php.Function;
 const HashTable = php.HashTable;
+const Long = php.Long;
 const N = php.getStaticString;
 const Object = php.Object;
 const ObjectHandlers = php.ObjectHandlers;
@@ -66,7 +67,7 @@ pub const ZigException = struct {
         return if (class.getMember(.static, self.name)) |_| true else |_| false;
     }
 
-    pub fn create(name: *String, code: c_long) !*Object {
+    pub fn create(name: *String, code: Long) !*Object {
         const prop_size = php.getObjectPropertySize(class_entry);
         const size: usize = @intCast(@sizeOf(@This()) + prop_size);
         const mem = php.emalloc(size) orelse return error.OutOfMemory;

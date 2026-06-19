@@ -16,6 +16,7 @@ const ArgumentIterator = php.ArgumentIterator;
 const ExecuteData = php.ExecuteData;
 const FunctionCallCache = php.FunctionCallCache;
 const HashTable = php.HashTable;
+const Long = php.Long;
 const Object = php.Object;
 const Stream = php.Stream;
 const StreamContext = php.StreamContext;
@@ -42,7 +43,7 @@ pub const CallDispatcher = struct {
     redirecting_root: bool = false,
     redirecting_other_libraries: bool = false,
     function_list: std.ArrayList(CallbackEntry) = .empty,
-    next_function_id: c_ulong = 1,
+    next_function_id: usize = 1,
     stream_list: std.ArrayList(StreamEntry) = .empty,
     host: *ModuleHost,
     hooks_installed: bool = false,
@@ -87,7 +88,7 @@ pub const CallDispatcher = struct {
         }
     };
     const StreamEntry = struct {
-        fd: c_long,
+        fd: Long,
         stream: *Stream,
         path: *String,
         fd_stat: std.os.wasi.fdstat_t,
@@ -479,11 +480,11 @@ pub const CallDispatcher = struct {
         }
     }
 
-    pub fn isVirtualStream(_: *@This(), fd: c_long) bool {
+    pub fn isVirtualStream(_: *@This(), fd: Long) bool {
         return fd >= fd_min and fd <= fd_max;
     }
 
-    pub fn addStream(self: *@This(), strm: *Stream, is_dir: bool) !c_long {
+    pub fn addStream(self: *@This(), strm: *Stream, is_dir: bool) !Long {
         const fd = try self.createDescriptor();
         const path = try getStreamPath(strm);
         defer php.release(path);
@@ -492,7 +493,7 @@ pub const CallDispatcher = struct {
         return fd;
     }
 
-    pub fn removeStream(self: *@This(), fd: c_long) !void {
+    pub fn removeStream(self: *@This(), fd: Long) !void {
         if (fd == -1) self.redirecting_root = false;
         for (self.stream_list.items, 0..) |*item, i| {
             if (item.fd == fd) {
@@ -549,15 +550,16 @@ pub const CallDispatcher = struct {
         return fdstat;
     }
 
-    pub fn redirectStream(self: *@This(), fd: c_long, arg: *Value) !void {
+    pub fn redirectStream(self: *@This(), fd: Long, arg: *Value) !void {
         if (fd == -1) {
             if (self.redirection_cb) |*cb| {
                 php.release(cb);
                 self.redirection_cb = null;
                 self.redirecting_root = false;
             }
-            if (php.isCallable(arg)) {
+            if (FunctionCallCache.init(arg) catch null) |cache| {
                 self.redirection_cb = php.reuse(arg).*;
+                self.redirection_cache = cache;
                 self.redirecting_root = true;
                 self.removeStream(fd) catch {};
                 return;
@@ -572,7 +574,7 @@ pub const CallDispatcher = struct {
         if (fd == -1) self.redirecting_root = true;
     }
 
-    fn findStream(self: *@This(), fd: c_long) !*StreamEntry {
+    fn findStream(self: *@This(), fd: Long) !*StreamEntry {
         for (self.stream_list.items) |*item| {
             if (item.fd == fd) return item;
         } else {
@@ -598,7 +600,7 @@ pub const CallDispatcher = struct {
         }
     }
 
-    fn useStream(self: *@This(), fd: c_long, mode: [*c]const u8) !std.meta.Tuple(&.{ *Stream, bool }) {
+    fn useStream(self: *@This(), fd: Long, mode: [*c]const u8) !std.meta.Tuple(&.{ *Stream, bool }) {
         switch (fd) {
             0, 1, 2, fd_min...fd_max => {
                 const entry = try self.findStream(fd);
@@ -611,7 +613,7 @@ pub const CallDispatcher = struct {
         }
     }
 
-    fn addStreamEntry(self: *@This(), fd: c_long, path: *String, strm: *Stream, stat: *const std.os.wasi.fdstat_t) !*StreamEntry {
+    fn addStreamEntry(self: *@This(), fd: Long, path: *String, strm: *Stream, stat: *const std.os.wasi.fdstat_t) !*StreamEntry {
         const entry = try self.stream_list.addOne(php.allocator);
         entry.* = .{
             .fd = fd,
@@ -628,8 +630,8 @@ pub const CallDispatcher = struct {
         return entry;
     }
 
-    fn createDescriptor(self: *@This()) !c_long {
-        var fd: c_long = fd_min;
+    fn createDescriptor(self: *@This()) !Long {
+        var fd: Long = fd_min;
         return while (fd < fd_max) : (fd += 1) {
             for (self.stream_list.items) |item| {
                 if (item.fd == fd) break;
@@ -676,7 +678,7 @@ pub const CallDispatcher = struct {
         }
     };
 
-    fn resolvePath(self: *@This(), dirfd: c_long, path_c: [*:0]const u8) !?PathInfo {
+    fn resolvePath(self: *@This(), dirfd: i32, path_c: [*:0]const u8) !?PathInfo {
         const path = path_c[0..std.mem.len(path_c)];
         var context: ?*StreamContext = null;
         const url: *String = getWrapperUrl(path) orelse find: {

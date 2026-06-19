@@ -538,7 +538,7 @@ fn getTempDir(allocator: std.mem.Allocator) ![]const u8 {
                 extern fn GetTempPathA(DWORD, LPSTR) callconv(.winapi) DWORD;
             };
             var buffer: [std.os.windows.MAX_PATH + 1]u8 = undefined;
-            const len = win32.GetTempPathA(buffer.len, &buffer);
+            const len = win32.GetTempPathA(buffer.len, @ptrCast(&buffer));
             if (len == 0) return error.CannotGetTempDirectory;
             return try allocator.dupe(u8, buffer[0..len]);
         },

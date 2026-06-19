@@ -10,6 +10,7 @@ const Error = failure.Error;
 const iterator = @import("../iterator.zig");
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
+const Long = php.Long;
 const N = php.getStaticString;
 const ClassEntry = php.ClassEntry;
 const HashTable = php.HashTable;
@@ -49,7 +50,7 @@ pub const Union = struct {
                 };
                 // go through the list of members again and get the possible selector values
                 var sel_ht = php.createHashTable(null);
-                var index: c_long = 0;
+                var index: Long = 0;
                 iter.reset();
                 while (iter.next()) |member| {
                     if (member.flags.is_selector) continue;

@@ -9,6 +9,7 @@ const ClassEntry = php.ClassEntry;
 const ExecuteData = php.ExecuteData;
 const Function = php.Function;
 const HashTable = php.HashTable;
+const Long = php.Long;
 const N = php.getStaticString;
 const Object = php.Object;
 const ObjectHandlers = php.ObjectHandlers;
@@ -190,7 +191,7 @@ pub const SpecialExports = struct {
                 php.getStringContent(name),
             });
         };
-        const fd: c_long = switch (stream_id) {
+        const fd: Long = switch (stream_id) {
             .stdin => 0,
             .stdout => 1,
             .stderr => 2,

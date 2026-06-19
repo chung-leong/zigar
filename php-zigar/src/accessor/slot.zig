@@ -6,6 +6,7 @@ const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const Error = @import("../failure.zig").Error;
 const php = @import("../php.zig");
 const HashTableIterator = php.HashTableIterator;
+const Long = php.Long;
 const Value = php.Value;
 const structure = @import("../structure.zig");
 
@@ -86,7 +87,7 @@ pub fn Slot(comptime attrs: Attributes) type {
 
                     pub fn getElementEntry(self: @This(), buffer: *ByteBuffer, table: *Value, index: usize, vivicate: bool) Error!?*Value {
                         const ht = try php.getValueHashTable(table);
-                        const key: c_long = @intCast(index);
+                        const key: Long = @intCast(index);
                         return php.getHashEntry(ht, key) catch if (vivicate) create: {
                             if (ht.nNumOfElements > 64) {
                                 // start removing unreferenced children when the hash table
