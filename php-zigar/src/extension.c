@@ -72,10 +72,6 @@ void set_stream_no_close(php_stream* strm) {
     strm->flags |= PHP_STREAM_FLAG_NO_CLOSE;
 }
 
-bool is_stdio_stream(php_stream* strm) {
-    return php_stream_is(strm, PHP_STREAM_IS_STDIO);
-}
-
 typedef struct {
     zval* ptr;
     size_t len;

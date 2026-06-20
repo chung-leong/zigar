@@ -134,7 +134,7 @@ pub fn Class(comptime S: type) type {
                 const func = &func_struct.closure.php_portion;
                 func.internal_function.function_name = name;
                 return func;
-            } else if (field_obj.handlers.*.get_closure != php.std_object_handlers.get_closure) {
+            } else if (field_obj.handlers.*.get_closure != php.getStandardObjectHandler(.get_closure)) {
                 // aside from Function, only Class implements getClosure()
                 const class_struct = fromObject(field_obj);
                 return &class_struct.closure.php_portion;

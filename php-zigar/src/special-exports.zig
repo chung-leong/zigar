@@ -55,7 +55,7 @@ pub const SpecialExports = struct {
             .ce_flags = php.LINKED | php.RESOLVED_INTERFACES,
             .properties_info = php.createHashTable(null),
             .constants_table = php.createHashTable(null),
-            .function_table = php.createHashTable(php.destructor.function),
+            .function_table = php.createHashTable(php.getDestructor(.function)),
             .unnamed_0 = .{
                 .parent = php.getClassEntry(.standard),
             },

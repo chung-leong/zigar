@@ -48,7 +48,7 @@ pub const ModuleHost = struct {
             .module = module,
             .module_path = php.createString(std.mem.sliceTo(module.module_path, 0)),
             .plain_object_table = php.createHashTable(null),
-            .exception_table = php.createHashTable(php.destructor.value),
+            .exception_table = php.createHashTable(php.getDestructor(.value)),
         };
         self.allocator = .{ .ptr = self, .vtable = &BufferAllocator.vtable };
         // install hooks

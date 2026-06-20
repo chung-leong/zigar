@@ -8,7 +8,6 @@
 
 #define PHP_WIN32
 #define ZEND_WIN32
-#define ZEND_DEBUG 0
 
 #define _pid_t int
 

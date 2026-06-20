@@ -4,11 +4,11 @@ const builtin = @import("builtin");
 const AbortSignal = @import("abort-signal.zig").AbortSignal;
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
 const failure = @import("failure.zig");
+const fixEnvironment = @import("dyn-lib.zig").fixEnvironment;
 const getSharedLibraryPath = @import("compilation.zig").getSharedLibraryPath;
 const js_compat = @import("js-compat.zig");
 const ModuleHost = @import("host.zig").ModuleHost;
 const php = @import("php.zig");
-const fixEnvironment = @import("dyn-lib.zig").fixEnvironment;
 const ArgumentIterator = php.ArgumentIterator;
 const FunctionInfo = php.FunctionInfo;
 const ExecuteData = php.ExecuteData;
@@ -71,7 +71,7 @@ export fn php_zigar_req_shutdown(_: c_int, _: c_int) php.Result {
 
 export fn php_zigar_info(_: *ModuleEntry) void {
     php.infoTableStart();
-    php.infoTableHeader(2, "PHP Zigar", "enabled");
+    php.infoTableHeader(&.{ "PHP Zigar", "enabled" });
     php.infoTableEnd();
 }
 
