@@ -33,7 +33,6 @@ const TypedArrayOf = @import("js-compat.zig").TypedArrayOf;
 const ZigObject = @import("object.zig").ZigObject;
 
 pub const ZigClassEntry = struct {
-    php_portion: ClassEntry = undefined,
     object: *Object,
     host: *Host,
     type: StructureType,
@@ -52,6 +51,9 @@ pub const ZigClassEntry = struct {
     } = .{},
     slot_usage: SlotUsage = .none,
     static_data: StaticData = undefined,
+    // this field must not be the first one, since the cache mechanism relies on ZigClassEntry
+    // pointers being different from their ClassEntry pointers
+    php_portion: ClassEntry = undefined,
 
     pub const ScopeType = enum { instance, static };
 
