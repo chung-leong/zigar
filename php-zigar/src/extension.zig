@@ -31,6 +31,15 @@ const ShutdownCallback = struct {
 
 threadlocal var request_shutdown_callbacks: std.ArrayList(ShutdownCallback) = .empty;
 
+pub fn DllMain(
+    _: std.os.windows.HINSTANCE,
+    _: std.os.windows.DWORD,
+    _: std.os.windows.LPVOID,
+) std.os.windows.BOOL {
+    @import("php-win32-c.zig").link() catch return std.os.windows.FALSE;
+    return std.os.windows.TRUE;
+}
+
 pub fn addRequestShutdownCallback(ptr: *anyopaque, fn_ptr: *const fn (*anyopaque) void) !void {
     try request_shutdown_callbacks.append(php.allocator, .{ .ptr = ptr, .fn_ptr = fn_ptr });
 }
@@ -341,7 +350,7 @@ comptime {
 }
 
 pub threadlocal var options: Options = .{};
-pub threadlocal var ini_entries: [std.meta.fields(Options).len]php.IniEntryDef = undefined;
+pub var ini_entries: [std.meta.fields(Options).len]php.IniEntryDef = undefined;
 
 fn registerIniEntries(module_number: c_int) !void {
     const fields = std.meta.fields(Options);

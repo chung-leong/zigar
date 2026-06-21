@@ -72,9 +72,9 @@ const debug = @import("debug.zig");
 const failure = @import("failure.zig");
 const fn_transform = @import("zigft/fn-transform.zig");
 
-// on Windows, we link symbols in PHP executable manually
+// on Windows, we link symbols in PHP DLL manually
 pub const pc = switch (builtin.target.os.tag) {
-    .windows => @import("php-c.zig"),
+    .windows => @import("php-win32-c.zig"),
     else => c,
 };
 
