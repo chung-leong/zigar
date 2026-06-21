@@ -49,6 +49,10 @@ pub fn build(b: *std.Build) !void {
         .file = b.path("src/extension.c"),
         .flags = c_flags.items,
     });
+    if (target.result.os.tag.isDarwin()) {
+        // allow symbols from php executable to be undefined
+        lib.linker_allow_shlib_undefined = true;
+    }
 
     inline for (.{ translate_c, mod }) |c| {
         const os_specific = if (target.result.os.tag == .linux)
