@@ -49,8 +49,8 @@ pub const ArrayBuffer = struct {
     pub fn create(buffer: ?*ByteBuffer) !*Object {
         const prop_size = php.getObjectPropertySize(class_entry);
         const size: usize = @intCast(@sizeOf(@This()) + prop_size);
-        const mem = php.emalloc(size) orelse return error.OutOfMemory;
-        errdefer php.efree(mem);
+        const mem = php.emalloc(size, @src()) orelse return error.OutOfMemory;
+        errdefer php.efree(mem, @src());
         const self: *@This() = @ptrCast(@alignCast(mem));
         self.* = .{
             .buffer = if (buffer) |buf| use: {
@@ -324,8 +324,8 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
         pub fn create(buffer: ?*ByteBuffer) !*Object {
             const prop_size = php.getObjectPropertySize(class_entry);
             const size: usize = @intCast(@sizeOf(@This()) + prop_size);
-            const mem = php.emalloc(size) orelse return error.OutOfMemory;
-            errdefer php.efree(mem);
+            const mem = php.emalloc(size, @src()) orelse return error.OutOfMemory;
+            errdefer php.efree(mem, @src());
             const self: *@This() = @ptrCast(@alignCast(mem));
             self.* = .{ .buffer = if (buffer) |buf| use: {
                 buf.addRef();

@@ -64,8 +64,8 @@ pub const AbortSignal = struct {
         const prop_size = php.getObjectPropertySize(ce);
         const size: usize = @intCast(@sizeOf(@This()) + prop_size);
         // we can't use the allocator here, since freeing is done by PHP itself
-        const mem = php.emalloc(size) orelse return error.OutOfMemory;
-        errdefer php.efree(mem);
+        const mem = php.emalloc(size, @src()) orelse return error.OutOfMemory;
+        errdefer php.efree(mem, @src());
         const self: *@This() = @ptrCast(@alignCast(mem));
         self.* = .{};
         const obj = self.object();

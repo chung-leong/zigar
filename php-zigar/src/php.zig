@@ -1,14 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const debug = @import("debug.zig");
-const failure = @import("failure.zig");
-const fn_transform = @import("zigft/fn-transform.zig");
-
-pub const c = switch (builtin.target.os.tag) {
-    .windows => @import("win32-c.zig"),
-    else => @import("c"),
-};
+pub const c = @import("c");
 pub const ArgInfo = c.zend_arg_info;
 pub const Array = c.zend_array;
 pub const ClassEntry = c.zend_class_entry;
@@ -75,7 +68,19 @@ pub const INI_SYSTEM = c.ZEND_INI_SYSTEM;
 pub const INI_ALL = c.ZEND_INI_ALL;
 pub const displayIniEntries = c.display_ini_entries;
 
-inline fn win32Deref(arg: anytype) switch (builtin.target.os.tag) {
+const debug = @import("debug.zig");
+const failure = @import("failure.zig");
+const fn_transform = @import("zigft/fn-transform.zig");
+
+// on Windows, we link symbols in PHP executable manually
+pub const pc = switch (builtin.target.os.tag) {
+    .windows => @import("php-c.zig"),
+    else => c,
+};
+
+// while function pointer dereference automatically, manually linked data variables
+// need to be dereference manually
+inline fn deref(arg: anytype) switch (builtin.target.os.tag) {
     .windows => @TypeOf(arg.*),
     else => @TypeOf(arg),
 } {
@@ -145,7 +150,7 @@ pub fn getCompilerGlobals() *const CompilerGlobals {
     if (use_tsrm) {
         @compileError("TODO");
     } else {
-        return win32Deref(&c.compiler_globals);
+        return deref(&pc.compiler_globals);
     }
 }
 
@@ -153,7 +158,7 @@ pub fn getExecutorGlobals() *const ExecutorGlobals {
     if (use_tsrm) {
         @compileError("TODO");
     } else {
-        return win32Deref(&c.executor_globals);
+        return deref(&pc.executor_globals);
     }
 }
 
@@ -341,7 +346,7 @@ pub fn removeError(retval: anytype) switch (@typeInfo(@TypeOf(retval))) {
 }
 
 pub fn findClassEntry(comptime name: []const u8) ?*ClassEntry {
-    return c.zend_lookup_class(getStaticString(name));
+    return pc.zend_lookup_class(getStaticString(name));
 }
 
 pub const ValueType = enum(u8) {
@@ -480,7 +485,7 @@ pub fn createValueObject(object: ?*Object) Value {
 
 pub fn createValueReference(target: *const Value) Value {
     var result: Value = .{};
-    const ref: *Reference = @ptrCast(@alignCast(emalloc(@sizeOf(Reference))));
+    const ref: *Reference = @ptrCast(@alignCast(emalloc(@sizeOf(Reference), @src())));
     ref.gc = .{ .refcount = 1, .u = .{ .type_info = c.GC_REFERENCE } };
     ref.val = target.*;
     ref.sources = .{ .ptr = null };
@@ -491,12 +496,12 @@ pub fn createValueReference(target: *const Value) Value {
 
 pub fn createValueNewObject(name: *const String, params: []const Value) !Value {
     var result: Value = undefined;
-    const ce = c.zend_lookup_class(@constCast(name)) orelse return error.NonexistentClass;
-    if (c.object_init_ex(&result, ce) != c.SUCCESS) return error.CannotCreateObject;
+    const ce = pc.zend_lookup_class(@constCast(name)) orelse return error.NonexistentClass;
+    if (pc.object_init_ex(&result, ce) != c.SUCCESS) return error.CannotCreateObject;
     const obj = result.value.obj;
     const ctor = obj.*.handlers.*.get_constructor.?(obj);
     if (ctor) |f| {
-        c.zend_call_known_function(
+        pc.zend_call_known_function(
             f,
             obj,
             obj.*.ce,
@@ -580,33 +585,33 @@ pub fn createValueStream(strm: *Stream) Value {
 
 pub fn createValueClosure(func: *Function, scope: ?*ClassEntry, called_scope: ?*ClassEntry, this_ptr: ?*const Value) Value {
     var result: Value = undefined;
-    c.zend_create_closure(&result, func, scope, called_scope, @constCast(this_ptr));
+    pc.zend_create_closure(&result, func, scope, called_scope, @constCast(this_ptr));
     return result;
 }
 
 pub fn empty(comptime T: type) *T {
     return switch (T) {
-        String => c.zend_empty_string,
-        Array => @constCast(&c.zend_empty_array),
+        String => pc.zend_empty_string,
+        Array => @constCast(&pc.zend_empty_array),
         else => @compileError("No empty version: " ++ @typeName(T)),
     };
 }
 
 pub fn convertValue(value: *Value, desired_type: ValueType) !void {
     switch (desired_type) {
-        .boolean => c.convert_to_boolean(value),
-        .long => c.convert_to_long(value),
-        .string => c._convert_to_string(value),
-        .array => c.convert_to_array(value),
-        .object => c.convert_to_object(value),
-        .double => c.convert_to_double(value),
-        .null => c.convert_to_null(value),
+        .boolean => pc.convert_to_boolean(value),
+        .long => pc.convert_to_long(value),
+        .string => pc._convert_to_string(value),
+        .array => pc.convert_to_array(value),
+        .object => pc.convert_to_object(value),
+        .double => pc.convert_to_double(value),
+        .null => pc.convert_to_null(value),
         else => return error.Unexpected,
     }
 }
 
 pub fn compareValues(a: *const Value, b: *const Value) c_int {
-    return c.zend_compare(@constCast(a), @constCast(b));
+    return pc.zend_compare(@constCast(a), @constCast(b));
 }
 
 pub fn isValueNull(value: *const Value) bool {
@@ -639,7 +644,7 @@ pub fn getValueLong(value: *const Value) !Long {
             const result = if (s[0] > '9')
                 c.IS_UNDEF
             else
-                c._is_numeric_string_ex(s, len, &long, &double, false, null, null);
+                pc._is_numeric_string_ex(s, len, &long, &double, false, null, null);
             break :convert switch (result) {
                 c.IS_LONG => long,
                 c.IS_DOUBLE => try doubleToLong(double),
@@ -685,7 +690,7 @@ pub fn getValueDouble(value: *const Value) !f64 {
             const result = if (s[0] > '9')
                 c.IS_UNDEF
             else
-                c._is_numeric_string_ex(s, len, &long, &double, false, null, null);
+                pc._is_numeric_string_ex(s, len, &long, &double, false, null, null);
             break :convert switch (result) {
                 c.IS_DOUBLE => double,
                 c.IS_LONG => try longToDouble(long),
@@ -732,11 +737,11 @@ pub fn getValueArray(value: *const Value) !*Array {
 
 pub fn getValueStream(value: *const Value) !*Stream {
     if (value.u1.v.type == c.IS_RESOURCE) {
-        const res_ptr = c.zend_fetch_resource2_ex(
+        const res_ptr = pc.zend_fetch_resource2_ex(
             @constCast(value),
             "stream",
-            c.php_file_le_stream(),
-            c.php_file_le_pstream(),
+            pc.php_file_le_stream(),
+            pc.php_file_le_pstream(),
         );
         if (res_ptr) |ptr| return @ptrCast(@alignCast(ptr));
     }
@@ -812,8 +817,8 @@ pub fn addElementRef(array: *Value, element: *Value) !void {
 
 pub fn createString(s: []const u8) *String {
     return switch (s.len) {
-        0 => win32Deref(c.zend_empty_string),
-        1 => win32Deref(c.zend_one_char_string)[s[0]],
+        0 => deref(pc.zend_empty_string),
+        1 => deref(pc.zend_one_char_string)[s[0]],
         else => create: {
             const zs = createStringWithLength(s.len);
             if (s.len > 0) {
@@ -832,11 +837,11 @@ pub fn isStringInterned(str: *String) bool {
 
 pub fn createStringWithLength(len: usize) *String {
     return switch (len) {
-        0 => win32Deref(c.zend_empty_string),
+        0 => deref(pc.zend_empty_string),
         else => create: {
             const struct_size = @offsetOf(String, "val") + len + 1;
             const aligned_size = std.mem.alignForward(usize, struct_size, c.ZEND_MM_ALIGNMENT);
-            const zs: *String = @ptrCast(@alignCast(emalloc(aligned_size)));
+            const zs: *String = @ptrCast(@alignCast(emalloc(aligned_size, @src())));
             zs.* = .{
                 .gc = .{ .refcount = 1, .u = .{ .type_info = c.GC_STRING } },
                 .h = 0,
@@ -848,7 +853,7 @@ pub fn createStringWithLength(len: usize) *String {
 }
 
 pub fn createInternedString(s: []const u8) *String {
-    const zend_string_init_interned = win32Deref(c.zend_string_init_interned);
+    const zend_string_init_interned = deref(pc.zend_string_init_interned);
     return zend_string_init_interned.?(s.ptr, s.len, false);
 }
 
@@ -870,19 +875,19 @@ pub fn matchString(s: *const String, text: []const u8) bool {
 }
 
 pub fn createStandardObject() *Object {
-    const obj = c.zend_objects_new(getClassEntry(.standard));
-    obj.*.properties = c._zend_new_array_0();
+    const obj = pc.zend_objects_new(getClassEntry(.standard));
+    obj.*.properties = pc._zend_new_array_0();
     return obj;
 }
 
 pub fn createArray() *Array {
-    return c._zend_new_array_0();
+    return pc._zend_new_array_0();
 }
 
 pub fn createNonDestructiveArray() *Array {
-    const bytes = emalloc(@sizeOf(HashTable));
+    const bytes = emalloc(@sizeOf(HashTable), @src());
     const ht: *HashTable = @ptrCast(@alignCast(bytes));
-    c._zend_hash_init(ht, c.HT_MIN_SIZE, null, false);
+    pc._zend_hash_init(ht, c.HT_MIN_SIZE, null, false);
     return ht;
 }
 
@@ -896,7 +901,7 @@ pub fn convertIterator(value: *const Value) Value {
         const ce: *ClassEntry = obj.ce;
         if (ce.get_iterator) |get_iterator| {
             if (get_iterator(ce, @constCast(value), 0)) |iter| {
-                defer c.zend_iterator_dtor(iter);
+                defer pc.zend_iterator_dtor(iter);
                 const new_array = createArray();
                 const handlers = iter.*.funcs.?;
                 const rewind = handlers.*.rewind.?;
@@ -919,23 +924,23 @@ pub fn convertIterator(value: *const Value) Value {
 }
 
 pub fn getDestructor(comptime tag: enum { function, value }) @TypeOf(switch (tag) {
-    .function => win32Deref(&c.zend_function_dtor),
-    .value => win32Deref(&c.zval_ptr_dtor),
+    .function => deref(&pc.zend_function_dtor),
+    .value => deref(&pc.zval_ptr_dtor),
 }) {
     return switch (tag) {
-        .function => win32Deref(&c.zend_function_dtor),
-        .value => win32Deref(&c.zval_ptr_dtor),
+        .function => deref(&pc.zend_function_dtor),
+        .value => deref(&pc.zval_ptr_dtor),
     };
 }
 
 pub fn createHashTable(dtor: c.dtor_func_t) HashTable {
     var result: HashTable = undefined;
-    c._zend_hash_init(&result, c.HT_MIN_SIZE, dtor, false);
+    pc._zend_hash_init(&result, c.HT_MIN_SIZE, dtor, false);
     return result;
 }
 
 pub fn destroyHashTable(ht: *HashTable) void {
-    c.zend_hash_destroy(ht);
+    pc.zend_hash_destroy(ht);
 }
 
 pub fn getHashLength(ht: *const HashTable) usize {
@@ -952,11 +957,11 @@ pub fn getHashEntry(ht: *const HashTable, key: anytype) !*Value {
         };
     }
     return if (comptime isStringContent(KT))
-        c.zend_hash_str_find(ht, key.ptr, key.len) orelse error.Missing
+        pc.zend_hash_str_find(ht, key.ptr, key.len) orelse error.Missing
     else if (comptime isString(KT))
-        c.zend_hash_find(ht, @constCast(key)) orelse error.Missing
+        pc.zend_hash_find(ht, @constCast(key)) orelse error.Missing
     else if (comptime isInt(KT))
-        c.zend_hash_index_find(ht, @intCast(key)) orelse error.Missing
+        pc.zend_hash_index_find(ht, @intCast(key)) orelse error.Missing
     else
         @compileError("Invalid key: " ++ @typeName(KT));
 }
@@ -1015,11 +1020,11 @@ pub fn insertHashEntry(ht: *HashTable, key: anytype, value: *const Value) *Value
     }
     ht.*.u.flags |= c.HASH_FLAG_ALLOW_COW_VIOLATION;
     const result = if (comptime isStringContent(KT))
-        c.zend_hash_str_update(ht, key.ptr, key.len, @constCast(value))
+        pc.zend_hash_str_update(ht, key.ptr, key.len, @constCast(value))
     else if (comptime isInt(KT))
-        c.zend_hash_index_update(ht, @intCast(key), @constCast(value))
+        pc.zend_hash_index_update(ht, @intCast(key), @constCast(value))
     else if (comptime isString(KT))
-        c.zend_hash_update(ht, key, @constCast(value))
+        pc.zend_hash_update(ht, key, @constCast(value))
     else
         @compileError("Invalid key: " ++ @typeName(KT));
     return @ptrCast(result);
@@ -1040,7 +1045,7 @@ pub fn getHashNextKey(ht: *HashTable) Long {
 
 pub fn appendHashEntry(ht: *HashTable, value: *const Value) usize {
     ht.*.u.flags |= c.HASH_FLAG_ALLOW_COW_VIOLATION;
-    _ = c.zend_hash_next_index_insert(ht, @constCast(value));
+    _ = pc.zend_hash_next_index_insert(ht, @constCast(value));
     return c.zend_hash_num_elements(ht);
 }
 
@@ -1053,11 +1058,11 @@ pub fn removeHashEntry(ht: *HashTable, key: anytype) bool {
     const KT = @TypeOf(key);
     ht.*.u.flags |= c.HASH_FLAG_ALLOW_COW_VIOLATION;
     const result = if (comptime isStringContent(KT))
-        c.zend_hash_str_del(ht, key.ptr, key.len)
+        pc.zend_hash_str_del(ht, key.ptr, key.len)
     else if (comptime isString(KT))
-        c.zend_hash_del(ht, key)
+        pc.zend_hash_del(ht, key)
     else if (comptime isInt(KT))
-        c.zend_hash_index_del(ht, @intCast(key))
+        pc.zend_hash_index_del(ht, @intCast(key))
     else
         @compileError("Invalid key: " ++ @typeName(KT));
     return result == SUCCESS;
@@ -1070,11 +1075,11 @@ pub fn deleteHashEntry(ht: *HashTable, key: anytype) void {
 pub fn hasHashEntry(ht: *HashTable, key: anytype) bool {
     const KT = @TypeOf(key);
     return if (comptime isStringContent(KT))
-        c.zend_hash_str_find(ht, key.ptr, key.len) != null
+        pc.zend_hash_str_find(ht, key.ptr, key.len) != null
     else if (comptime isString(KT))
-        c.zend_hash_find(ht, key) != null
+        pc.zend_hash_find(ht, key) != null
     else if (comptime isInt(KT))
-        c.zend_hash_index_find(ht, @intCast(key)) != null
+        pc.zend_hash_index_find(ht, @intCast(key)) != null
     else
         @compileError("Invalid key: " ++ @typeName(KT));
 }
@@ -1096,8 +1101,8 @@ pub const HashTableIterator = struct {
         var pos: HashPosition = undefined;
         const nc_ht = @constCast(ht);
         switch (options.dir) {
-            .forward => c.zend_hash_internal_pointer_reset_ex(nc_ht, &pos),
-            .backward => c.zend_hash_internal_pointer_end_ex(nc_ht, &pos),
+            .forward => pc.zend_hash_internal_pointer_reset_ex(nc_ht, &pos),
+            .backward => pc.zend_hash_internal_pointer_end_ex(nc_ht, &pos),
         }
         return .{
             .ht = nc_ht,
@@ -1109,8 +1114,8 @@ pub const HashTableIterator = struct {
 
     pub fn reset(self: *@This()) void {
         switch (self.dir) {
-            .forward => c.zend_hash_internal_pointer_reset_ex(self.ht, &self.pos),
-            .backward => c.zend_hash_internal_pointer_end_ex(self.ht, &self.pos),
+            .forward => pc.zend_hash_internal_pointer_reset_ex(self.ht, &self.pos),
+            .backward => pc.zend_hash_internal_pointer_end_ex(self.ht, &self.pos),
         }
         self.returned = false;
     }
@@ -1119,18 +1124,18 @@ pub const HashTableIterator = struct {
         defer self.returned = true;
         if (self.returned) {
             switch (self.dir) {
-                .forward => _ = c.zend_hash_move_forward_ex(self.ht, &self.pos),
-                .backward => _ = c.zend_hash_move_backwards_ex(self.ht, &self.pos),
+                .forward => _ = pc.zend_hash_move_forward_ex(self.ht, &self.pos),
+                .backward => _ = pc.zend_hash_move_backwards_ex(self.ht, &self.pos),
             }
         }
         self.key = null;
-        return c.zend_hash_get_current_data_ex(self.ht, &self.pos);
+        return pc.zend_hash_get_current_data_ex(self.ht, &self.pos);
     }
 
     pub fn currentKey(self: *@This()) *Value {
         if (self.key == null) {
             var key: Value = undefined;
-            c.zend_hash_get_current_key_zval_ex(self.ht, &key, &self.pos);
+            pc.zend_hash_get_current_key_zval_ex(self.ht, &key, &self.pos);
             self.key = key;
             // don't increment the key's refcount
             if (getValueType(&key) == .string) release(&key);
@@ -1184,7 +1189,7 @@ pub fn HashTableObjectIterator(comptime T: type) type {
 
 pub fn readObjectProperty(obj: *const Object, name: *const String) Value {
     var value: Value = createValueNull();
-    _ = c.zend_read_property_ex(obj.ce, @constCast(obj), @constCast(name), true, &value);
+    _ = pc.zend_read_property_ex(obj.ce, @constCast(obj), @constCast(name), true, &value);
     return value;
 }
 
@@ -1224,11 +1229,11 @@ pub fn delRef(value: anytype) void {
 pub fn release(value: anytype) void {
     const T = @TypeOf(value);
     switch (T) {
-        *Value, *const Value, [*c]Value => c.zval_ptr_dtor(@constCast(value)),
-        *String, [*c]String => zend_string_release(value),
-        *Object, [*c]Object => zend_object_release(value),
-        *HashTable, [*c]HashTable => zend_hash_release(value),
-        *Resource, [*c]Resource => _ = c.zend_list_delete(value),
+        *Value, *const Value, [*c]Value => pc.zval_ptr_dtor(@constCast(value)),
+        *String, [*c]String => pc.zend_string_release(value),
+        *Object, [*c]Object => pc.zend_object_release(value),
+        *HashTable, [*c]HashTable => pc.zend_hash_release(value),
+        *Resource, [*c]Resource => _ = pc.zend_list_delete(value),
         else => @compileError("Unexpected type: " ++ @typeName(T)),
     }
 }
@@ -1253,7 +1258,7 @@ pub fn invokeMethodEx(container: ?*const Value, fn_name: *const Value, arguments
     var retval: Value = undefined;
     const args = @constCast(arguments.ptr);
     const len: u32 = @intCast(arguments.len);
-    if (c._call_user_function_impl(@constCast(container), @constCast(fn_name), &retval, len, args, named_params) != c.SUCCESS) {
+    if (pc._call_user_function_impl(@constCast(container), @constCast(fn_name), &retval, len, args, named_params) != c.SUCCESS) {
         return error.Failure;
     }
     if (getValueType(&retval) == .undefined) {
@@ -1281,10 +1286,10 @@ pub const FunctionCallCache = struct {
         fci.param_count = 0;
         fci.params = null;
         var err_msg: [*c]u8 = undefined;
-        const result = c.zend_fcall_info_init(@constCast(callable), 0, &fci, &fcc, null, &err_msg);
+        const result = pc.zend_fcall_info_init(@constCast(callable), 0, &fci, &fcc, null, &err_msg);
         if (result != SUCCESS) {
             if (err_msg != null) {
-                defer efree(err_msg);
+                defer efree(err_msg, @src());
                 return failure.report("{s}", .{err_msg});
             } else {
                 return error.NotCallable;
@@ -1294,7 +1299,7 @@ pub const FunctionCallCache = struct {
     }
 
     pub fn deinit(self: *@This()) void {
-        c.zend_fcall_info_args_clear(&self.fci, true);
+        pc.zend_fcall_info_args_clear(&self.fci, true);
     }
 
     pub fn argumentInfo(self: *@This()) []c.zend_arg_info {
@@ -1307,12 +1312,12 @@ pub const FunctionCallCache = struct {
     }
 
     pub fn invoke(self: *@This(), args: []const Value) !Value {
-        c.zend_fcall_info_argp(&self.fci, @truncate(args.len), @constCast(args.ptr));
-        defer c.zend_fcall_info_args_clear(&self.fci, false);
+        pc.zend_fcall_info_argp(&self.fci, @truncate(args.len), @constCast(args.ptr));
+        defer pc.zend_fcall_info_args_clear(&self.fci, false);
         defer self.fci.named_params = null;
         var retval: Value = undefined;
         self.fci.retval = &retval;
-        const result = c.zend_call_function(&self.fci, &self.fcc);
+        const result = pc.zend_call_function(&self.fci, &self.fcc);
         if (result != SUCCESS) return error.Failure;
         if (getValueType(&retval) == .undefined) {
             const eg = getExecutorGlobals();
@@ -1446,7 +1451,7 @@ pub fn registerConstant(name: *String, value: *const Value) !void {
         .name = reuse(name),
         .value = reuse(value).*,
     };
-    const result = c.zend_register_constant(&constant);
+    const result = pc.zend_register_constant(&constant);
     if (result != SUCCESS) return error.Failure;
 }
 
@@ -1475,7 +1480,7 @@ pub fn unregisterFunction(name: *String) void {
 }
 
 pub fn registerClass(name: *String, ce: *ClassEntry) !void {
-    if (!c.zend_is_valid_class_name(name)) return error.InvalidName;
+    if (!pc.zend_is_valid_class_name(name)) return error.InvalidName;
     const lc_name = createLowercaseName(name);
     defer release(lc_name);
     const cg = getCompilerGlobals();
@@ -1496,30 +1501,30 @@ pub fn unregisterClass(name: *String) void {
 pub fn createLowercaseName(name: *String) *String {
     const str = createString(getStringContent(name));
     const sc = @constCast(getStringContent(str));
-    c.zend_str_tolower(sc.ptr, sc.len);
+    pc.zend_str_tolower(sc.ptr, sc.len);
     return str;
 }
 
 pub fn instanceOf(obj: *Object, ce: *ClassEntry) bool {
-    return (obj.ce == ce) or c.instanceof_function_slow(obj.ce, ce);
+    return (obj.ce == ce) or pc.instanceof_function_slow(obj.ce, ce);
 }
 
 pub fn subclassOf(subclass: *ClassEntry, ce: *ClassEntry) bool {
-    return (subclass == ce) or c.instanceof_function_slow(subclass, ce);
+    return (subclass == ce) or pc.instanceof_function_slow(subclass, ce);
 }
 
 pub fn registerInternalClass(ce: *ClassEntry, parent_ce: *ClassEntry) !*ClassEntry {
-    return c.zend_register_internal_class_ex(ce, parent_ce) orelse error.ClassRegistrationFailure;
+    return pc.zend_register_internal_class_ex(ce, parent_ce) orelse error.ClassRegistrationFailure;
 }
 
 pub fn registerInternalInterface(ce: *ClassEntry) !*ClassEntry {
-    return c.zend_register_internal_interface(ce) orelse error.ClassRegistrationFailure;
+    return pc.zend_register_internal_interface(ce) orelse error.ClassRegistrationFailure;
 }
 
 pub fn unregisterInternalClass(ce: *ClassEntry) void {
     const cg = getCompilerGlobals();
     const list = cg.class_table;
-    const lc_name = c.zend_string_tolower_ex(ce.name, false);
+    const lc_name = pc.zend_string_tolower_ex(ce.name, false);
     defer release(lc_name);
     // the destructor will free the memory
     _ = removeHashEntry(list, lc_name);
@@ -1529,7 +1534,7 @@ pub const unregisterInternalInterface = unregisterInternalClass;
 
 pub fn getObjectProperty(obj: *Object, name: *String) ?Value {
     var retval: Value = undefined;
-    _ = c.zend_std_read_property(obj, name, BP_VAR_R, null, &retval);
+    _ = pc.zend_std_read_property(obj, name, BP_VAR_R, null, &retval);
     return retval;
 }
 
@@ -1550,14 +1555,14 @@ pub const InterfaceName = enum {
 
 pub fn getInterface(itype: InterfaceName) *ClassEntry {
     const ptr = switch (itype) {
-        .aggregate => win32Deref(c.zend_ce_aggregate),
-        .array_access => win32Deref(c.zend_ce_arrayaccess),
-        .countable => win32Deref(c.zend_ce_countable),
-        .iterator => win32Deref(c.zend_ce_iterator),
-        .serializable => win32Deref(c.zend_ce_serializable),
-        .stringable => win32Deref(c.zend_ce_stringable),
-        .traversable => win32Deref(c.zend_ce_traversable),
-        .throwable => win32Deref(c.zend_ce_throwable),
+        .aggregate => deref(pc.zend_ce_aggregate),
+        .array_access => deref(pc.zend_ce_arrayaccess),
+        .countable => deref(pc.zend_ce_countable),
+        .iterator => deref(pc.zend_ce_iterator),
+        .serializable => deref(pc.zend_ce_serializable),
+        .stringable => deref(pc.zend_ce_stringable),
+        .traversable => deref(pc.zend_ce_traversable),
+        .throwable => deref(pc.zend_ce_throwable),
     };
     return @ptrCast(ptr);
 }
@@ -1569,8 +1574,8 @@ pub const ClassEntryName = enum {
 
 pub fn getClassEntry(ctype: ClassEntryName) *ClassEntry {
     const ptr = switch (ctype) {
-        .standard => win32Deref(c.zend_standard_class_def),
-        .exception => win32Deref(c.zend_ce_exception),
+        .standard => deref(pc.zend_standard_class_def),
+        .exception => deref(pc.zend_ce_exception),
     };
     return @ptrCast(ptr);
 }
@@ -1592,12 +1597,12 @@ pub fn throwError(err: anytype) void {
     if (failure.match(err, error.ExceptionThrown)) return;
     const msg = failure.acquireMessage(err);
     defer failure.freeMessage(msg);
-    _ = c.zend_throw_exception_ex(null, 0, "%s (zig)", msg.ptr);
+    _ = pc.zend_throw_exception_ex(null, 0, "%s (zig)", msg.ptr);
 }
 
 pub fn throwException(obj: *Object) error{ExceptionThrown} {
     var value = createValueObject(obj);
-    c.zend_throw_exception_object(&value);
+    pc.zend_throw_exception_object(&value);
     return error.ExceptionThrown;
 }
 
@@ -1622,22 +1627,22 @@ pub fn captureException() !*Object {
     const eg = getExecutorGlobals();
     const ex = eg.exception orelse return error.Unexpected;
     addRef(ex);
-    c.zend_clear_exception();
+    pc.zend_clear_exception();
     return ex;
 }
 
 pub fn triggerWarning(err: anytype) void {
     const msg = failure.acquireMessage(err);
     defer failure.freeMessage(msg);
-    c.zend_error(c.E_WARNING, "%s (zig)", msg.ptr);
+    pc.zend_error(c.E_WARNING, "%s (zig)", msg.ptr);
 }
 
 pub fn getCurrentLine() u32 {
-    return c.zend_get_executed_lineno();
+    return pc.zend_get_executed_lineno();
 }
 
 pub fn getCurrentFile() *String {
-    const path = c.zend_get_executed_filename();
+    const path = pc.zend_get_executed_filename();
     const len = std.mem.len(path);
     return createString(path[0..len]);
 }
@@ -1645,7 +1650,7 @@ pub fn getCurrentFile() *String {
 pub fn getBacktrace() !*Array {
     const eg = getExecutorGlobals();
     var trace: Value = undefined;
-    c.zend_fetch_debug_backtrace(
+    pc.zend_fetch_debug_backtrace(
         &trace,
         0,
         if (eg.exception_ignore_args) c.DEBUG_BACKTRACE_IGNORE_ARGS else 0,
@@ -1654,27 +1659,24 @@ pub fn getBacktrace() !*Array {
     return try getValueArray(&trace);
 }
 
-pub fn emalloc(size: usize) ?*anyopaque {
-    const src = @src();
-    const ptr = switch (comptime argCount(@TypeOf(c._emalloc))) {
-        5 => c._emalloc(size, src.file, src.line, null, 0),
-        1 => c._emalloc(size),
+pub fn emalloc(size: usize, comptime src: std.builtin.SourceLocation) ?*anyopaque {
+    const ptr = switch (comptime argCount(@TypeOf(pc._emalloc))) {
+        5 => pc._emalloc(size, src.file, src.line, null, 0),
+        1 => pc._emalloc(size),
         else => @compileError("Unexpected _emalloc argument count"),
     };
     return ptr;
 }
 
-pub fn efree(ptr: ?*anyopaque) void {
-    const src = @src();
-    switch (comptime argCount(@TypeOf(c._efree))) {
-        5 => c._efree(ptr, src.file, src.line, null, 0),
-        1 => c._efree(ptr),
+pub fn efree(ptr: ?*anyopaque, comptime src: std.builtin.SourceLocation) void {
+    switch (comptime argCount(@TypeOf(pc._efree))) {
+        5 => pc._efree(ptr, src.file, src.line, null, 0),
+        1 => pc._efree(ptr),
         else => @compileError("Unexpected ptr argument count"),
     }
 }
 
-pub fn estrdup(s: [*:0]const u8) [*:0]const u8 {
-    const src = @src();
+pub fn estrdup(s: [*:0]const u8, comptime src: std.builtin.SourceLocation) [*:0]const u8 {
     return switch (comptime argCount(@TypeOf(c.estrdup))) {
         5 => c._estrdup(s, src.file, src.line + 1, null, 0),
         1 => c._estrdup(s),
@@ -1683,7 +1685,7 @@ pub fn estrdup(s: [*:0]const u8) [*:0]const u8 {
 }
 
 pub fn malloc(size: usize) ?*anyopaque {
-    const ptr = c.__zend_malloc(size);
+    const ptr = pc.__zend_malloc(size);
     return ptr;
 }
 
@@ -1712,7 +1714,7 @@ const allocator_impl = struct {
         _ = return_address;
         _ = alignment;
         std.debug.assert(len > 0);
-        return @ptrCast(emalloc(len));
+        return @ptrCast(emalloc(len, @src()));
     }
 
     fn resize(
@@ -1753,7 +1755,7 @@ const allocator_impl = struct {
     ) void {
         _ = alignment;
         _ = return_address;
-        efree(memory.ptr);
+        efree(memory.ptr, @src());
     }
 };
 
@@ -1791,9 +1793,9 @@ fn isInt(comptime T: type) bool {
 pub fn open(path: *const String, mode: [*c]const u8, context: ?*StreamContext, options: c_int) !*Stream {
     const p = getStringContent(path);
     const src = @src();
-    return switch (comptime argCount(@TypeOf(c._php_stream_open_wrapper_ex))) {
-        10 => c._php_stream_open_wrapper_ex(p.ptr, mode, options, null, context, 1, src.file, src.line, src.file, src.line),
-        5 => c._php_stream_open_wrapper_ex(p.ptr, mode, options, null, context),
+    return switch (comptime argCount(@TypeOf(pc._php_stream_open_wrapper_ex))) {
+        10 => pc._php_stream_open_wrapper_ex(p.ptr, mode, options, null, context, 1, src.file, src.line, src.file, src.line),
+        5 => pc._php_stream_open_wrapper_ex(p.ptr, mode, options, null, context),
         else => @compileError("Unexpected _php_stream_open_wrapper_ex argument count"),
     } orelse error.Failure;
 }
@@ -1820,7 +1822,7 @@ pub fn getStreamMode(strm: *Stream) []const u8 {
 
 pub fn isStdIOStream(strm: *Stream) bool {
     const ops = get_stream_handlers(strm);
-    return ops == win32Deref(&c.php_stream_stdio_ops);
+    return ops == deref(&pc.php_stream_stdio_ops);
 }
 
 pub fn preserveStream(strm: *Stream) void {
@@ -1830,11 +1832,11 @@ pub fn preserveStream(strm: *Stream) void {
 pub fn openDescriptor(fd: c_int, mode: [*c]const u8) !*Stream {
     const src = @src();
     // arg count varies depending on PHP version and whether debug is enabled
-    return switch (comptime argCount(@TypeOf(c._php_stream_fopen_from_fd))) {
-        3 => c._php_stream_fopen_from_fd(fd, mode, null),
-        4 => c._php_stream_fopen_from_fd(fd, mode, null, false),
-        8 => c._php_stream_fopen_from_fd(fd, mode, null, 1, src.file, src.line, src.file, src.line),
-        9 => c._php_stream_fopen_from_fd(fd, mode, null, 1, src.file, src.line, src.file, src.line, false),
+    return switch (comptime argCount(@TypeOf(pc._php_stream_fopen_from_fd))) {
+        3 => pc._php_stream_fopen_from_fd(fd, mode, null),
+        4 => pc._php_stream_fopen_from_fd(fd, mode, null, false),
+        8 => pc._php_stream_fopen_from_fd(fd, mode, null, 1, src.file, src.line, src.file, src.line),
+        9 => pc._php_stream_fopen_from_fd(fd, mode, null, 1, src.file, src.line, src.file, src.line, false),
         else => @compileError("Unexpected _php_stream_fopen_from_fd argument count"),
     } orelse error.Failure;
 }
@@ -1843,7 +1845,7 @@ pub fn getDescriptor(strm: *Stream) ?c_int {
     if (!isStdIOStream(strm)) return null;
     return inline for (.{ c.PHP_STREAM_AS_FD_FOR_SELECT, c.PHP_STREAM_AS_FD }) |as| {
         var fd: c_int align(@alignOf(*anyopaque)) = undefined;
-        if (c._php_stream_cast(strm, as, @ptrCast(&fd), 0) == SUCCESS) {
+        if (pc._php_stream_cast(strm, as, @ptrCast(&fd), 0) == SUCCESS) {
             break fd;
         }
     } else null;
@@ -1868,21 +1870,21 @@ pub fn pipe(fds: *[2]c_int) c_int {
 }
 
 pub fn close(strm: *Stream) void {
-    _ = c._php_stream_free(strm, c.PHP_STREAM_FREE_CLOSE);
+    _ = pc._php_stream_free(strm, c.PHP_STREAM_FREE_CLOSE);
 }
 
 pub fn flush(strm: *Stream) void {
-    _ = c._php_stream_flush(strm, 0);
+    _ = pc._php_stream_flush(strm, 0);
 }
 
 pub fn read(strm: *Stream, buf: [*]const u8, size: usize) !usize {
-    const r = c._php_stream_read(strm, @constCast(buf), size);
+    const r = pc._php_stream_read(strm, @constCast(buf), size);
     if (r < 0) return error.Failure;
     return @intCast(r);
 }
 
 pub fn write(strm: *Stream, buf: [*]const u8, size: usize) !usize {
-    const w = c._php_stream_write(strm, buf, size);
+    const w = pc._php_stream_write(strm, buf, size);
     if (w < 0) return error.Failure;
     return @intCast(w);
 }
@@ -1892,21 +1894,21 @@ pub fn seek(strm: *Stream, offset: i64, whence: u32) !void {
     const flags = get_stream_flags(strm);
     if (ops.seek == null) return error.Unseekable;
     if (flags & c.PHP_STREAM_FLAG_NO_SEEK != 0) return error.Unseekable;
-    const pos = c._php_stream_seek(strm, offset, @intCast(whence));
+    const pos = pc._php_stream_seek(strm, offset, @intCast(whence));
     if (pos < 0) return error.Failure;
 }
 
 pub fn stat(path: *const String, context: ?*StreamContext, _: std.os.wasi.lookupflags_t, out: *std.os.wasi.filestat_t) !void {
     const p = getStringContent(path);
     var stat_buf: c.php_stream_statbuf = undefined;
-    const result = c._php_stream_stat_path(p.ptr, 0, &stat_buf, context);
+    const result = pc._php_stream_stat_path(p.ptr, 0, &stat_buf, context);
     if (result != SUCCESS) return error.Failure;
     copyStat(&stat_buf.sb, out);
 }
 
 pub fn fstat(strm: *Stream, out: *std.os.wasi.filestat_t) !void {
     var stat_buf: c.php_stream_statbuf = undefined;
-    const result = c._php_stream_stat(strm, &stat_buf);
+    const result = pc._php_stream_stat(strm, &stat_buf);
     if (result != SUCCESS) return error.Failure;
     copyStat(&stat_buf.sb, out);
 }
@@ -1914,9 +1916,9 @@ pub fn fstat(strm: *Stream, out: *std.os.wasi.filestat_t) !void {
 pub fn performOperation(opcode: c_int, op1: *const Value, op2: *const Value) !Value {
     var value: Value = undefined;
     var result: Result = undefined;
-    if (c.get_unary_op(opcode)) |unary_handler| {
+    if (pc.get_unary_op(opcode)) |unary_handler| {
         result = unary_handler(&value, @constCast(op1));
-    } else if (c.get_binary_op(opcode)) |binary_handler| {
+    } else if (pc.get_binary_op(opcode)) |binary_handler| {
         result = binary_handler(&value, @constCast(op1), @constCast(op2));
     } else {
         result = FAILURE;
@@ -1998,25 +2000,25 @@ pub fn rename(path: *const String, new_path: *const String, context: ?*StreamCon
 }
 
 pub fn tell(strm: *Stream) !usize {
-    const pos = c._php_stream_tell(strm);
+    const pos = pc._php_stream_tell(strm);
     if (pos < 0) return error.Failure;
     return @intCast(pos);
 }
 
 pub fn truncate(strm: *Stream, len: u64) !void {
-    const result = c._php_stream_truncate_set_size(strm, @intCast(len));
+    const result = pc._php_stream_truncate_set_size(strm, @intCast(len));
     if (result != 0) return error.Failure;
 }
 
 pub fn mkdir(path: *const String, mode: u32, context: ?*StreamContext) !void {
     const p = getStringContent(path);
-    const result = c._php_stream_mkdir(p.ptr, @intCast(mode), 0, context);
+    const result = pc._php_stream_mkdir(p.ptr, @intCast(mode), 0, context);
     if (result == 0) return error.Failure;
 }
 
 pub fn rmdir(path: *const String, context: ?*StreamContext) !void {
     const p = getStringContent(path);
-    const result = c._php_stream_rmdir(p.ptr, 0, context);
+    const result = pc._php_stream_rmdir(p.ptr, 0, context);
     if (result == 0) return error.Failure;
 }
 
@@ -2024,42 +2026,42 @@ pub fn opendir(path: *String, options: c_int, context: ?*StreamContext) !*Stream
     const p = getStringContent(path);
     const src = @src();
     return switch (comptime argCount(@TypeOf(c._php_stream_opendir))) {
-        8 => c._php_stream_opendir(p.ptr, options, context, 1, src.file, src.line, src.file, src.line),
-        3 => c._php_stream_opendir(p.ptr, options, context),
+        8 => pc._php_stream_opendir(p.ptr, options, context, 1, src.file, src.line, src.file, src.line),
+        3 => pc._php_stream_opendir(p.ptr, options, context),
         else => @compileError("Unexpected _php_stream_opendir argument count"),
     } orelse error.Failure;
 }
 
 pub fn readdir(strm: *Stream, ent: *DirEntry) bool {
-    return c._php_stream_readdir(strm, ent) != null;
+    return pc._php_stream_readdir(strm, ent) != null;
 }
 
 pub fn closedir(strm: *Stream) void {
-    _ = c.php_stream_free(strm, c.PHP_STREAM_FREE_CLOSE);
+    _ = pc.php_stream_free(strm, c.PHP_STREAM_FREE_CLOSE);
 }
 
 pub fn sendfile(out_strm: *Stream, in_strm: *Stream, offset: ?*i64, len: u32) !u32 {
     var original_pos: i64 = 0;
     var copied: i64 = 0;
     if (offset) |ptr| {
-        original_pos = c._php_stream_tell(in_strm);
+        original_pos = pc._php_stream_tell(in_strm);
         if (original_pos < 0) return error.Failure;
-        const pos = c._php_stream_seek(in_strm, ptr.*, c.SEEK_SET);
+        const pos = pc._php_stream_seek(in_strm, ptr.*, c.SEEK_SET);
         if (pos < 0) return error.InvalidOffset;
     }
     var buf: [8192]u8 = undefined;
     var remaining = len;
     while (remaining > 0) {
-        const bytes_read = c._php_stream_read(in_strm, &buf, @min(remaining, buf.len));
+        const bytes_read = pc._php_stream_read(in_strm, &buf, @min(remaining, buf.len));
         if (bytes_read == 0) break;
-        const written = c._php_stream_write(out_strm, &buf, @intCast(bytes_read));
+        const written = pc._php_stream_write(out_strm, &buf, @intCast(bytes_read));
         if (written < 0) return error.Failure;
         copied += bytes_read;
         remaining -= @intCast(bytes_read);
     }
     if (offset) |ptr| {
         ptr.* += copied;
-        _ = c._php_stream_seek(in_strm, original_pos, c.SEEK_SET);
+        _ = pc._php_stream_seek(in_strm, original_pos, c.SEEK_SET);
     }
     return @intCast(copied);
 }
@@ -2069,44 +2071,44 @@ pub fn copyFileRange(in_strm: *Stream, out_strm: *Stream, in_offset: ?*i64, out_
     var original_out_pos: i64 = 0;
     var copied: i64 = 0;
     if (in_offset) |ptr| {
-        original_in_pos = c._php_stream_tell(in_strm);
+        original_in_pos = pc._php_stream_tell(in_strm);
         if (original_in_pos < 0) return error.Failure;
-        const pos = c._php_stream_seek(in_strm, ptr.*, c.SEEK_SET);
+        const pos = pc._php_stream_seek(in_strm, ptr.*, c.SEEK_SET);
         if (pos < 0) return error.InvalidOffset;
     }
     if (out_offset) |ptr| {
-        original_out_pos = c._php_stream_tell(out_strm);
+        original_out_pos = pc._php_stream_tell(out_strm);
         if (original_out_pos < 0) return error.Failure;
-        const pos = c._php_stream_seek(out_strm, ptr.*, c.SEEK_SET);
+        const pos = pc._php_stream_seek(out_strm, ptr.*, c.SEEK_SET);
         if (pos < 0) return error.InvalidOffset;
     }
     var buf: [8192]u8 = undefined;
     var remaining = len;
     while (remaining > 0) {
-        const bytes_read = c._php_stream_read(in_strm, &buf, @min(remaining, buf.len));
+        const bytes_read = pc._php_stream_read(in_strm, &buf, @min(remaining, buf.len));
         if (bytes_read == 0) break;
-        const written = c._php_stream_write(out_strm, &buf, @intCast(bytes_read));
+        const written = pc._php_stream_write(out_strm, &buf, @intCast(bytes_read));
         if (written < 0) return error.Failure;
         copied += bytes_read;
         remaining -= @intCast(bytes_read);
     }
     if (in_offset) |ptr| {
         ptr.* += copied;
-        _ = c._php_stream_seek(in_strm, original_in_pos, c.SEEK_SET);
+        _ = pc._php_stream_seek(in_strm, original_in_pos, c.SEEK_SET);
     }
     if (out_offset) |ptr| {
         ptr.* += copied;
-        _ = c._php_stream_seek(out_strm, original_out_pos, c.SEEK_SET);
+        _ = pc._php_stream_seek(out_strm, original_out_pos, c.SEEK_SET);
     }
     return @intCast(copied);
 }
 
 pub fn resolve(name: []const u8, parent_path: []const u8) !*String {
-    return c.php_resolve_path(name.ptr, name.len, parent_path.ptr) orelse error.Failure;
+    return pc.php_resolve_path(name.ptr, name.len, parent_path.ptr) orelse error.Failure;
 }
 
 pub fn rewinddir(strm: *Stream) !void {
-    if (c.php_stream_rewinddir(strm) < 0) return error.Failure;
+    if (pc.php_stream_rewinddir(strm) < 0) return error.Failure;
 }
 
 extern fn get_stream_context(strm: *Stream) ?*StreamContext;
@@ -2128,13 +2130,13 @@ pub fn getStreamWrapperProperty(strm: *Stream, name: []const u8) !*Value {
 pub fn setBlocking(strm: *Stream, set: bool) !void {
     const id = c.PHP_STREAM_OPTION_BLOCKING;
     const value: c_int = if (set) 1 else 0;
-    const result = c._php_stream_set_option(strm, id, value, null);
+    const result = pc._php_stream_set_option(strm, id, value, null);
     if (result < 0) return error.Failure;
 }
 
 pub fn setLock(strm: *Stream, lock_type: c_int) !void {
     const id = c.PHP_STREAM_OPTION_LOCKING;
-    const result = c._php_stream_set_option(strm, id, lock_type, null);
+    const result = pc._php_stream_set_option(strm, id, lock_type, null);
     if (result != SUCCESS) return error.Failure;
 }
 
@@ -2152,7 +2154,7 @@ fn getStreamWrapper(path: []const u8, comptime name: []const u8) !std.meta.Tuple
     *c.php_stream_wrapper,
     @FieldType(c.php_stream_wrapper_ops, name),
 }) {
-    const wrapper = c.php_stream_locate_url_wrapper(path.ptr, null, 0);
+    const wrapper = pc.php_stream_locate_url_wrapper(path.ptr, null, 0);
     if (wrapper == null or wrapper.*.wops == null or @field(wrapper.*.wops.*, name) == null) {
         return error.Failure;
     }
@@ -2164,7 +2166,7 @@ pub const OnModified = fn (*IniEntry, *String, *anyopaque, *anyopaque, *anyopaqu
 pub fn createHandlerTable(comptime T: type, comptime offset: comptime_int) ObjectHandlers {
     var handlers: ObjectHandlers = undefined;
     handlers.offset = offset;
-    const std_object_handlers = win32Deref(&c.std_object_handlers);
+    const std_object_handlers = deref(&pc.std_object_handlers);
     inline for (comptime std.meta.fields(@TypeOf(object_handler_mapping))) |field| {
         const func_name = @field(object_handler_mapping, field.name);
         @field(handlers, field.name) = if (@hasDecl(T, func_name))
@@ -2178,66 +2180,66 @@ pub fn createHandlerTable(comptime T: type, comptime offset: comptime_int) Objec
 }
 
 pub fn getStandardObjectHandler(comptime tag: std.meta.FieldEnum(ObjectHandlers)) @FieldType(ObjectHandlers, @tagName(tag)) {
-    return @field(win32Deref(&c.std_object_handlers), @tagName(tag));
+    return @field(deref(&pc.std_object_handlers), @tagName(tag));
 }
 
 pub fn initializeClassData(ce: *ClassEntry, nullify_handlers: bool) void {
-    c.zend_initialize_class_data(ce, nullify_handlers);
+    pc.zend_initialize_class_data(ce, nullify_handlers);
 }
 
 pub fn initializeIterator(iter: *ObjectIterator) void {
-    c.zend_iterator_init(iter);
+    pc.zend_iterator_init(iter);
 }
 
 pub fn freeIterator(iter: *ObjectIterator) void {
-    c.zend_iterator_dtor(iter);
+    pc.zend_iterator_dtor(iter);
 }
 
 pub fn initializeStandardObject(obj: *Object, ce: *ClassEntry) void {
-    c.zend_object_std_init(obj, ce);
+    pc.zend_object_std_init(obj, ce);
 }
 
 pub fn initializeObjectProperties(obj: *Object, ce: *ClassEntry) void {
-    c.object_properties_init(obj, ce);
+    pc.object_properties_init(obj, ce);
 }
 
 pub fn traceToString(trace: *HashTable, include_main: bool) *String {
-    return c.zend_trace_to_string(trace, include_main);
+    return pc.zend_trace_to_string(trace, include_main);
 }
 
 pub fn registerIniEntries(ini_entry: [*]const IniEntryDef, module_number: c_int) Result {
-    return c.zend_register_ini_entries(ini_entry, module_number);
+    return pc.zend_register_ini_entries(ini_entry, module_number);
 }
 
 pub fn unregisterIniEntries(module_number: c_int) void {
-    c.zend_unregister_ini_entries(module_number);
+    pc.zend_unregister_ini_entries(module_number);
 }
 
 pub fn onUpdateBool(entry: [*c]IniEntry, new_value: [*c]String, mh_arg1: ?*anyopaque, mh_arg2: ?*anyopaque, mh_arg3: ?*anyopaque, stage: c_int) callconv(.c) c_int {
-    return c.OnUpdateBool(entry, new_value, mh_arg1, mh_arg2, mh_arg3, stage);
+    return pc.OnUpdateBool(entry, new_value, mh_arg1, mh_arg2, mh_arg3, stage);
 }
 
 pub fn onUpdateLong(entry: [*c]IniEntry, new_value: [*c]String, mh_arg1: ?*anyopaque, mh_arg2: ?*anyopaque, mh_arg3: ?*anyopaque, stage: c_int) callconv(.c) c_int {
-    return c.OnUpdateLong(entry, new_value, mh_arg1, mh_arg2, mh_arg3, stage);
+    return pc.OnUpdateLong(entry, new_value, mh_arg1, mh_arg2, mh_arg3, stage);
 }
 
 pub fn onUpdateString(entry: [*c]IniEntry, new_value: [*c]String, mh_arg1: ?*anyopaque, mh_arg2: ?*anyopaque, mh_arg3: ?*anyopaque, stage: c_int) callconv(.c) c_int {
-    return c.OnUpdateString(entry, new_value, mh_arg1, mh_arg2, mh_arg3, stage);
+    return pc.OnUpdateString(entry, new_value, mh_arg1, mh_arg2, mh_arg3, stage);
 }
 
 pub fn infoTableStart() void {
-    c.php_info_print_table_start();
+    pc.php_info_print_table_start();
 }
 
 pub fn infoTableHeader(columns: anytype) void {
     switch (columns.len) {
-        2 => c.php_info_print_table_header(2, columns[0].ptr, columns[1].ptr),
+        2 => pc.php_info_print_table_header(2, columns[0].ptr, columns[1].ptr),
         else => @compileError("Unsupported column count"),
     }
 }
 
 pub fn infoTableEnd() void {
-    c.php_info_print_table_end();
+    pc.php_info_print_table_end();
 }
 
 pub const object_handler_mapping = .{
@@ -2266,34 +2268,3 @@ pub const object_handler_mapping = .{
     .compare = "compare",
     .do_operation = "doOperation",
 };
-
-pub fn zend_string_release(arg_s: [*c]c.zend_string) callconv(.c) void {
-    var s = arg_s;
-    _ = &s;
-    if (!((c.zval_gc_flags(s.*.gc.u.type_info) & @as(u32, @bitCast(@as(c_int, 1) << @intCast(6)))) != 0)) {
-        if (c.zend_gc_delref(&s.*.gc) == @as(u32, @bitCast(@as(c_int, 0)))) {
-            _ = if ((c.zval_gc_flags(s.*.gc.u.type_info) & @as(u32, @bitCast(@as(c_int, 1) << @intCast(7)))) != 0) free(@as(?*anyopaque, @ptrCast(s))) else efree(@as(?*anyopaque, @ptrCast(s)));
-        }
-    }
-}
-
-pub fn zend_hash_release(arg_array: [*c]c.zend_array) callconv(.c) void {
-    var array = arg_array;
-    _ = &array;
-    if (!((c.zval_gc_flags(array.*.gc.u.type_info) & @as(u32, @bitCast(@as(c_int, 1) << @intCast(6)))) != 0)) {
-        if (c.zend_gc_delref(&array.*.gc) == @as(u32, @bitCast(@as(c_int, 0)))) {
-            c.zend_hash_destroy(array);
-            _ = if ((c.zval_gc_flags(array.*.gc.u.type_info) & @as(u32, @bitCast(@as(c_int, 1) << @intCast(7)))) != 0) free(@as(?*anyopaque, @ptrCast(array))) else efree(@as(?*anyopaque, @ptrCast(array)));
-        }
-    }
-}
-
-pub fn zend_object_release(arg_obj: [*c]c.zend_object) callconv(.c) void {
-    var obj = arg_obj;
-    _ = &obj;
-    if (c.zend_gc_delref(&obj.*.gc) == @as(u32, @bitCast(@as(c_int, 0)))) {
-        c.zend_objects_store_del(obj);
-    } else if ((@as([*c]c.zend_refcounted, @ptrCast(@alignCast(obj))).*.gc.u.type_info & (@as(c_uint, 4294966272) | @as(c_uint, @bitCast((@as(c_int, 1) << @intCast(4)) << @intCast(0))))) == @as(c_uint, @bitCast(@as(c_int, 0)))) {
-        c.gc_possible_root(@as([*c]c.zend_refcounted, @ptrCast(@alignCast(obj))));
-    }
-}

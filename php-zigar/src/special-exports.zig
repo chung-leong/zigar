@@ -71,8 +71,8 @@ pub const SpecialExports = struct {
         };
         const prop_size = php.getObjectPropertySize(&class_entry);
         const size: usize = @intCast(@sizeOf(@This()) + prop_size);
-        const mem = php.emalloc(size) orelse return error.OutOfMemory;
-        errdefer php.efree(mem);
+        const mem = php.emalloc(size, @src()) orelse return error.OutOfMemory;
+        errdefer php.efree(mem, @src());
         const self: *@This() = @ptrCast(@alignCast(mem));
         self.* = .{
             .host = class.host,

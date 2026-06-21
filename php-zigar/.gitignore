@@ -13,6 +13,7 @@ Makefile
 Makefile.*
 zig-out
 .zig-cache
+extensions
 
 *.a
 *.dep

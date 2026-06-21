@@ -1,158 +1,6 @@
 const std = @import("std");
 
 const c = @import("c");
-pub const _IS_BOOL = c._IS_BOOL;
-pub const _IS_ERROR = c._IS_ERROR;
-pub const _IS_NUMBER = c._IS_NUMBER;
-pub const _O_RDONLY = c._O_RDONLY;
-pub const _open_osfhandle = c._open_osfhandle;
-pub const BP_VAR_FUNC_ARG = c.BP_VAR_FUNC_ARG;
-pub const BP_VAR_IS = c.BP_VAR_IS;
-pub const BP_VAR_R = c.BP_VAR_R;
-pub const BP_VAR_RW = c.BP_VAR_RW;
-pub const BP_VAR_UNSET = c.BP_VAR_UNSET;
-pub const BP_VAR_W = c.BP_VAR_W;
-pub const CreatePipe = c.CreatePipe;
-pub const DEBUG_BACKTRACE_IGNORE_ARGS = c.DEBUG_BACKTRACE_IGNORE_ARGS;
-pub const dtor_func_t = c.dtor_func_t;
-pub const E_ERROR = c.E_ERROR;
-pub const E_WARNING = c.E_WARNING;
-pub const free = c.free;
-pub const FAILURE = c.FAILURE;
-pub const GC_ADDREF = c.GC_ADDREF;
-pub const GC_NOT_COLLECTABLE = c.GC_NOT_COLLECTABLE;
-pub const GC_REFERENCE = c.GC_REFERENCE;
-pub const GC_STRING = c.GC_STRING;
-pub const HANDLE = c.HANDLE;
-pub const HASH_FLAG_ALLOW_COW_VIOLATION = c.HASH_FLAG_ALLOW_COW_VIOLATION;
-pub const HashPosition = c.HashPosition;
-pub const HashTable = c.HashTable;
-pub const HT_MIN_SIZE = c.HT_MIN_SIZE;
-pub const ImageDirectoryEntryToDataEx = c.ImageDirectoryEntryToDataEx;
-pub const IS_ARRAY = c.IS_ARRAY;
-pub const IS_ARRAY_EX = c.IS_ARRAY_EX;
-pub const IS_CALLABLE = c.IS_CALLABLE;
-pub const IS_CONSTANT_AST = c.IS_CONSTANT_AST;
-pub const IS_DOUBLE = c.IS_DOUBLE;
-pub const IS_FALSE = c.IS_FALSE;
-pub const IS_LONG = c.IS_LONG;
-pub const IS_NULL = c.IS_NULL;
-pub const IS_OBJ_FREE_CALLED = c.IS_OBJ_FREE_CALLED;
-pub const IS_OBJECT = c.IS_OBJECT;
-pub const IS_OBJECT_EX = c.IS_OBJECT_EX;
-pub const IS_PTR = c.IS_PTR;
-pub const IS_REFERENCE = c.IS_REFERENCE;
-pub const IS_REFERENCE_EX = c.IS_REFERENCE_EX;
-pub const IS_RESOURCE = c.IS_RESOURCE;
-pub const IS_STR_INTERNED = c.IS_STR_INTERNED;
-pub const IS_STR_PERMANENT = c.IS_STR_PERMANENT;
-pub const IS_STRING = c.IS_STRING;
-pub const IS_STRING_EX = c.IS_STRING_EX;
-pub const IS_TRUE = c.IS_TRUE;
-pub const IS_UNDEF = c.IS_UNDEF;
-pub const MAY_BE_ARRAY = c.MAY_BE_ARRAY;
-pub const MAY_BE_BOOL = c.MAY_BE_BOOL;
-pub const MAY_BE_DOUBLE = c.MAY_BE_DOUBLE;
-pub const MAY_BE_LONG = c.MAY_BE_LONG;
-pub const MAY_BE_NULL = c.MAY_BE_NULL;
-pub const MAY_BE_OBJECT = c.MAY_BE_OBJECT;
-pub const MAY_BE_STRING = c.MAY_BE_STRING;
-pub const MAY_BE_UNDEF = c.MAY_BE_UNDEF;
-pub const php_stream = c.php_stream;
-pub const PHP_STREAM_AS_FD_FOR_SELECT = c.PHP_STREAM_AS_FD_FOR_SELECT;
-pub const php_stream_context = c.php_stream_context;
-pub const php_stream_dirent = c.php_stream_dirent;
-pub const PHP_STREAM_FREE_CLOSE = c.PHP_STREAM_FREE_CLOSE;
-pub const PHP_STREAM_FLAG_NO_SEEK = c.PHP_STREAM_FLAG_NO_SEEK;
-pub const PHP_STREAM_META_TOUCH = c.PHP_STREAM_META_TOUCH;
-pub const PHP_STREAM_OPTION_BLOCKING = c.PHP_STREAM_OPTION_BLOCKING;
-pub const PHP_STREAM_OPTION_LOCKING = c.PHP_STREAM_OPTION_LOCKING;
-pub const PHP_STREAM_AS_FD = c.PHP_STREAM_AS_FD;
-pub const php_stream_ops = c.php_stream_ops;
-pub const php_stream_statbuf = c.php_stream_statbuf;
-pub const php_stream_wrapper = c.php_stream_wrapper;
-pub const php_stream_wrapper_ops = c.php_stream_wrapper_ops;
-pub const read = c.read;
-pub const S_IFBLK = c.S_IFBLK;
-pub const S_IFCHR = c.S_IFCHR;
-pub const S_IFDIR = c.S_IFDIR;
-pub const S_IFLNK = c.S_IFLNK;
-pub const S_IFMT = c.S_IFMT;
-pub const S_IFREG = c.S_IFREG;
-pub const SECURITY_ATTRIBUTES = c.SECURITY_ATTRIBUTES;
-pub const SEEK_CUR = c.SEEK_CUR;
-pub const SEEK_END = c.SEEK_END;
-pub const SEEK_SET = c.SEEK_SET;
-pub const SUCCESS = c.SUCCESS;
-pub const TRUE = c.TRUE;
-pub const utimbuf = c.utimbuf;
-pub const write = c.write;
-pub const Z_TYPE_FLAGS_MASK = c.Z_TYPE_FLAGS_MASK;
-pub const ZEND_ACC_ANON_CLASS = c.ZEND_ACC_ANON_CLASS;
-pub const ZEND_ACC_FINAL = c.ZEND_ACC_FINAL;
-pub const ZEND_ACC_LINKED = c.ZEND_ACC_LINKED;
-pub const ZEND_ACC_NO_DYNAMIC_PROPERTIES = c.ZEND_ACC_NO_DYNAMIC_PROPERTIES;
-pub const ZEND_ACC_NOT_SERIALIZABLE = c.ZEND_ACC_NOT_SERIALIZABLE;
-pub const ZEND_ACC_PUBLIC = c.ZEND_ACC_PUBLIC;
-pub const ZEND_ACC_RESOLVED_INTERFACES = c.ZEND_ACC_RESOLVED_INTERFACES;
-pub const ZEND_ACC_STRICT_TYPES = c.ZEND_ACC_STRICT_TYPES;
-pub const ZEND_ACC_VARIADIC = c.ZEND_ACC_VARIADIC;
-pub const zend_arg_info = c.zend_arg_info;
-pub const zend_array = c.zend_array;
-pub const zend_class_entry = c.zend_class_entry;
-pub const zend_constant = c.zend_constant;
-pub const zend_compiler_globals = c.zend_compiler_globals;
-pub const zend_execute_data = c.zend_execute_data;
-pub const zend_executor_globals = c.zend_executor_globals;
-pub const zend_fcall_info = c.zend_fcall_info;
-pub const zend_fcall_info_cache = c.zend_fcall_info_cache;
-pub const zend_fiber = c.zend_fiber;
-pub const zend_fiber_transfer = c.zend_fiber_transfer;
-pub const zend_function = c.zend_function;
-pub const zend_hash_num_elements = c.zend_hash_num_elements;
-pub const ZEND_INI_ALL = c.ZEND_INI_ALL;
-pub const zend_ini_entry = c.zend_ini_entry;
-pub const zend_ini_entry_def = c.zend_ini_entry_def;
-pub const ZEND_INI_PERDIR = c.ZEND_INI_PERDIR;
-pub const ZEND_INI_SYSTEM = c.ZEND_INI_SYSTEM;
-pub const ZEND_INI_USER = c.ZEND_INI_USER;
-pub const zend_internal_arg_info = c.zend_internal_arg_info;
-pub const ZEND_INTERNAL_CLASS = c.ZEND_INTERNAL_CLASS;
-pub const ZEND_INTERNAL_FUNCTION = c.ZEND_INTERNAL_FUNCTION;
-pub const zend_inline_hash_func = c.zend_inline_hash_func;
-pub const zend_internal_function_info = c.zend_internal_function_info;
-pub const zend_long = c.zend_long;
-pub const ZEND_MM_ALIGNMENT = c.ZEND_MM_ALIGNMENT;
-pub const zend_module_dep = c.zend_module_dep;
-pub const zend_object = c.zend_object;
-pub const zend_object_handlers = c.zend_object_handlers;
-pub const zend_object_iterator = c.zend_object_iterator;
-pub const zend_object_iterator_funcs = c.zend_object_iterator_funcs;
-pub const zend_object_properties_size = c.zend_object_properties_size;
-pub const ZEND_PROP_PURPOSE_ARRAY_CAST = c.ZEND_PROP_PURPOSE_ARRAY_CAST;
-pub const ZEND_PROP_PURPOSE_DEBUG = c.ZEND_PROP_PURPOSE_DEBUG;
-pub const ZEND_PROP_PURPOSE_JSON = c.ZEND_PROP_PURPOSE_JSON;
-pub const ZEND_PROP_PURPOSE_SERIALIZE = c.ZEND_PROP_PURPOSE_SERIALIZE;
-pub const ZEND_PROP_PURPOSE_VAR_EXPORT = c.ZEND_PROP_PURPOSE_VAR_EXPORT;
-pub const zend_refcounted = c.zend_refcounted;
-pub const zend_refcounted_h = c.zend_refcounted_h;
-pub const zend_reference = c.zend_reference;
-pub const zend_resource = c.zend_resource;
-pub const zend_result = c.zend_result;
-pub const zend_stat_t = c.zend_stat_t;
-pub const zend_string = c.zend_string;
-pub const zend_string_addref = c.zend_string_addref;
-pub const zend_uchar = c.zend_uchar;
-pub const zend_ulong = c.zend_ulong;
-pub const ZEND_USER_CLASS = c.ZEND_USER_CLASS;
-pub const ZEND_USER_FUNCTION = c.ZEND_USER_FUNCTION;
-pub const zif_handler = c.zif_handler;
-pub const zval = c.zval;
-pub const zval_addref_p = c.zval_addref_p;
-pub const zend_gc_delref = c.zend_gc_delref;
-pub const zval_gc_flags = c.zval_gc_flags;
-
-pub const S_IFSOCK = c.S_IFMT + 1; // non-existent on Windows
 
 export fn DllMain() callconv(.winapi) std.os.windows.BOOL {
     const module = std.os.windows.kernel32.GetModuleHandleW(null) orelse unreachable;
@@ -283,3 +131,42 @@ pub var zend_throw_exception_object: *const @TypeOf(c.zend_throw_exception_objec
 pub var zend_trace_to_string: *const @TypeOf(c.zend_trace_to_string) = undefined;
 pub var zend_unregister_ini_entries: *const @TypeOf(c.zend_unregister_ini_entries) = undefined;
 pub var zval_ptr_dtor: *const @TypeOf(c.zval_ptr_dtor) = undefined;
+
+pub fn zend_string_release(arg_s: [*c]c.zend_string) callconv(.c) void {
+    var s = arg_s;
+    _ = &s;
+    if (!((c.zval_gc_flags(s.*.gc.u.type_info) & @as(u32, @bitCast(@as(c_int, 1) << @intCast(6)))) != 0)) {
+        if (c.zend_gc_delref(&s.*.gc) == @as(u32, @bitCast(@as(c_int, 0)))) {
+            _ = if ((c.zval_gc_flags(s.*.gc.u.type_info) & @as(u32, @bitCast(@as(c_int, 1) << @intCast(7)))) != 0) c.free(@as(?*anyopaque, @ptrCast(s))) else efree(@as(?*anyopaque, @ptrCast(s)), @src());
+        }
+    }
+}
+
+pub fn zend_hash_release(arg_array: [*c]c.zend_array) callconv(.c) void {
+    var array = arg_array;
+    _ = &array;
+    if (!((c.zval_gc_flags(array.*.gc.u.type_info) & @as(u32, @bitCast(@as(c_int, 1) << @intCast(6)))) != 0)) {
+        if (c.zend_gc_delref(&array.*.gc) == @as(u32, @bitCast(@as(c_int, 0)))) {
+            zend_hash_destroy(array);
+            _ = if ((c.zval_gc_flags(array.*.gc.u.type_info) & @as(u32, @bitCast(@as(c_int, 1) << @intCast(7)))) != 0) c.free(@as(?*anyopaque, @ptrCast(array))) else efree(@as(?*anyopaque, @ptrCast(array)), @src());
+        }
+    }
+}
+
+pub fn zend_object_release(arg_obj: [*c]c.zend_object) callconv(.c) void {
+    var obj = arg_obj;
+    _ = &obj;
+    if (c.zend_gc_delref(&obj.*.gc) == @as(u32, @bitCast(@as(c_int, 0)))) {
+        zend_objects_store_del(obj);
+    } else if ((@as([*c]c.zend_refcounted, @ptrCast(@alignCast(obj))).*.gc.u.type_info & (@as(c_uint, 4294966272) | @as(c_uint, @bitCast((@as(c_int, 1) << @intCast(4)) << @intCast(0))))) == @as(c_uint, @bitCast(@as(c_int, 0)))) {
+        gc_possible_root(@as([*c]c.zend_refcounted, @ptrCast(@alignCast(obj))));
+    }
+}
+
+fn efree(ptr: ?*anyopaque, comptime src: std.builtin.SourceLocation) void {
+    switch (@typeInfo(@TypeOf(c._efree)).@"fn".params.len) {
+        5 => _efree(ptr, src.file, src.line, null, 0),
+        1 => _efree(ptr),
+        else => @compileError("Unexpected ptr argument count"),
+    }
+}

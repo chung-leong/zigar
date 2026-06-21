@@ -45,8 +45,8 @@ pub fn ZigObject(comptime S: type) type {
             const prop_size = php.getObjectPropertySize(ce);
             const size: usize = @intCast(@sizeOf(@This()) + prop_size);
             // we can't use allocator here, since freeing is done by PHP itself
-            const mem = php.emalloc(size) orelse return error.OutOfMemory;
-            errdefer php.efree(mem);
+            const mem = php.emalloc(size, @src()) orelse return error.OutOfMemory;
+            errdefer php.efree(mem, @src());
             const self: *@This() = @ptrCast(@alignCast(mem));
             self.* = .{};
             // initialize the PHP portion

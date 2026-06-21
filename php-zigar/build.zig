@@ -4,26 +4,16 @@ pub fn build(b: *std.Build) !void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
 
-    const php_devel = b.option([]const u8, "php-devel", "Path to PHP development package") orelse "php-devel";
+    const php_include = b.option([]const u8, "php-include", "Directory containing PHP header files") orelse "php-devel";
+    const php_extension = b.option([]const u8, "php-extension", "Directory where the extension will be saved") orelse "extensions";
     const php_debug = b.option(bool, "php-debug", "Whether PHP executable has debug enabled") orelse false;
     const php_ts = b.option(bool, "php-ts", "Whether PHP executable was compiled with thread-safety enabled") orelse false;
 
-    // define for include/c.h
-    const os_specific_macro = if (target.result.os.tag == .linux)
-        "ZIGAR_LINUX"
-    else if (target.result.os.tag.isDarwin())
-        "ZIGAR_DARWIN"
-    else if (target.result.os.tag == .windows)
-        "ZIGAR_WIN32"
-    else
-        unreachable;
     const translate_c = b.addTranslateC(.{
         .root_source_file = b.path("src/include/c.h"),
         .target = target,
         .optimize = optimize,
     });
-    translate_c.defineCMacro(os_specific_macro, null);
-    translate_c.defineCMacro("ZIGAR_TARGET_OS", @tagName(target.result.os.tag));
     translate_c.defineCMacro("ZEND_DEBUG", if (php_debug) "1" else "0");
     if (php_ts) translate_c.defineCMacro("ZTS", null);
 
@@ -41,6 +31,9 @@ pub fn build(b: *std.Build) !void {
         },
     });
     mod.stack_check = false;
+    if (target.result.os.tag == .windows) {
+        mod.linkSystemLibrary("dbghelp", .{});
+    }
 
     const lib = b.addLibrary(.{
         .linkage = .dynamic,
@@ -67,16 +60,24 @@ pub fn build(b: *std.Build) !void {
         else
             unreachable;
         c.addIncludePath(b.path(os_specific));
-        c.addIncludePath(.{ .cwd_relative = try std.fs.path.join(b.allocator, &.{ php_devel, "include" }) });
-        c.addIncludePath(.{ .cwd_relative = try std.fs.path.join(b.allocator, &.{ php_devel, "include/main" }) });
-        c.addIncludePath(.{ .cwd_relative = try std.fs.path.join(b.allocator, &.{ php_devel, "include/TSRM" }) });
-        c.addIncludePath(.{ .cwd_relative = try std.fs.path.join(b.allocator, &.{ php_devel, "include/Zend" }) });
+        c.addIncludePath(.{ .cwd_relative = php_include });
+        c.addIncludePath(.{ .cwd_relative = try std.fs.path.join(b.allocator, &.{ php_include, "main" }) });
+        c.addIncludePath(.{ .cwd_relative = try std.fs.path.join(b.allocator, &.{ php_include, "TSRM" }) });
+        c.addIncludePath(.{ .cwd_relative = try std.fs.path.join(b.allocator, &.{ php_include, "Zend" }) });
     }
 
     const wf = b.addUpdateSourceFiles();
-    wf.addCopyFileToSource(lib.getEmittedBin(), "modules/php_zigar.so");
+    const filename = if (target.result.os.tag == .linux)
+        "php_zigar.so"
+    else if (target.result.os.tag.isDarwin())
+        "php_zigar.dylib"
+    else if (target.result.os.tag == .windows)
+        "php_zigar.dll"
+    else
+        unreachable;
+    wf.addCopyFileToSource(lib.getEmittedBin(), try std.fs.path.join(b.allocator, &.{ php_extension, filename }));
     if (target.result.os.tag == .windows and optimize == .Debug) {
-        wf.addCopyFileToSource(lib.getEmittedPdb(), "modules/php_zigar.pdb");
+        wf.addCopyFileToSource(lib.getEmittedPdb(), try std.fs.path.join(b.allocator, &.{ php_extension, "php_zigar.pdb" }));
     }
     wf.step.dependOn(&lib.step);
     b.getInstallStep().dependOn(&wf.step);
