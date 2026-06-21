@@ -1943,7 +1943,25 @@ fn copyStat(in: *c.zend_stat_t, out: *std.os.wasi.filestat_t) void {
             c.S_IFCHR => .CHARACTER_DEVICE,
             else => .UNKNOWN,
         };
+    } else if (@hasField(c.zend_stat_t, "st_atimespec")) {
+        // MacOS
+        out.size = convertSize(in.st_size);
+        out.atim = convertTimespec(in.st_atimespec);
+        out.ctim = convertTimespec(in.st_ctimespec);
+        out.mtim = convertTimespec(in.st_mtimespec);
+        out.ino = @intCast(in.st_ino);
+        out.dev = @intCast(in.st_dev);
+        out.filetype = switch (in.st_mode & c.S_IFMT) {
+            c.S_IFSOCK => .SOCKET_STREAM,
+            c.S_IFLNK => .SYMBOLIC_LINK,
+            c.S_IFREG => .REGULAR_FILE,
+            c.S_IFBLK => .BLOCK_DEVICE,
+            c.S_IFDIR => .DIRECTORY,
+            c.S_IFCHR => .CHARACTER_DEVICE,
+            else => .UNKNOWN,
+        };
     } else if (@hasField(c.zend_stat_t, "st_atime")) {
+        // Windows
         out.size = convertSize(in.st_size);
         out.atim = convertTimespec(in.st_atime);
         out.ctim = convertTimespec(in.st_ctime);
@@ -1951,7 +1969,6 @@ fn copyStat(in: *c.zend_stat_t, out: *std.os.wasi.filestat_t) void {
         out.ino = @intCast(in.st_ino);
         out.dev = @intCast(in.st_dev);
         out.filetype = switch (in.st_mode & c.S_IFMT) {
-            c.S_IFSOCK => .SOCKET_STREAM,
             c.S_IFLNK => .SYMBOLIC_LINK,
             c.S_IFREG => .REGULAR_FILE,
             c.S_IFBLK => .BLOCK_DEVICE,
