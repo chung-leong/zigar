@@ -7,6 +7,7 @@
 
 #define ZEND_API __attribute__ ((visibility("default")))
 #define ZEND_DLEXPORT __attribute__ ((visibility("default")))
+#define ZEND_DLIMPORT
 
 #define ZEND_MM_ALIGNMENT 8
 #define ZEND_MM_ALIGNMENT_LOG2 3

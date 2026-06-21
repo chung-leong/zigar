@@ -5,9 +5,9 @@
 #include <dirent.h>
 #include <utime.h>
 
-// TODO: figure out what's required for MacOS
 #define ZEND_API __attribute__ ((visibility("default")))
 #define ZEND_DLEXPORT __attribute__ ((visibility("default")))
+#define ZEND_DLIMPORT
 
 #define ZEND_MM_ALIGNMENT 8
 #define ZEND_MM_ALIGNMENT_LOG2 3
