@@ -151,12 +151,6 @@ pub var zend_trace_to_string: *const @TypeOf(c.zend_trace_to_string) = undefined
 pub var zend_unregister_ini_entries: *const @TypeOf(c.zend_unregister_ini_entries) = undefined;
 pub var zval_ptr_dtor: *const @TypeOf(c.zval_ptr_dtor) = undefined;
 
-pub inline fn TSRMG_FAST_BULK(T: type, offset: usize) T {
-    if (!@hasDecl(c, "ZTS")) @compileError("Not thread-safe");
-    const cache_ptr: [*]u8 = @ptrCast(tsrm_get_ls_cache());
-    return @ptrCast(@alignCast(cache_ptr + offset));
-}
-
 pub fn zend_string_release(arg_s: [*c]c.zend_string) callconv(.c) void {
     var s = arg_s;
     _ = &s;

@@ -146,20 +146,27 @@ pub const empty_value: Value = .{ .u1 = .{ .type_info = c.IS_NULL } };
 
 pub const use_tsrm = @hasDecl(c, "ZTS");
 
-pub fn getCompilerGlobals() *const CompilerGlobals {
+inline fn getGlobals(comptime T: type) *const T {
+    const name = switch (T) {
+        CompilerGlobals => "compiler",
+        ExecutorGlobals => "executor",
+        else => @compileError("Unrecognized type: " ++ @typeName(T)),
+    };
     if (use_tsrm) {
-        return pc.TSRMG_FAST_BULK(*const CompilerGlobals, pc.compiler_globals_offset.*);
+        const cache_address = @intFromPtr(pc.tsrm_get_ls_cache());
+        const offset = deref(@field(pc, name ++ "_globals_offset"));
+        return @ptrFromInt(cache_address + offset);
     } else {
-        return deref(&pc.compiler_globals);
+        return deref(&@field(pc, name ++ "_globals"));
     }
 }
 
+pub fn getCompilerGlobals() *const CompilerGlobals {
+    return getGlobals(CompilerGlobals);
+}
+
 pub fn getExecutorGlobals() *const ExecutorGlobals {
-    if (use_tsrm) {
-        return pc.TSRMG_FAST_BULK(*const ExecutorGlobals, pc.executor_globals_offset.*);
-    } else {
-        return deref(&pc.executor_globals);
-    }
+    return getGlobals(ExecutorGlobals);
 }
 
 const ArgPtrCountExtra = extern struct {
@@ -550,7 +557,19 @@ fn StringWithLength(comptime len: usize) type {
 }
 
 pub fn calculateStringHash(s: []const u8) Ulong {
-    return c.zend_inline_hash_func(s.ptr, s.len);
+    if (@inComptime()) {
+        // we can't use the function from PHP at comptime because it uses memcpy() when the target is ARM64
+        var hash: Ulong = 5381;
+        for (s) |char| hash = hash *% 33 +% char;
+        hash |= switch (@sizeOf(Ulong)) {
+            8 => 0x8000000000000000,
+            4 => 0x80000000,
+            else => unreachable,
+        };
+        return hash;
+    } else {
+        return c.zend_inline_hash_func(s.ptr, s.len);
+    }
 }
 
 pub fn getStaticString(comptime s: []const u8) *String {

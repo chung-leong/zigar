@@ -1,6 +1,7 @@
 #ifndef PHP_CONFIG_H
 #define PHP_CONFIG_H
 #define _GNU_SOURCE
+#include <stdlib.h>
 #include <string.h>
 #include <dirent.h>
 #include <utime.h>
