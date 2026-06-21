@@ -1,30 +1,34 @@
 const std = @import("std");
+const c_allocator = std.heap.c_allocator;
 const builtin = @import("builtin");
 
 const c = @import("c");
 
 pub const DynLib = struct {
-    handle: *anyopaque,
+    handle: Handle,
     path: [:0]const u8,
 
     const Handle = switch (builtin.target.os.tag) {
-        .windows => *anyopaque,
-        else => c.HMODULE,
+        .windows => std.os.windows.HMODULE,
+        else => *anyopaque,
     };
 
     pub fn open(path: []const u8) !@This() {
-        switch (builtin.target.os.tag) {
-            .windows => @panic("TODO"),
-            else => {
-                const path_copy = try std.heap.c_allocator.dupeZ(u8, path);
+        const path_copy = try std.heap.c_allocator.dupeZ(u8, path);
+        const handle = switch (builtin.target.os.tag) {
+            .windows => load: {
+                const path_w = std.os.windows.sliceToPrefixedFileW(null, path) catch return error.InvalidPath;
+                break :load try std.os.windows.LoadLibraryW(path_w.span().ptr);
+            },
+            else => load: {
                 var flags: u32 = c.RTLD_LAZY;
                 if (@hasDecl(c, "RTLD_DEEPBIND")) {
                     flags |= c.RTLD_DEEPBIND;
                 }
-                const handle = std.c.dlopen(path_copy, @bitCast(flags)) orelse return error.FileNotFound;
-                return .{ .handle = handle, .path = path_copy };
+                break :load std.c.dlopen(path_copy, @bitCast(flags)) orelse return error.FileNotFound;
             },
-        }
+        };
+        return .{ .handle = handle, .path = path_copy };
     }
 
     pub fn openBySymbol(ptr: *const anyopaque) !@This() {
@@ -37,7 +41,7 @@ pub const DynLib = struct {
                 const len = c.GetModuleFileNameA(handle, null, 0);
                 const path_copy = try std.heap.c_allocator.alloc(u8, len + 1);
                 _ = c.GetModuleFileNameA(handle, null, 0);
-                return .{ .handle = handle, .path = @ptrCast(path_copy) };
+                return .{ .handle = @ptrCast(handle), .path = @ptrCast(path_copy) };
             },
             else => {
                 var info: c.Dl_info = undefined;
@@ -50,7 +54,7 @@ pub const DynLib = struct {
 
     pub fn close(self: *@This()) void {
         _ = switch (builtin.target.os.tag) {
-            .windows => @panic("TODO"),
+            .windows => std.os.windows.CloseHandle(self.handle),
             else => std.c.dlclose(self.handle),
         };
         std.heap.c_allocator.free(self.path);
@@ -58,7 +62,7 @@ pub const DynLib = struct {
 
     pub fn lookup(self: *@This(), comptime T: type, name: [:0]const u8) ?T {
         const ptr = switch (builtin.target.os.tag) {
-            .windows => @panic("TODO"),
+            .windows => std.os.windows.kernel32.GetProcAddress(self.handle, name),
             else => std.c.dlsym(self.handle, name),
         };
         return @ptrCast(@alignCast(ptr));

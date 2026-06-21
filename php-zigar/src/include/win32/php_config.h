@@ -10,6 +10,5 @@
 #define ZEND_WIN32
 
 #define _pid_t int
-#define S_IFSOCK (S_IFMT + 1)
 
 #endif 
