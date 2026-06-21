@@ -17,8 +17,14 @@ pub const DynLib = struct {
         const path_copy = try std.heap.c_allocator.dupeZ(u8, path);
         const handle = switch (builtin.target.os.tag) {
             .windows => load: {
-                const path_w = std.os.windows.sliceToPrefixedFileW(null, path) catch return error.InvalidPath;
-                break :load try std.os.windows.LoadLibraryW(path_w.span().ptr);
+                const path_space = std.os.windows.sliceToPrefixedFileW(null, path) catch return error.InvalidPath;
+                const path_w = path_space.span().ptr;
+                var offset: usize = 0;
+                if (path_w[0] == '\\' and path_w[1] == '?' and path_w[2] == '?' and path_w[3] == '\\') {
+                    // + 4 to skip over the \??\
+                    offset = 4;
+                }
+                break :load try std.os.windows.LoadLibraryExW(path_w + offset, .none);
             },
             else => load: {
                 var flags: u32 = c.RTLD_LAZY;

@@ -4,9 +4,11 @@ const builtin = @import("builtin");
 const c = @import("c");
 
 pub fn link() !void {
-    const dll_name = if (@hasDecl(c, "ZTS")) "php8ts" else "php8";
-    const path = try std.os.windows.sliceToPrefixedFileW(null, dll_name);
-    const module = std.os.windows.kernel32.GetModuleHandleW(path.span()) orelse return error.LibraryNotFound;
+    const dll_name = comptime switch (@hasDecl(c, "ZTS")) {
+        false => std.unicode.wtf8ToWtf16LeStringLiteral("php8"),
+        true => std.unicode.wtf8ToWtf16LeStringLiteral("php8ts"),
+    };
+    const module = std.os.windows.kernel32.GetModuleHandleW(dll_name) orelse return error.LibraryNotFound;
     inline for (comptime std.meta.declarations(@This())) |decl| {
         const decl_ptr = &@field(@This(), decl.name);
         const decl_ptr_info = @typeInfo(@TypeOf(decl_ptr)).pointer;
@@ -22,7 +24,6 @@ pub fn link() !void {
                 else => decl.name,
             };
             const ptr = std.os.windows.kernel32.GetProcAddress(module, import_name) orelse {
-                std.debug.print("Unable to find symbol: {s}\n", .{import_name});
                 return error.MissingFunction;
             };
             decl_ptr.* = @ptrCast(@alignCast(ptr));
