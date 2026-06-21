@@ -6,7 +6,8 @@ export fn DllMain() callconv(.winapi) std.os.windows.BOOL {
     const module = std.os.windows.kernel32.GetModuleHandleW(null) orelse unreachable;
     inline for (comptime std.meta.declarations(@This())) |decl| {
         const decl_ptr = &@field(@This(), decl.name);
-        if (!@typeInfo(@TypeOf(decl_ptr)).pointer.is_const) {
+        const decl_ptr_info = @typeInfo(@TypeOf(decl_ptr)).pointer;
+        if (decl_ptr_info.child != void and !decl_ptr_info.is_const) {
             const ptr = std.os.windows.kernel32.GetProcAddress(module, decl.name) orelse {
                 std.debug.print("Unable to import function: {s}", .{decl.name});
                 return std.os.windows.FALSE;
@@ -42,14 +43,28 @@ pub var _php_stream_truncate_set_size: *const @TypeOf(c._php_stream_truncate_set
 pub var _php_stream_write: *const @TypeOf(c._php_stream_write) = undefined;
 pub var _zend_hash_init: *const @TypeOf(c._zend_hash_init) = undefined;
 pub var _zend_new_array_0: *const @TypeOf(c._zend_new_array_0) = undefined;
-pub var compiler_globals: *const @TypeOf(c.compiler_globals) = undefined;
+pub var compiler_globals: switch (@hasDecl(c, "ZTS")) {
+    false => *const @TypeOf(c.compiler_globals),
+    true => void,
+} = undefined;
+pub var compiler_globals_offset: switch (@hasDecl(c, "ZTS")) {
+    false => void,
+    true => *const usize,
+} = undefined;
 pub var convert_to_array: *const @TypeOf(c.convert_to_array) = undefined;
 pub var convert_to_boolean: *const @TypeOf(c.convert_to_boolean) = undefined;
 pub var convert_to_double: *const @TypeOf(c.convert_to_double) = undefined;
 pub var convert_to_long: *const @TypeOf(c.convert_to_long) = undefined;
 pub var convert_to_null: *const @TypeOf(c.convert_to_null) = undefined;
 pub var convert_to_object: *const @TypeOf(c.convert_to_object) = undefined;
-pub var executor_globals: *const @TypeOf(c.executor_globals) = undefined;
+pub var executor_globals: switch (@hasDecl(c, "ZTS")) {
+    false => *const @TypeOf(c.executor_globals),
+    true => void,
+} = undefined;
+pub var executor_globals_offset: switch (@hasDecl(c, "ZTS")) {
+    false => void,
+    true => *const usize,
+} = undefined;
 pub var gc_possible_root: *const @TypeOf(c.gc_possible_root) = undefined;
 pub var get_binary_op: *const @TypeOf(c.get_binary_op) = undefined;
 pub var get_unary_op: *const @TypeOf(c.get_unary_op) = undefined;
@@ -67,6 +82,10 @@ pub var php_info_print_table_start: *const @TypeOf(c.php_info_print_table_start)
 pub var php_stream_locate_url_wrapper: *const @TypeOf(c.php_stream_locate_url_wrapper) = undefined;
 pub var php_stream_stdio_ops: *const @TypeOf(c.php_stream_stdio_ops) = undefined;
 pub var std_object_handlers: *const @TypeOf(c.std_object_handlers) = undefined;
+pub var tsrm_get_ls_cache: switch (@hasDecl(c, "ZTS")) {
+    false => void,
+    true => *const @TypeOf(c.tsrm_get_ls_cache),
+} = undefined;
 pub var zend_call_function: *const @TypeOf(c.zend_call_function) = undefined;
 pub var zend_call_known_function: *const @TypeOf(c.zend_call_known_function) = undefined;
 pub var zend_ce_aggregate: *const @TypeOf(c.zend_ce_aggregate) = undefined;
@@ -131,6 +150,12 @@ pub var zend_throw_exception_object: *const @TypeOf(c.zend_throw_exception_objec
 pub var zend_trace_to_string: *const @TypeOf(c.zend_trace_to_string) = undefined;
 pub var zend_unregister_ini_entries: *const @TypeOf(c.zend_unregister_ini_entries) = undefined;
 pub var zval_ptr_dtor: *const @TypeOf(c.zval_ptr_dtor) = undefined;
+
+pub inline fn TSRMG_FAST_BULK(T: type, offset: usize) T {
+    if (!@hasDecl(c, "ZTS")) @compileError("Not thread-safe");
+    const cache_ptr: [*]u8 = @ptrCast(tsrm_get_ls_cache());
+    return @ptrCast(@alignCast(cache_ptr + offset));
+}
 
 pub fn zend_string_release(arg_s: [*c]c.zend_string) callconv(.c) void {
     var s = arg_s;

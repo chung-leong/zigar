@@ -144,11 +144,11 @@ pub const empty_array = &c.zend_empty_array;
 
 pub const empty_value: Value = .{ .u1 = .{ .type_info = c.IS_NULL } };
 
-pub const use_tsrm = false;
+pub const use_tsrm = @hasDecl(c, "ZTS");
 
 pub fn getCompilerGlobals() *const CompilerGlobals {
     if (use_tsrm) {
-        @compileError("TODO");
+        return pc.TSRMG_FAST_BULK(*const CompilerGlobals, pc.compiler_globals_offset.*);
     } else {
         return deref(&pc.compiler_globals);
     }
@@ -156,7 +156,7 @@ pub fn getCompilerGlobals() *const CompilerGlobals {
 
 pub fn getExecutorGlobals() *const ExecutorGlobals {
     if (use_tsrm) {
-        @compileError("TODO");
+        return pc.TSRMG_FAST_BULK(*const ExecutorGlobals, pc.executor_globals_offset.*);
     } else {
         return deref(&pc.executor_globals);
     }

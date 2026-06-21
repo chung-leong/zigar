@@ -14,6 +14,7 @@ pub fn build(b: *std.Build) !void {
         .target = target,
         .optimize = optimize,
     });
+    translate_c.defineCMacro("ZEND_COMPILE_DL_EXT", null);
     translate_c.defineCMacro("ZEND_DEBUG", if (php_debug) "1" else "0");
     if (php_ts) translate_c.defineCMacro("ZTS", null);
 
@@ -43,6 +44,7 @@ pub fn build(b: *std.Build) !void {
         .use_llvm = true,
     });
     var c_flags: std.ArrayList([]const u8) = .empty;
+    try c_flags.append(b.allocator, "-DZEND_COMPILE_DL_EXT");
     try c_flags.append(b.allocator, if (php_debug) "-DZEND_DEBUG=1" else "-DZEND_DEBUG=0");
     if (php_ts) try c_flags.append(b.allocator, "-DZTS");
     lib.addCSourceFile(.{
