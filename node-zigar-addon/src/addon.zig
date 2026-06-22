@@ -78,6 +78,7 @@ const ModuleHost = struct {
         fd_fdstat_get: ?Ref = null,
         fd_fdstat_set_flags: ?Ref = null,
         fd_fdstat_set_rights: ?Ref = null,
+        fd_fdstat_set_size: ?Ref = null,
         fd_filestat_get: ?Ref = null,
         fd_filestat_set_times: ?Ref = null,
         fd_lock_get: ?Ref = null,
@@ -99,6 +100,7 @@ const ModuleHost = struct {
         path_create_directory: ?Ref = null,
         path_filestat_get: ?Ref = null,
         path_filestat_set_times: ?Ref = null,
+        path_filestat_set_size: ?Ref = null,
         path_open: ?Ref = null,
         path_readlink: ?Ref = null,
         path_remove_directory: ?Ref = null,
@@ -1331,10 +1333,22 @@ const ModuleHost = struct {
 
     fn handleTruncate(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
-        _ = env;
-        _ = futex;
-        _ = args;
-        return .OPNOTSUPP;
+        if (@hasField(@TypeOf(args.*), "fd")) {
+            return try self.callPosixFunction(self.js.fd_fdstat_set_size, &.{
+                try env.createInt32(args.fd),
+                try env.createBigintUint64(args.len),
+                futex,
+            });
+        } else {
+            const path_len: u32 = @truncate(std.mem.len(args.path));
+            return try self.callPosixFunction(self.js.path_filestat_set_size, &.{
+                try env.createInt32(args.dirfd),
+                try env.createUsize(@intFromPtr(args.path)),
+                try env.createUint32(path_len),
+                try env.createBigintUint64(args.len),
+                futex,
+            });
+        }
     }
 
     fn handleGetDescriptorFlags(self: *@This(), futex: Value, args: anytype) !E {

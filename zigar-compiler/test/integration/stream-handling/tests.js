@@ -2671,6 +2671,36 @@ export function addTests(importModule, options) {
         }
       }
     })
+    it('should get file descriptor using libc function', async function() {
+      const { __zigar, get } = await importTest('get-file-descriptor-with-libc-function');
+      __zigar.on('open', (evt) => {
+        if (evt.path.startsWith('custom/')) {
+          return new Uint8Array(10);
+        }
+      });
+      const result1 = get("/custom/somewhere");
+      expect(result1).to.be.at.least(0xf00000);
+      const result2 = get(fileURLToPath(import.meta.url));
+      expect(result2).to.be.below(1024);
+    })
+    it('should check if stream is terminal using libc function', async function() {
+      const { __zigar, check } = await importTest('check-if-stream-is-terminal-with-libc-function');
+      const result1 = check(new Uint8Array(8));
+      expect(result1).to.be.false;
+      const result2 = check(process.stdin);
+      expect(result1).to.be.false;
+    })
+    it('should get terminal name using libc function', async function() {
+      const { __zigar, get1, get2 } = await importTest('get-terminal-name-with-libc-function');
+      const result1 = get1(new Uint8Array(8));
+      expect(result1).to.be.null;
+      const result2 = get2(new Uint8Array(8));
+      expect(result2).to.be.null;
+      const result3 = get1(process.stdin);
+      expect(result3).to.be.null;
+      const result4 = get2(process.stdin);
+      expect(result4).to.be.null;
+    })
     it('should truncate file using posix function', async function() {
       const { __zigar, truncate } = await importTest('truncate-file-with-posix-function');
       let called = false, args;
