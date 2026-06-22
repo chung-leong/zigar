@@ -26,6 +26,7 @@ import '../syscalls/fd-datasync.js';
 import '../syscalls/fd-fdstat-get.js';
 import '../syscalls/fd-fdstat-set-flags.js';
 import '../syscalls/fd-fdstat-set-rights.js';
+import '../syscalls/fd-fdstat-set-size.js';
 import '../syscalls/fd-filestat-get.js';
 import '../syscalls/fd-filestat-set-times.js';
 import '../syscalls/fd-pread.js';

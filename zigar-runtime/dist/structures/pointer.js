@@ -265,10 +265,12 @@ var pointer = mixin({
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[FINALIZE] = (targetType === StructureType.Function) && {
       value() {
-        const self = function(...args) {
-          const f = self['*'];
-          return f.call(this, ...args);
-        };
+        const self = (() => (
+          function(...args) {
+            const f = self['*'];
+            return f.call(this, ...args);
+          }
+        ))();
         self[MEMORY] = this[MEMORY];
         self[SLOTS] = this[SLOTS];
         Object.setPrototypeOf(self, constructor.prototype);

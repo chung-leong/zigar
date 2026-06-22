@@ -2671,6 +2671,38 @@ export function addTests(importModule, options) {
         }
       }
     })
+    it('should truncate file using posix function', async function() {
+      const { __zigar, truncate } = await importTest('truncate-file-with-posix-function');
+      let called = false, args;
+      __zigar.on('open', (evt) => {
+        return {
+          write() {
+          },
+          truncate(...a) {
+            called = true;
+            args = a;
+          },
+        };
+      });
+      truncate("/hello/world.txt", 1000);
+      expect(called).to.be.true;
+      expect(args).to.eql([ 1000 ]);
+    })
+    it('should truncate opened file using posix function', async function() {
+      const { __zigar, truncate } = await importTest('truncate-opened-file-with-posix-function');
+      let called = false, args;
+      const strm = {
+        write() {
+        },
+        truncate(...a) {
+          called = true;
+          args = a;
+        },
+      };
+      truncate(strm, 1000);
+      expect(called).to.be.true;
+      expect(args).to.eql([ 1000 ]);
+    })
   })
 }
 

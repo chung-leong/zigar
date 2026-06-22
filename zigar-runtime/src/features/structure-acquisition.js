@@ -29,6 +29,7 @@ import fdDatasync from '../syscalls/fd-datasync.js';
 import fdFdstatGet from '../syscalls/fd-fdstat-get.js';
 import fdFdstatSetFlags from '../syscalls/fd-fdstat-set-flags.js';
 import fdFdstatSetRights from '../syscalls/fd-fdstat-set-rights.js';
+import fdFdstatSetSize from '../syscalls/fd-fdstat-set-size.js';
 import fdFilestatGet from '../syscalls/fd-filestat-get.js';
 import fdFileStatSetTimes from '../syscalls/fd-filestat-set-times.js';
 import fdPread from '../syscalls/fd-pread.js';
@@ -252,6 +253,7 @@ export default mixin({
             case 'fd_fdstat_get': this.use(fdFdstatGet); break;
             case 'fd_fdstat_set_flags': this.use(fdFdstatSetFlags); break;
             case 'fd_fdstat_set_rights': this.use(fdFdstatSetRights); break;
+            case 'fd_fdstat_set_size': this.use(fdFdstatSetSize); break;
             case 'fd_filestat_get':this.use(fdFilestatGet); break;
             case 'fd_filestat_set_times': this.use(fdFileStatSetTimes); break;
             case 'fd_pread': this.use(fdPread); break;

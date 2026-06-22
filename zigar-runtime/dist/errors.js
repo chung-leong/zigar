@@ -558,6 +558,10 @@ function throwReadOnly() {
   throw new ReadOnly();
 }
 
+function throwNoSupport(feature) {
+  throw new Error(`Current platform does not support ${feature}`);
+}
+
 function checkInefficientAccess(progress, access, len) {
   progress.bytes += len;
   progress.calls++;
@@ -674,4 +678,4 @@ function formatList(list, conj = 'or') {
   }
 }
 
-export { AccessingOpaque, AlignmentConflict, ArgumentCountMismatch, ArrayLengthMismatch, AssigningToConstant, BufferExpected, BufferSizeMismatch, ConstantConstraint, CreatingOpaque, Deadlock, EnumExpected, ErrorExpected, Exit, IllegalSeek, InaccessiblePointer, InactiveUnionProperty, InvalidArgument, InvalidArrayInitializer, InvalidEnumValue, InvalidFileDescriptor, InvalidInitializer, InvalidIntConversion, InvalidPath, InvalidPointerTarget, InvalidSliceLength, InvalidStream, InvalidType, InvalidVariadicArgument, MisplacedSentinel, MissingEventListener, MissingInitializers, MissingSentinel, MissingStreamMethod, MissingUnionInitializer, MultipleUnionInitializers, MustBeOverridden, NoCastingToFunction, NoCastingToPointer, NoInitializer, NoProperty, NotInErrorSet, NotOnByteBoundary, NotUndefined, NullPointer, OutOfBound, Overflow, PreviouslyFreed, ReadOnly, ReadOnlyTarget, TooManyFiles, TypeMismatch, UndefinedArgument, UnexpectedGenerator, Unsupported, WouldBlock, ZigError, ZigMemoryTargetRequired, addArticle, adjustArgumentError, article, catchPosixError, checkAccessRight, checkInefficientAccess, checkStreamMethod, deanimalizeErrorName, expectBoolean, formatList, getDescription, isErrorJSON, replaceRangeError, throwReadOnly };
+export { AccessingOpaque, AlignmentConflict, ArgumentCountMismatch, ArrayLengthMismatch, AssigningToConstant, BufferExpected, BufferSizeMismatch, ConstantConstraint, CreatingOpaque, Deadlock, EnumExpected, ErrorExpected, Exit, IllegalSeek, InaccessiblePointer, InactiveUnionProperty, InvalidArgument, InvalidArrayInitializer, InvalidEnumValue, InvalidFileDescriptor, InvalidInitializer, InvalidIntConversion, InvalidPath, InvalidPointerTarget, InvalidSliceLength, InvalidStream, InvalidType, InvalidVariadicArgument, MisplacedSentinel, MissingEventListener, MissingInitializers, MissingSentinel, MissingStreamMethod, MissingUnionInitializer, MultipleUnionInitializers, MustBeOverridden, NoCastingToFunction, NoCastingToPointer, NoInitializer, NoProperty, NotInErrorSet, NotOnByteBoundary, NotUndefined, NullPointer, OutOfBound, Overflow, PreviouslyFreed, ReadOnly, ReadOnlyTarget, TooManyFiles, TypeMismatch, UndefinedArgument, UnexpectedGenerator, Unsupported, WouldBlock, ZigError, ZigMemoryTargetRequired, addArticle, adjustArgumentError, article, catchPosixError, checkAccessRight, checkInefficientAccess, checkStreamMethod, deanimalizeErrorName, expectBoolean, formatList, getDescription, isErrorJSON, replaceRangeError, throwNoSupport, throwReadOnly };
