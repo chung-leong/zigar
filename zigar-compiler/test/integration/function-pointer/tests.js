@@ -166,10 +166,7 @@ export function addTests(importModule, options) {
       ]);
       const f3 = function({ callback }) {
         for (let i = 6; i < 20; i++) {
-          if (!callback(i)) {
-            callback(null);
-            break;
-          }
+          if (!callback(i)) break;
         }
       };
       const lines3 = await capture(async () => {

@@ -83,7 +83,7 @@ export default mixin({
         for await (const elem of iter) {
           if (elem !== null) {
             if (!args[YIELD](elem)) {
-              break;
+              return;
             }
           }
         }
