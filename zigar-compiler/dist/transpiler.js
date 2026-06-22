@@ -24,6 +24,7 @@ const StructureType = {
   ArgStruct: 12,
   VariadicStruct: 13,
   Function: 14,
+  Comptime: 15,
 };
 const StructurePurpose = {
   Unknown: 0,
@@ -34,6 +35,9 @@ const StructurePurpose = {
   Iterator: 5,
   File: 6,
   Directory: 7,
+  AnyImage: 8,
+  WebImage: 9,
+  GdImage: 10,
 };
 const structureNames = Object.keys(StructureType);
 const StructureFlag = {
@@ -859,7 +863,6 @@ function getPlatform() {
           for (let i = 0; i < sectionCount; i++, position += Usize(Shdr.size)) {
             shdrs.push(read(position, Shdr.size));
           }
-          const decoder = new TextDecoder();
           for (const shdr of shdrs) {
             const sectionType = shdr.getUint32(Shdr.sh_type, le);
             if (sectionType == SHT_DYNAMIC) {
@@ -1425,7 +1428,7 @@ async function compile(srcPath, modPath, options) {
       if (!outputMTimeBefore || options.recompile !== false) {
         const { onStart, onEnd } = options;
         // create config file
-        await createProject(config, moduleBuildDir);
+        await createProject(config);
         // then run the compiler
         await runCompiler(zigPath, zigArgs, { cwd: moduleBuildDir, onStart, onEnd });
       }
@@ -1528,7 +1531,8 @@ function formatProjectConfig(config) {
   return lines.join('\n') + '\n';
 }
 
-async function createProject(config, dir) {
+async function createProject(config) {
+  const dir = config.moduleBuildDir;
   await createDirectory(dir);
   const content = formatProjectConfig(config);
   const cfgFilePath = join(dir, 'build.cfg.zig');
@@ -5986,7 +5990,7 @@ var fdAllocate = mixin({
   fdAllocate(fd, offset, len, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
       const [ stream ] = this.getStream(fd);
-      checkStreamMethod(stream, 'allocate', PosixError.ENOSPC);
+      checkStreamMethod(stream, 'allocate', PosixError.ENOSYS);
       return stream.allocate(safeInt(offset), safeInt(len));
     });
   },
@@ -7225,7 +7229,7 @@ var structureAcquisition = mixin({
     s.name = handler.call(this, s);
   },
   getPrimitiveName(s) {
-    const { instance: { members: [member] }, flags = 0 } = s;
+    const { instance: { members: [ member ] }, flags = 0 } = s;
     switch (member.type) {
       case MemberType.Bool:
         return `bool`;
@@ -7237,12 +7241,17 @@ var structureAcquisition = mixin({
         return `f${member.bitSize}`;
       case MemberType.Void:
         return 'void';
+    }
+  },
+  getComptimeName(s) {
+    const { instance: { members: [ member ] }, flags = 0 } = s;
+    switch (member.type) {
       case MemberType.Literal:
-        return 'enum_literal';
+        return '@TypeOf(.enum_literal)';
       case MemberType.Null:
-        return 'null';
+        return '@TypeOf(null)';
       case MemberType.Undefined:
-        return 'undefined';
+        return '@TypeOf(undefined)';
       case MemberType.Type:
         return 'type';
       case MemberType.Object:
@@ -7252,7 +7261,7 @@ var structureAcquisition = mixin({
     }
   },
   getArrayName(s) {
-    const { instance: { members: [element] }, length } = s;
+    const { instance: { members: [ element ] }, length } = s;
     return `[${length}]${element.structure.name}`;
   },
   getStructName(s) {
@@ -7265,7 +7274,7 @@ var structureAcquisition = mixin({
     return `U${this.structureCounters.union++}`;
   },
   getErrorUnionName(s) {
-    const { instance: { members: [payload, errorSet] } } = s;
+    const { instance: { members: [ payload, errorSet ] } } = s;
     return `${errorSet.structure.name}!${payload.structure.name}`;
   },
   getErrorSetName(s) {
@@ -7275,11 +7284,11 @@ var structureAcquisition = mixin({
     return `EN${this.structureCounters.enum++}`;
   },
   getOptionalName(s) {
-    const { instance: { members: [payload] } } = s;
+    const { instance: { members: [ payload ] } } = s;
     return `?${payload.structure.name}`;
   },
   getPointerName(s) {
-    const { instance: { members: [target] }, flags } = s;
+    const { instance: { members: [ target ] }, flags } = s;
     let prefix = '*';
     let targetName = target.structure.name;
     if (target.structure.type === StructureType.Slice) {
@@ -7307,11 +7316,11 @@ var structureAcquisition = mixin({
     return prefix + targetName;
   },
   getSliceName(s) {
-    const { instance: { members: [element] }, flags } = s;
+    const { instance: { members: [ element ] }, flags } = s;
     return (flags & SliceFlag.IsOpaque) ? 'anyopaque' : `[_]${element.structure.name}`;
   },
   getVectorName(s) {
-    const { instance: { members: [element] }, length } = s;
+    const { instance: { members: [ element ] }, length } = s;
     return `@Vector(${length}, ${element.structure.name})`;
   },
   getOpaqueName(s) {
@@ -9177,6 +9186,26 @@ var array = mixin({
   },
 });
 
+var comptime = mixin({
+  defineComptime(structure, descriptors) {
+    const {
+      instance: { members: [ member ] },
+    } = structure;
+    const { get } = this.defineMember(member);
+    const constructor = this.createConstructor(structure);
+    descriptors.$ = { get, set: throwReadOnly };
+    descriptors[INITIALIZE] = defineValue(throwReadOnly);
+    descriptors[Symbol.toPrimitive] = defineValue(get);
+    return constructor;
+  },
+  finalizeComptime(structure, staticDescriptors) {
+    const {
+      instance: { members: [ member ] },
+    } = structure;
+    staticDescriptors[BIT_SIZE] = defineValue(member.bitSize);
+  },
+});
+
 var _enum = mixin({
   defineEnum(structure, descriptors) {
     const {
@@ -9255,7 +9284,7 @@ var _enum = mixin({
               // write the value into memory
               set.call(item, arg);
               // attach the new item to the enum set
-              const name = `${arg}`;
+              const name = `@enumFromInt(${arg})`;
               defineProperty(item, NAME, defineValue(name));
               defineProperty(constructor, name, defineValue(item));
               itemsByIndex[arg] = item;
@@ -9751,33 +9780,16 @@ var pointer = mixin({
     const {
       flags,
       byteSize,
-      instance: { members: [ member ] },
+      instance: { members },
     } = structure;
-    const { structure: targetStructure } = member;
+    const { structure: targetStructure } = members[0];
     const {
       type: targetType,
       flags: targetFlags,
       byteSize: targetSize = 1
     } = targetStructure;
-    // length for slice can be zero or undefined
-    const addressSize = (flags & PointerFlag.HasLength) ? byteSize / 2 : byteSize;
-    const { get: readAddress, set: writeAddress } = this.defineMember({
-      type: MemberType.Uint,
-      bitOffset: 0,
-      bitSize: addressSize * 8,
-      byteSize: addressSize,
-      structure: { byteSize: addressSize },
-    });
-    const { get: readLength, set: writeLength } = (flags & PointerFlag.HasLength) ? this.defineMember({
-      type: MemberType.Uint,
-      bitOffset: addressSize * 8,
-      bitSize: addressSize * 8,
-      byteSize: addressSize,
-      structure: {
-        flags: PrimitiveFlag.IsSize,
-        byteSize: addressSize
-      },
-    }) : {};
+    const { get: readAddress, set: writeAddress } = this.defineMember(members[1]);
+    const { get: readLength, set: writeLength } = (flags & PointerFlag.HasLength) ? this.defineMember(members[2]) : {};
     const updateTarget = function(context, all = true, active = true) {
       if (all || this[MEMORY][ZIG]) {
         if (active) {
@@ -11081,6 +11093,7 @@ var mixins = /*#__PURE__*/Object.freeze({
   StructureArgStruct: argStruct,
   StructureArray: array,
   StructureArrayLike: arrayLike,
+  StructureComptime: comptime,
   StructureDir: dir,
   StructureEnum: _enum,
   StructureErrorSet: errorSet,

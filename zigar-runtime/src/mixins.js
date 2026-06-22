@@ -68,6 +68,7 @@ export { default as StructureAllocator } from './structures/allocator.js';
 export { default as StructureArgStruct } from './structures/arg-struct.js';
 export { default as StructureArrayLike } from './structures/array-like.js';
 export { default as StructureArray } from './structures/array.js';
+export { default as StructureComptime } from './structures/comptime.js';
 export { default as StructureDir } from './structures/dir.js';
 export { default as StructureEnum } from './structures/enum.js';
 export { default as StructureErrorSet } from './structures/error-set.js';

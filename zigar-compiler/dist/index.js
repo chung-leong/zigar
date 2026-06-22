@@ -249,7 +249,6 @@ function getPlatform() {
           for (let i = 0; i < sectionCount; i++, position += Usize(Shdr.size)) {
             shdrs.push(read(position, Shdr.size));
           }
-          const decoder = new TextDecoder();
           for (const shdr of shdrs) {
             const sectionType = shdr.getUint32(Shdr.sh_type, le);
             if (sectionType == SHT_DYNAMIC) {
@@ -794,7 +793,7 @@ async function test(srcPath, options) {
   const config = await createConfig(srcPath, '', options);
   const { zigPath, moduleBuildDir } = config;
   // create config file
-  await createProject(config, moduleBuildDir);
+  await createProject(config);
   const cwd = moduleBuildDir;
   const stdio = (silent) ? 'pipe' : 'inherit';
   const child = spawn(zigPath, [ 'build', 'test', ...extraArgs ], { cwd, stdio, windowsHide: true });
@@ -831,7 +830,7 @@ async function compile(srcPath, modPath, options) {
       if (!outputMTimeBefore || options.recompile !== false) {
         const { onStart, onEnd } = options;
         // create config file
-        await createProject(config, moduleBuildDir);
+        await createProject(config);
         // then run the compiler
         await runCompiler(zigPath, zigArgs, { cwd: moduleBuildDir, onStart, onEnd });
       }
@@ -935,7 +934,8 @@ function formatProjectConfig(config) {
   return lines.join('\n') + '\n';
 }
 
-async function createProject(config, dir) {
+async function createProject(config) {
+  const dir = config.moduleBuildDir;
   await createDirectory(dir);
   const content = formatProjectConfig(config);
   const cfgFilePath = join(dir, 'build.cfg.zig');

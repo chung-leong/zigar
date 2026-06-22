@@ -14,6 +14,7 @@ export const StructureType = {
   ArgStruct: 12,
   VariadicStruct: 13,
   Function: 14,
+  Comptime: 15,
 };
 export const StructurePurpose = {
   Unknown: 0,
@@ -24,6 +25,9 @@ export const StructurePurpose = {
   Iterator: 5,
   File: 6,
   Directory: 7,
+  AnyImage: 8,
+  WebImage: 9,
+  GdImage: 10,
 };
 export const structureNames = Object.keys(StructureType);
 export const StructureFlag = {

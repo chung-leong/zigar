@@ -1,8 +1,7 @@
 import { ENVIRONMENT, MEMORY, PROPS, SENTINEL, SLOTS, VISIT, ZIG } from '../../src/symbols.js';
 import {
   ErrorSetFlag, MemberType, ModuleAttribute, PointerFlag, PrimitiveFlag, SliceFlag, StructFlag,
-  StructureFlag,
-  structureNames, StructurePurpose, StructureType
+  StructureFlag, structureNames, StructurePurpose, StructureType
 } from '../constants.js';
 import { mixin } from '../environment.js';
 import callMarshalingInbound from '../features/call-marshaling-inbound.js';
@@ -368,12 +367,17 @@ export default mixin({
         return `f${member.bitSize}`;
       case MemberType.Void:
         return 'void';
+    }
+  },
+  getComptimeName(s) {
+    const { instance: { members: [ member ] }, flags = 0 } = s;
+    switch (member.type) {
       case MemberType.Literal:
-        return 'enum_literal';
+        return '@TypeOf(.enum_literal)';
       case MemberType.Null:
-        return 'null';
+        return '@TypeOf(null)';
       case MemberType.Undefined:
-        return 'undefined';
+        return '@TypeOf(undefined)';
       case MemberType.Type:
         return 'type';
       case MemberType.Object:

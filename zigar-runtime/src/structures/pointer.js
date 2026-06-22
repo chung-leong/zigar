@@ -1,6 +1,4 @@
-import {
-  MemberType, PointerFlag, PrimitiveFlag, ProxyType, SliceFlag, StructureFlag, StructureType,
-} from '../constants.js';
+import { PointerFlag, ProxyType, SliceFlag, StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import {
   ConstantConstraint, InvalidPointerTarget, InvalidSliceLength, NoCastingToPointer, NullPointer,
@@ -21,33 +19,16 @@ export default mixin({
     const {
       flags,
       byteSize,
-      instance: { members: [ member ] },
+      instance: { members },
     } = structure;
-    const { structure: targetStructure } = member;
+    const { structure: targetStructure } = members[0];
     const {
       type: targetType,
       flags: targetFlags,
       byteSize: targetSize = 1
     } = targetStructure;
-    // length for slice can be zero or undefined
-    const addressSize = (flags & PointerFlag.HasLength) ? byteSize / 2 : byteSize;
-    const { get: readAddress, set: writeAddress } = this.defineMember({
-      type: MemberType.Uint,
-      bitOffset: 0,
-      bitSize: addressSize * 8,
-      byteSize: addressSize,
-      structure: { byteSize: addressSize },
-    });
-    const { get: readLength, set: writeLength } = (flags & PointerFlag.HasLength) ? this.defineMember({
-      type: MemberType.Uint,
-      bitOffset: addressSize * 8,
-      bitSize: addressSize * 8,
-      byteSize: addressSize,
-      structure: {
-        flags: PrimitiveFlag.IsSize,
-        byteSize: addressSize
-      },
-    }) : {};
+    const { get: readAddress, set: writeAddress } = this.defineMember(members[1]);
+    const { get: readLength, set: writeLength } = (flags & PointerFlag.HasLength) ? this.defineMember(members[2]) : {};
     const updateTarget = function(context, all = true, active = true) {
       if (all || this[MEMORY][ZIG]) {
         if (active) {
