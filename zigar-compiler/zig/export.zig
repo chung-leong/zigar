@@ -1,13 +1,13 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const enums = @import("enums.zig");
-const StructureType = enums.StructureType;
-const StructurePurpose = enums.StructurePurpose;
-const StructureFlags = enums.StructureFlags;
-const MemberType = enums.MemberType;
-const MemberFlags = enums.MemberFlags;
 const meta = @import("meta.zig");
+const interface = @import("module/native/interface.zig");
+const StructureType = interface.StructureType;
+const StructurePurpose = interface.StructurePurpose;
+const StructureFlags = interface.StructureFlags;
+const MemberType = interface.MemberType;
+const MemberFlags = interface.MemberFlags;
 pub const options = @import("options.zig");
 const js_fn = @import("thunk/js-fn.zig");
 const zig_fn = @import("thunk/zig-fn.zig");

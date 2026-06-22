@@ -18,7 +18,7 @@ pub fn link() !void {
             const import_name = switch (@typeInfo(ptr_info.child)) {
                 .@"fn" => |fn_info| switch (fn_info.calling_convention) {
                     .x86_64_vectorcall => std.fmt.comptimePrint("{s}@@{d}", .{ decl.name, fn_info.params.len * @sizeOf(usize) }),
-                    .x86_fastcall => std.fmt.comptimePrint("@{s}@{d}", .{ decl.name, fn_info.params.len * @sizeOf(usize) }),
+                    .x86_vectorcall => std.fmt.comptimePrint("@{s}@{d}", .{ decl.name, fn_info.params.len * @sizeOf(usize) }),
                     else => decl.name,
                 },
                 else => decl.name,
@@ -80,7 +80,7 @@ fn Ptr(comptime name: []const u8) type {
             .@"fn" = .{
                 .calling_convention = switch (builtin.target.cpu.arch) {
                     .x86_64 => .{ .x86_64_vectorcall = .{} },
-                    .x86 => .{ .x86_fastcall = .{} },
+                    .x86 => .{ .x86_vectorcall = .{} },
                     else => .c,
                 },
                 .is_generic = false,
