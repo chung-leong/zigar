@@ -558,6 +558,10 @@ export function throwReadOnly() {
   throw new ReadOnly();
 }
 
+export function throwNoSupport(feature) {
+  throw new Error(`Current platform does not support ${feature}`);
+}
+
 export function checkInefficientAccess(progress, access, len) {
   progress.bytes += len;
   progress.calls++;

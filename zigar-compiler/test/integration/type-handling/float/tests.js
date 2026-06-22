@@ -66,6 +66,13 @@ export function addTests(importModule, options) {
       module.array3 = [ 3.5, 3.5, 3.5, 3.5 ];
       const [ after3 ] = await capture(() => print1());
       expect(after3).to.equal('{ 3.5, 3.5, 3.5, 3.5 }');
+      expect(module.array2.typedArray).to.be.instanceOf(Float64Array);
+      if (global.Float16Array) {
+        expect(module.array1.typedArray).to.be.instanceOf(Float16Array);
+      } else {
+        expect(() => module.array1.typedArray).to.throw(Error)
+          .with.property('message').that.contains('Float16Array');
+      }
     })
     it('should handle float in struct', async function() {
       const { default: module, StructA, print } = await importTest('in-struct');

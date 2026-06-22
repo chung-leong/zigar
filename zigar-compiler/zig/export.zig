@@ -939,7 +939,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .int => |int| inline for (.{ 8, 16, 32, 64 }) |bits| {
                     if (int.bits == bits) break .{ .bits = bits, .signedness = int.signedness };
                 } else null,
-                .float => |float| inline for (.{ 32, 64 }) |bits| {
+                .float => |float| inline for (.{ 16, 32, 64 }) |bits| {
                     if (float.bits == bits) break .{ .bits = bits, .signedness = .signed };
                 } else null,
                 .array => |ar| getTypedArrayType(ar.child),

@@ -54,7 +54,7 @@ final class FloatHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/array-of.zig');
         $this->assertSame([ 1.25, 2.25, 3.25, 4.25 ], (array) $m->array1);
         $this->assertSame([ 1.1, 2.1, 3.1, 4.1 ], (array) $m->array2);
-        $this->assertSame([ 1.1, 2.1, 3.1, 4.1 ], (array) $m->array3);
+        $this->assertSame([ 1.1, 2.1, 3.1, 4.1 ], (array) $m->array3);        
 
         $this->expectOutputString(<<<OUTPUT
         { 1.25, 2.25, 3.25, 4.25 }
@@ -64,6 +64,9 @@ final class FloatHandlingTest extends ZigarTestCase
         $m->print1();
         $m->array1 = [ 3.5, 3.5, 3.5, 3.5 ];
         $m->print1();
+
+        $this->assertTrue($m->array2->__typed_array instanceof Float64Array);
+        $this->assertTrue($m->array1->__typed_array instanceof Float16Array);
     }
 
     public function testHandleFloatInStruct(): void
