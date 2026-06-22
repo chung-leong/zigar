@@ -12,24 +12,40 @@ pub fn build(b: *std.Build) !void {
         return;
     };
     const os = if (@hasDecl(@TypeOf(target), "getOsTag")) target.getOsTag() else target.result.os.tag;
+
+    const translate_c = b.addTranslateC(.{
+        .root_source_file = b.path("src/include/c.h"),
+        .target = target,
+        .optimize = optimize,
+    });
+    translate_c.addIncludePath(b.path("../node-api-headers/include"));
+    translate_c.addIncludePath(b.path("./node_modules/node-api-headers/include"));
+
+    const mod = b.addModule("root", .{
+        .root_source_file = b.path("src/addon.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{
+                .name = "c",
+                .module = translate_c.createModule(),
+            },
+        },
+    });
+
     const lib = b.addLibrary(.{
         .linkage = .dynamic,
         .name = "node-zigar-addon",
-        .root_module = b.addModule("root", .{
-            .root_source_file = b.path("src/addon.zig"),
-            .target = target,
-            .optimize = optimize,
-        }),
+        .root_module = mod,
+        .use_llvm = true,
     });
-    lib.addIncludePath(b.path("./src"));
-    lib.addIncludePath(b.path("../node-api-headers/include"));
-    lib.addIncludePath(b.path("./node_modules/node-api-headers/include"));
     switch (os) {
         .windows => lib.linkSystemLibrary("dbghelp"),
         .macos => lib.linker_allow_shlib_undefined = true,
         else => {},
     }
     lib.linkLibC();
+
     const wf = b.addUpdateSourceFiles();
     wf.addCopyFileToSource(lib.getEmittedBin(), output_path);
     wf.step.dependOn(&lib.step);

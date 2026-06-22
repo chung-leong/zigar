@@ -29,9 +29,16 @@ const os = switch (builtin.target.os.tag) {
     else => .unknown,
 };
 
-pub const Entry = extern struct {
+pub const Entry = struct {
     handler: *const anyopaque,
     original: **const anyopaque,
+    deferred: ?*Deferred = null,
+
+    pub const Deferred = struct {
+        address: usize = 0,
+        read_only: bool = false,
+        installed: bool = false,
+    };
 };
 pub const Syscall = extern struct {
     cmd: Command,
@@ -50,6 +57,14 @@ pub const Syscall = extern struct {
         },
         close: extern struct {
             fd: i32,
+        },
+        copyfilerange: extern struct {
+            out_fd: i32,
+            in_fd: i32,
+            out_offset: ?*i64,
+            in_offset: ?*i64,
+            len: u64,
+            copied: u32 = undefined,
         },
         datasync: extern struct {
             fd: i32,
@@ -72,6 +87,10 @@ pub const Syscall = extern struct {
             fd: i32,
             stat: Filestat = undefined,
         },
+        ftruncate: extern struct {
+            fd: i32,
+            len: u64,
+        },
         futimes: extern struct {
             fd: i32,
             atime: i64,
@@ -87,6 +106,7 @@ pub const Syscall = extern struct {
         mkdir: extern struct {
             dirfd: i32,
             path: [*:0]const u8,
+            mode: u32,
         },
         open: extern struct {
             dirfd: i32,
@@ -200,6 +220,11 @@ pub const Syscall = extern struct {
             fd: i32,
             position: u64 = undefined,
         },
+        truncate: extern struct {
+            dirfd: i32,
+            path: [*:0]const u8,
+            len: u64,
+        },
         unlink: extern struct {
             dirfd: i32,
             path: [*:0]const u8,
@@ -236,9 +261,11 @@ pub const Syscall = extern struct {
         advise,
         allocate,
         close,
+        copyfilerange,
         datasync,
         environ,
         fstat,
+        ftruncate,
         futimes,
         getdents,
         getfl,
@@ -263,6 +290,7 @@ pub const Syscall = extern struct {
         symlink,
         sync,
         tell,
+        truncate,
         unlink,
         utimes,
         write,
@@ -494,6 +522,33 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                 const err = Host.redirectSyscall(&call);
                 result.* = intFromError(err);
                 return true;
+            }
+            return false;
+        }
+
+        pub fn copy_file_range(in_fd: c_int, in_offset: [*c]off_t, out_fd: c_int, out_offset: [*c]off_t, len: size_t, _: c_int, result: *ssize_t) callconv(.c) bool {
+            if (isPrivateDescriptor(out_fd) or isPrivateDescriptor(in_fd)) {
+                var in_offset64: off64_t = if (in_offset) |ptr| ptr.* else 0;
+                var out_offset64: off64_t = if (out_offset) |ptr| ptr.* else 0;
+                var call: Syscall = .{ .cmd = .copyfilerange, .u = .{
+                    .copyfilerange = .{
+                        .in_fd = in_fd,
+                        .out_fd = out_fd,
+                        .in_offset = if (in_offset != null) &in_offset64 else null,
+                        .out_offset = if (out_offset != null) &out_offset64 else null,
+                        .len = @intCast(len),
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                if (err == .SUCCESS) {
+                    if (in_offset) |ptr| ptr.* = @intCast(in_offset64);
+                    if (out_offset) |ptr| ptr.* = @intCast(out_offset64);
+                    result.* = @intCast(call.u.copyfilerange.copied);
+                    return true;
+                } else if (err != .OPNOTSUPP) {
+                    result.* = intFromError(err);
+                    return true;
+                }
             }
             return false;
         }
@@ -852,17 +907,28 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
-        pub fn ftruncate(fd: c_int, _: off_t, result: *c_int) callconv(.c) bool {
-            if (isPrivateDescriptor(fd)) {
-                result.* = intFromError(.INVAL);
-                return true;
-            }
-            return false;
+        pub fn ftruncate(fd: c_int, offset: off_t, result: *c_int) callconv(.c) bool {
+            return ftruncateT(off_t, fd, offset, result);
         }
 
-        pub fn ftruncate64(fd: c_int, _: off64_t, result: *c_int) callconv(.c) bool {
+        pub fn ftruncate64(fd: c_int, offset: off64_t, result: *c_int) callconv(.c) bool {
+            return ftruncateT(off64_t, fd, offset, result);
+        }
+
+        fn ftruncateT(comptime T: type, fd: c_int, offset: T, result: *c_int) bool {
             if (isPrivateDescriptor(fd)) {
-                result.* = intFromError(.INVAL);
+                if (offset < 0) {
+                    result.* = intFromError(.INVAL);
+                } else {
+                    var call: Syscall = .{ .cmd = .ftruncate, .u = .{
+                        .ftruncate = .{
+                            .fd = @intCast(fd),
+                            .len = @intCast(offset),
+                        },
+                    } };
+                    const err = Host.redirectSyscall(&call);
+                    result.* = intFromError(err);
+                }
                 return true;
             }
             return false;
@@ -1060,7 +1126,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return mkdirat(fd_cwd, path, mode, result);
         }
 
-        pub fn mkdirat(dirfd: c_int, path: [*:0]const u8, _: c_int, result: *c_int) callconv(.c) bool {
+        pub fn mkdirat(dirfd: c_int, path: [*:0]const u8, mode: c_int, result: *c_int) callconv(.c) bool {
             if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.mkdir))) {
                 var resolver = PathResolver.init(dirfd, path) catch {
                     result.* = intFromError(.NOMEM);
@@ -1071,6 +1137,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     .mkdir = .{
                         .dirfd = resolver.dirfd,
                         .path = resolver.path,
+                        .mode = @intCast(mode),
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
@@ -1376,11 +1443,11 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
-        pub fn readlink(path: [*:0]const u8, buffer: [*]u8, len: usize, result: *c_int) callconv(.c) bool {
+        pub fn readlink(path: [*:0]const u8, buffer: [*]u8, len: usize, result: *isize) callconv(.c) bool {
             return readlinkat(fd_cwd, path, buffer, len, result);
         }
 
-        pub fn readlinkat(dirfd: c_int, path: [*:0]const u8, buffer: [*]u8, len: usize, result: *c_int) callconv(.c) bool {
+        pub fn readlinkat(dirfd: c_int, path: [*:0]const u8, buffer: [*]u8, len: usize, result: *isize) callconv(.c) bool {
             if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.readlink))) {
                 var resolver = PathResolver.init(dirfd, path) catch {
                     result.* = intFromError(.NOMEM);
@@ -1558,6 +1625,34 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     result.* = intFromError(err);
                     return true;
                 }
+            }
+            return false;
+        }
+
+        pub fn truncate(path: [*:0]const u8, offset: off_t, result: *c_int) callconv(.c) bool {
+            return truncateT(off_t, path, offset, result);
+        }
+
+        pub fn truncate64(path: [*:0]const u8, offset: off64_t, result: *c_int) callconv(.c) bool {
+            return truncateT(off64_t, path, offset, result);
+        }
+
+        fn truncateT(comptime T: type, path: [*:0]const u8, offset: T, result: *c_int) bool {
+            if (Host.isRedirecting(.open)) {
+                if (offset < 0) {
+                    result.* = intFromError(.INVAL);
+                } else {
+                    var call: Syscall = .{ .cmd = .truncate, .u = .{
+                        .truncate = .{
+                            .dirfd = fd_cwd,
+                            .path = path,
+                            .len = @intCast(offset),
+                        },
+                    } };
+                    const err = Host.redirectSyscall(&call);
+                    result.* = intFromError(err);
+                }
+                return true;
             }
             return false;
         }
@@ -1880,6 +1975,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const fstatfs64 = makeStdHook("fstatfs64");
         pub const fsync = makeStdHook("fsync");
         pub const ftruncate = makeStdHook("ftruncate");
+        pub const ftruncate64 = makeStdHook("ftruncate64");
         pub const futimens = makeStdHook("futimens");
         pub const futimes = makeStdHook("futimes");
         pub const futimesat = makeStdHook("futimesat");
@@ -1914,6 +2010,8 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const stat64 = makeStdHook("stat64");
         pub const symlink = makeStdHook("symlink");
         pub const symlinkat = makeStdHook("symlinkat");
+        pub const truncate = makeStdHook("truncate");
+        pub const truncate64 = makeStdHook("truncate64");
         pub const unlink = makeStdHook("unlink");
         pub const unlinkat = makeStdHook("unlinkat");
         pub const utimensat = makeStdHook("utimensat");
@@ -2128,10 +2226,10 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             const flags_int: @typeInfo(O).@"struct".backing_integer.? = @bitCast(flags);
             if (redirector.open(path, flags_int, 0, &result)) {
                 if (result > 0) {
-                    if (c_allocator.create(RedirectedDir)) |dir| {
+                    if (c_allocator.create(RedirectedDir) catch null) |dir| {
                         dir.* = .{ .fd = result };
                         return @ptrCast(dir);
-                    } else |_| {}
+                    }
                 }
                 return null;
             }
@@ -2216,11 +2314,17 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             return Original.telldir(d);
         }
 
-        pub fn utime(path: [*:0]const u8, tb: *const utimbuf) callconv(.c) c_int {
-            const ts: [2]std.c.timespec = .{
-                .{ .sec = tb.actime, .nsec = 0 },
-                .{ .sec = tb.modtime, .nsec = 0 },
-            };
+        pub fn utime(path: [*:0]const u8, tb: ?*const utimbuf) callconv(.c) c_int {
+            var ts: [2]std.c.timespec = undefined;
+            if (tb) |t| {
+                ts = .{ .{ .sec = t.actime, .nsec = 0 }, .{ .sec = t.modtime, .nsec = 0 } };
+            } else {
+                const now = std.time.nanoTimestamp();
+                const nps = 1_000_000_000;
+                const s: c_long = @intCast(@divTrunc(now, nps));
+                const ns: c_long = @intCast(now - s * nps);
+                ts = .{ .{ .sec = s, .nsec = ns }, .{ .sec = s, .nsec = ns } };
+            }
             var result: c_int = undefined;
             if (redirector.utimensat(fd_cwd, path, &ts, 0, &result)) {
                 return saveError(result);
@@ -2228,11 +2332,17 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             return Original.utime(path, tb);
         }
 
-        pub fn utime64(path: [*:0]const u8, tb: *const utimbuf) callconv(.c) c_int {
-            const ts: [2]std.c.timespec = .{
-                .{ .sec = tb.actime, .nsec = 0 },
-                .{ .sec = tb.modtime, .nsec = 0 },
-            };
+        pub fn utime64(path: [*:0]const u8, tb: ?*const utimbuf) callconv(.c) c_int {
+            var ts: [2]std.c.timespec = undefined;
+            if (tb) |t| {
+                ts = .{ .{ .sec = t.actime, .nsec = 0 }, .{ .sec = t.modtime, .nsec = 0 } };
+            } else {
+                const now = std.time.nanoTimestamp();
+                const nps = 1_000_000_000;
+                const s: c_long = @intCast(@divTrunc(now, nps));
+                const ns: c_long = @intCast(now - s * nps);
+                ts = .{ .{ .sec = s, .nsec = ns }, .{ .sec = s, .nsec = ns } };
+            }
             var result: c_int = undefined;
             if (redirector.utimensat(fd_cwd, path, &ts, 0, &result)) {
                 return saveError(result);
@@ -2358,6 +2468,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var fstatfs64: *const @TypeOf(Self.fstatfs64) = undefined;
             pub var fsync: *const @TypeOf(Self.fsync) = undefined;
             pub var ftruncate: *const @TypeOf(Self.ftruncate) = undefined;
+            pub var ftruncate64: *const @TypeOf(Self.ftruncate64) = undefined;
             pub var futime: *const @TypeOf(Self.futime) = undefined;
             pub var futime64: *const @TypeOf(Self.futime64) = undefined;
             pub var futimes: *const @TypeOf(Self.futimes) = undefined;
@@ -2404,6 +2515,8 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var stat64: *const @TypeOf(Self.stat64) = undefined;
             pub var symlink: *const @TypeOf(Self.symlink) = undefined;
             pub var symlinkat: *const @TypeOf(Self.symlinkat) = undefined;
+            pub var truncate: *const @TypeOf(Self.truncate) = undefined;
+            pub var truncate64: *const @TypeOf(Self.truncate64) = undefined;
             pub var telldir: *const @TypeOf(Self.telldir) = undefined;
             pub var unlink: *const @TypeOf(Self.unlink) = undefined;
             pub var unlinkat: *const @TypeOf(Self.unlinkat) = undefined;
@@ -2422,6 +2535,7 @@ pub fn PosixSubstituteLinux(comptime redirector: type) type {
     return struct {
         const posix = PosixSubstitute(redirector);
 
+        pub const copy_file_range = makeStdHook("copy_file_range");
         pub const sendfile = makeStdHook("sendfile");
         pub const sendfile64 = makeStdHook("sendfile64");
 
@@ -2431,6 +2545,7 @@ pub fn PosixSubstituteLinux(comptime redirector: type) type {
 
         const Self = @This();
         pub const Original = struct {
+            pub var copy_file_range: *const @TypeOf(Self.copy_file_range) = undefined;
             pub var sendfile: *const @TypeOf(Self.sendfile) = undefined;
             pub var sendfile64: *const @TypeOf(Self.sendfile64) = undefined;
         };
@@ -2812,6 +2927,13 @@ pub fn LibcSubstitute(comptime redirector: type) type {
             return Original.fgets(buf, num, s);
         }
 
+        pub fn fileno(s: *std.c.FILE) callconv(.c) c_int {
+            if (RedirectedFile.cast(s)) |file| {
+                return file.fd;
+            }
+            return Original.fileno(s);
+        }
+
         pub fn fopen(path: [*:0]const u8, mode: [*:0]const u8) callconv(.c) ?*std.c.FILE {
             const oflags = decodeOpenMode(mode);
             const oflags_int: u32 = @bitCast(oflags);
@@ -2902,6 +3024,14 @@ pub fn LibcSubstitute(comptime redirector: type) type {
             return Original.fwrite(buffer, size, n, s);
         }
 
+        pub fn isatty(fd: c_int) callconv(.c) c_int {
+            if (redirector.isPrivateDescriptor(fd)) {
+                _ = posix.saveError(.NOTTY);
+                return 0;
+            }
+            return Original.isatty(fd);
+        }
+
         pub fn perror(text: [*:0]const u8) callconv(.c) void {
             const msg = stdio_h.strerror(posix.getError());
             const stderr = getStdProxy(2);
@@ -2951,6 +3081,10 @@ pub fn LibcSubstitute(comptime redirector: type) type {
                 total += result;
             }
             return @intCast(total);
+        }
+
+        pub fn realpath(name: [*:0]const u8, resolved: [*]u8) callconv(.c) [*:0]u8 {
+            return Original.realpath(name, resolved);
         }
 
         pub fn rewind(s: *std.c.FILE) callconv(.c) void {
@@ -3035,6 +3169,21 @@ pub fn LibcSubstitute(comptime redirector: type) type {
             if (result < 0) return saveFileError(file, posix.getError());
             if (result == 0) file.eof = true;
             return result;
+        }
+
+        fn ttyname(fd: c_int) callconv(.c) ?[*]u8 {
+            if (redirector.isPrivateDescriptor(fd)) {
+                _ = posix.saveError(.NOTTY);
+                return null;
+            }
+            return Original.ttyname(fd);
+        }
+
+        fn ttyname_r(fd: c_int, buf: [*]u8, size: usize) callconv(.c) c_int {
+            if (redirector.isPrivateDescriptor(fd)) {
+                return @intFromEnum(std.posix.E.NOTTY);
+            }
+            return Original.ttyname_r(fd, buf, size);
         }
 
         fn write(file: *RedirectedFile, src: [*]const u8, len: off_t) callconv(.c) off_t {
@@ -3226,6 +3375,7 @@ pub fn LibcSubstitute(comptime redirector: type) type {
             pub var fgetc: *const @TypeOf(Self.fgetc) = undefined;
             pub var fgetpos: *const @TypeOf(Self.fgetpos) = undefined;
             pub var fgets: *const @TypeOf(Self.fgets) = undefined;
+            pub var fileno: *const @TypeOf(Self.fileno) = undefined;
             pub var fopen: *const @TypeOf(Self.fopen) = undefined;
             pub var fputc: *const @TypeOf(Self.fputc) = undefined;
             pub var fputs: *const @TypeOf(Self.fputs) = undefined;
@@ -3234,13 +3384,17 @@ pub fn LibcSubstitute(comptime redirector: type) type {
             pub var fsetpos: *const @TypeOf(Self.fsetpos) = undefined;
             pub var ftell: *const @TypeOf(Self.ftell) = undefined;
             pub var fwrite: *const @TypeOf(Self.fwrite) = undefined;
+            pub var isatty: *const @TypeOf(Self.isatty) = undefined;
             pub var perror: *const @TypeOf(Self.perror) = undefined;
             pub var putc: *const @TypeOf(Self.putc) = undefined;
             pub var putchar: *const @TypeOf(Self.putchar) = undefined;
             pub var puts: *const @TypeOf(Self.puts) = undefined;
+            pub var realpath: *const @TypeOf(Self.realpath) = undefined;
             pub var rewind: *const @TypeOf(Self.rewind) = undefined;
             pub var setbuf: *const @TypeOf(Self.setbuf) = undefined;
             pub var setvbuf: *const @TypeOf(Self.setvbuf) = undefined;
+            pub var ttyname: *const @TypeOf(Self.ttyname) = undefined;
+            pub var ttyname_r: *const @TypeOf(Self.ttyname_r) = undefined;
             pub var ungetc: *const @TypeOf(Self.ungetc) = undefined;
 
             pub extern var vfprintf_orig: *const @TypeOf(Self.vfprintf_hook);
@@ -3411,10 +3565,10 @@ pub fn LibcSubstituteWindows(comptime redirector: type) type {
                     var result: c_int = undefined;
                     if (redirector.open(path, flags_int, 0, &result)) {
                         if (result > 0) {
-                            if (c_allocator.create(RedirectedDir)) |dir| {
+                            if (c_allocator.create(RedirectedDir) catch null) |dir| {
                                 dir.* = .{ .fd = result };
                                 return @bitCast(@intFromPtr(dir));
-                            } else |_| {}
+                            }
                         }
                         return -1;
                     }
@@ -3873,7 +4027,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
             const object_name = object_attributes.ObjectName;
             const name_len = @divExact(object_name.Length, 2);
             const path = object_name.Buffer.?[0..name_len];
-            var result: c_int = undefined;
+            var result: isize = undefined;
             if (isPrivateDescriptor(dirfd) or redirector.Host.isRedirecting(.any)) {
                 var converter = Wtf8Converter.init(.{ .save_error = false });
                 defer converter.deinit();
@@ -3887,8 +4041,10 @@ pub fn Win32Substitute(comptime redirector: type) type {
                     }
                 } else if (dir_op and create_disposition == std.os.windows.FILE_CREATE) {
                     // creating a directory
-                    if (redirector.mkdirat(dirfd, path_wtf8, 0, &result)) {
+                    var int_result: c_int = undefined;
+                    if (redirector.mkdirat(dirfd, path_wtf8, 0, &int_result)) {
                         if (result < 0) return .ACCESS_DENIED;
+                        result = int_result;
                         handle.* = createTemporaryHandle(path_wtf8, dirfd, dir_op) catch return .NO_MEMORY;
                         io_status_block.Information = windows_h.FILE_CREATED;
                         return .SUCCESS;
@@ -4912,9 +5068,9 @@ pub fn Win32SubstituteNonIO(comptime redirector: type) type {
             var len: usize = undefined;
             if (redirector.environ(&list, &bytes, &count, &len)) {
                 const bytes_s = bytes[0..len];
-                if (std.unicode.wtf8ToWtf16LeAlloc(c_allocator, bytes_s)) |bytes_w| {
+                if (std.unicode.wtf8ToWtf16LeAlloc(c_allocator, bytes_s) catch null) |bytes_w| {
                     return @ptrCast(bytes_w.ptr);
-                } else |_| {}
+                }
                 return null;
             }
             return Original.GetEnvironmentStringsW();
@@ -5088,7 +5244,7 @@ const Wtf8Converter = struct {
     }
 };
 
-pub const HandlerVTable = init: {
+pub const HandlerVTable: type = init: {
     const redirector = SyscallRedirector(void);
     const len = count: {
         var count: usize = 0;

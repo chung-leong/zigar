@@ -1,13 +1,13 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const meta = @import("meta.zig");
-const interface = @import("module/native/interface.zig");
+const interface = @import("host/native/interface.zig");
 const StructureType = interface.StructureType;
 const StructurePurpose = interface.StructurePurpose;
 const StructureFlags = interface.StructureFlags;
 const MemberType = interface.MemberType;
 const MemberFlags = interface.MemberFlags;
+const meta = @import("meta.zig");
 pub const options = @import("options.zig");
 const js_fn = @import("thunk/js-fn.zig");
 const zig_fn = @import("thunk/zig-fn.zig");
@@ -483,14 +483,20 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .slot = 0,
                 .structure = target_structure,
             });
-            const usize_structure = try self.getStructure(usize);
-            try appendList(list, .{
-                .type = getMemberType(usize, false),
-                .bitOffset = 0,
-                .bitSize = bit_size.get(usize),
-                .byteSize = byte_size.get(usize),
-                .structure = usize_structure,
+            // JavaScript code allows usize to be number instead of bigint, so we use
+            // u32 and u64 for the address instead
+            const Address = @Type(.{
+                .int = .{ .bits = @bitSizeOf(*anyopaque), .signedness = .unsigned },
             });
+            const address_structure = try self.getStructure(Address);
+            try appendList(list, .{
+                .type = getMemberType(Address, false),
+                .bitOffset = 0,
+                .bitSize = bit_size.get(Address),
+                .byteSize = byte_size.get(Address),
+                .structure = address_structure,
+            });
+            const usize_structure = try self.getStructure(usize);
             if (@typeInfo(T).pointer.size == .slice) {
                 try appendList(list, .{
                     .type = getMemberType(usize, false),

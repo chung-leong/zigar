@@ -3,6 +3,9 @@ const c_allocator = std.heap.c_allocator;
 const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
+const c = @import("c");
+
+const DynLib = @import("dyn-lib.zig").DynLib;
 const hooks = @import("module/native/hooks.zig");
 const interface = @import("module/native/interface.zig");
 const napi = @import("napi.zig");
@@ -28,14 +31,15 @@ const ModuleHost = struct {
         original: **const anyopaque,
         deferred: ?*Deferred = null,
     };
-    pub const Syscall = hooks.Syscall;
+    pub const Syscall = interface.Syscall;
+    pub const Jscall = interface.Jscall;
     pub const HandlerVTable = hooks.HandlerVTable;
     const redirection_controller = redirection.Controller(@This());
 
     env: Env,
     ref_count: isize = 1,
     module: ?*Module = null,
-    library: ?std.DynLib = null,
+    library: ?DynLib = null,
     base_address: usize = 0,
     is_bun: bool = false,
     external_buffer_disabled: bool = false,
@@ -111,8 +115,8 @@ const ModuleHost = struct {
     } = .{},
 
     pub threadlocal var trapping_syscalls: bool = false;
-    threadlocal var main_thread_syscall_trap_count: usize = 0;
-    threadlocal var in_main_thread: bool = undefined;
+    pub threadlocal var main_thread_syscall_trap_count: usize = 0;
+    pub threadlocal var in_main_thread: bool = false;
 
     var host_list: std.ArrayList(*@This()) = .{};
     var host_list_mutex: std.Thread.Mutex = .{};
@@ -122,7 +126,6 @@ const ModuleHost = struct {
     var function_count: i32 = 0;
 
     const Module = interface.Module(Value);
-    const Jscall = Module.Jscall;
 
     fn register(self: *@This()) !void {
         host_list_mutex.lock();
@@ -155,7 +158,7 @@ const ModuleHost = struct {
         redirection_controller.uninstallSignalHandler();
     }
 
-    fn createEnvironment(env: Env, disableExternalBuffer: Value) !Value {
+    fn createEnvironment(env: Env, disable_external_buffer: Value) !Value {
         // this function is only called from a main thread (where the event loop runs)
         in_main_thread = true;
         // compile embedded JavaScript
@@ -178,7 +181,7 @@ const ModuleHost = struct {
         if (env.getNamedProperty(global, "Bun")) |_| {
             self.is_bun = true;
         } else |_| {}
-        if (env.getValueBool(disableExternalBuffer)) |disabled| {
+        if (env.getValueBool(disable_external_buffer)) |disabled| {
             self.external_buffer_disabled = disabled;
         } else |_| {}
         return js_env;
@@ -200,15 +203,20 @@ const ModuleHost = struct {
         };
         // decompress JS
         var input: std.Io.Reader = .fixed(@embedFile(js_file_name));
-        var decompression_buffer: [256 * 1024]u8 = undefined;
-        var decompressor: std.compress.zstd.Decompress = .init(&input, &decompression_buffer, .{
-            .window_len = decompression_buffer.len,
+        const decompression_buffer = try c_allocator.alloc(u8, 512 * 1024);
+        defer c_allocator.free(decompression_buffer);
+        var decompressor: std.compress.zstd.Decompress = .init(&input, decompression_buffer, .{
+            .window_len = @intCast(decompression_buffer.len),
         });
-        var buffer: [512 * 1024]u8 = undefined;
-        const len = try decompressor.reader.readSliceShort(&buffer);
-        const js_bytes = buffer[0..len];
+        const read_buffer = try c_allocator.alloc(u8, 512 * 1024);
+        defer c_allocator.free(read_buffer);
+        const len = try decompressor.reader.readSliceShort(read_buffer);
+        const js_bytes = read_buffer[0..len];
         const js_str = try env.createStringUtf8(js_bytes);
-        return try env.runScript(js_str);
+        return env.runScript(js_str) catch |err| {
+            std.debug.print("error = {}\n", .{err});
+            return err;
+        };
     }
 
     fn addRef(self: *@This()) void {
@@ -300,7 +308,7 @@ const ModuleHost = struct {
         defer c_allocator.free(path_bytes);
         _ = try env.getValueStringUtf8(path, path_bytes);
         const path_s = path_bytes[0..path_len];
-        var lib = try std.DynLib.open(path_s);
+        var lib = try DynLib.open(path_s);
         errdefer lib.close();
         const module = lib.lookup(*Module, "zig_module") orelse return error.MissingSymbol;
         if (module.version != Module.current_version) return error.IncorrectVersion;
@@ -314,11 +322,6 @@ const ModuleHost = struct {
                     break :get @intFromPtr(mbi.AllocationBase);
                 },
                 else => {
-                    const c = @cImport({
-                        @cDefine("_GNU_SOURCE", {});
-                        @cDefine("_BSD_SOURCE", {});
-                        @cInclude("dlfcn.h");
-                    });
                     var dl_info: c.Dl_info = undefined;
                     if (c.dladdr(module, &dl_info) == 0) return error.Unexpected;
                     break :get @intFromPtr(dl_info.dli_fbase.?);
@@ -330,7 +333,7 @@ const ModuleHost = struct {
         if (env.getValueBool(redirectingIO) catch true) {
             // hooks are installed even when io redirection is disabled, because they're needed for
             // correct handling threads and environment variables
-            const pos = try redirection_controller.installHooks(self, &lib, path_s);
+            const pos = try redirection_controller.installHooks(self, &lib);
             if (module.attributes.io_redirection) {
                 if (self.getSyscallHook("__sc_vtable")) |hook| {
                     const vtable: *const HandlerVTable = @ptrCast(@alignCast(hook.handler));
@@ -347,7 +350,6 @@ const ModuleHost = struct {
     }
 
     pub fn initializeThread(self: *@This()) !void {
-        in_main_thread = false;
         if (self.syscall_trap_installed) {
             try redirection_controller.installSyscallTrap(&trapping_syscalls);
             self.thread_syscall_trap_list_mutex.lock();
@@ -853,9 +855,11 @@ const ModuleHost = struct {
         return try env.createStringUtf8(bytes[0..len]);
     }
 
-    fn createView(self: *@This(), bytes: ?[*]const u8, len: usize, copying: bool, handle: usize) !Value {
+    fn createView(self: *@This(), bytes: ?[*]const u8, len: usize, copying: bool, read_only: bool, handle: usize, alignment: usize) !Value {
         const env = self.env;
         const pi_handle = if (handle != 0) handle - self.base_address else 0;
+        _ = read_only; // can't make view read-only in JavaScript
+        _ = alignment; // cam\t control alignment in JavaScript
         return env.callFunction(
             try env.getNull(),
             try env.getReferenceValue(self.js.create_view orelse return error.Unexpected),
@@ -1050,6 +1054,8 @@ const ModuleHost = struct {
                 .pwritev => try self.handlePositionalVectorWrite(futex, &call.u.pwritev),
                 .seek => try self.handleSeek(futex, &call.u.seek),
                 .tell => try self.handleTell(futex, &call.u.tell),
+                .truncate => self.handleTruncate(futex, &call.u.truncate),
+                .ftruncate => self.handleTruncate(futex, &call.u.ftruncate),
                 .getfl => try self.handleGetDescriptorFlags(futex, &call.u.getfl),
                 .setfl => try self.handleSetDescriptorFlags(futex, &call.u.setfl),
                 .getlk => try self.handleGetLock(futex, &call.u.getlk),
@@ -1071,6 +1077,7 @@ const ModuleHost = struct {
                 .rename => try self.handleRename(futex, &call.u.rename),
                 .poll => try self.handlePoll(futex, &call.u.poll),
                 .sendfile => try self.handleSendFile(futex, &call.u.sendfile),
+                .copyfilerange => try self.handleCopyFileRange(futex, &call.u.copyfilerange),
                 .environ => try self.handleGetEnvironmentStrings(futex, &call.u.environ),
                 .write_stderr => try self.handleWriteStderr(futex, &call.u.write_stderr),
             };
@@ -1322,6 +1329,14 @@ const ModuleHost = struct {
         }
     }
 
+    fn handleTruncate(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
+        _ = env;
+        _ = futex;
+        _ = args;
+        return .OPNOTSUPP;
+    }
+
     fn handleGetDescriptorFlags(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
         return try self.callPosixFunction(self.js.fd_fdstat_get, &.{
@@ -1508,6 +1523,14 @@ const ModuleHost = struct {
         });
     }
 
+    fn handleCopyFileRange(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
+        _ = env;
+        _ = futex;
+        _ = args;
+        return .OPNOTSUPP;
+    }
+
     fn handleGetEnvironmentStrings(self: *@This(), futex: Value, args: anytype) !E {
         var result: E = undefined;
         if (self.env_variable_list != null) {
@@ -1679,15 +1702,15 @@ inline fn camelize(comptime name: []const u8) [:0]const u8 {
     var buffer: [name.len + 1]u8 = undefined;
     var len: usize = 0;
     var capitalize = false;
-    for (name) |c| {
-        if (c == '_') {
+    for (name) |char| {
+        if (char == '_') {
             capitalize = true;
         } else if (capitalize) {
-            buffer[len] = std.ascii.toUpper(c);
+            buffer[len] = std.ascii.toUpper(char);
             len += 1;
             capitalize = false;
         } else {
-            buffer[len] = c;
+            buffer[len] = char;
             len += 1;
         }
     }
