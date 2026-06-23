@@ -352,7 +352,6 @@ pub const CallDispatcher = struct {
             .symlink => try self.handleSymlink(&call.u.symlink),
             .rename => try self.handleRename(&call.u.rename),
             .poll => try self.handlePoll(&call.u.poll),
-            .sendfile => try self.handleSendFile(&call.u.sendfile),
             .copyfilerange => try self.handleCopyFileRange(&call.u.copyfilerange),
             .environ => try self.handleGetEnvironmentStrings(&call.u.environ),
             .write_stderr => try self.handleWriteStderr(&call.u.write_stderr),
@@ -1107,20 +1106,6 @@ pub const CallDispatcher = struct {
 
     fn handlePoll(_: *@This(), _: anytype) !E {
         return .INVAL;
-    }
-
-    fn handleSendFile(self: *@This(), args: anytype) !E {
-        const out_strm, const close_out_strm = self.useStream(args.out_fd, "w") catch return .BADF;
-        defer if (close_out_strm) php.close(out_strm);
-        const in_strm, const close_in_strm = self.useStream(args.in_fd, "r") catch return .BADF;
-        defer if (close_in_strm) php.close(in_strm);
-        args.sent = php.sendfile(out_strm, in_strm, args.offset, args.len) catch |err| {
-            return switch (err) {
-                error.InvalidOffset => .INVAL,
-                else => .IO,
-            };
-        };
-        return .SUCCESS;
     }
 
     fn handleCopyFileRange(self: *@This(), args: anytype) !E {

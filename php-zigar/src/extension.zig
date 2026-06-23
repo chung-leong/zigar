@@ -78,10 +78,20 @@ export fn php_zigar_req_shutdown(_: c_int, _: c_int) php.Result {
     return php.SUCCESS;
 }
 
-export fn php_zigar_info(_: *ModuleEntry) void {
+export fn php_zigar_info(module: *ModuleEntry) void {
     php.infoTableStart();
-    php.infoTableHeader(&.{ "PHP Zigar", "enabled" });
+    php.infoTableRow(&.{ "Version", module.version });
+    php.infoTableRow(&.{ "Extension optimization level", @tagName(builtin.mode) });
+    if (builtin.target.zigTriple(php.allocator) catch null) |target| {
+        defer php.allocator.free(target);
+        if (php.allocator.dupeZ(u8, target) catch null) |cstr| {
+            defer php.allocator.free(cstr);
+            php.infoTableRow(&.{ "Extension compilation target", cstr });
+        }
+    }
+    php.infoTableRow(&.{ "Zig compiler version", builtin.zig_version_string });
     php.infoTableEnd();
+    php.displayIniEntries(module);
 }
 
 fn registerClasses() !void {
@@ -361,7 +371,7 @@ fn registerIniEntries(module_number: c_int) !void {
                 bool => {
                     if (field.default_value_ptr) |ptr| {
                         const bool_ptr: *const bool = @ptrCast(ptr);
-                        if (bool_ptr.*) break :init "1";
+                        break :init if (bool_ptr.*) "On" else "Off";
                     }
                     break :init "";
                 },

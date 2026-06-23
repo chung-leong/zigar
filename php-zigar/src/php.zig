@@ -66,7 +66,6 @@ pub const INI_USER = c.ZEND_INI_USER;
 pub const INI_PERDIR = c.ZEND_INI_PERDIR;
 pub const INI_SYSTEM = c.ZEND_INI_SYSTEM;
 pub const INI_ALL = c.ZEND_INI_ALL;
-pub const displayIniEntries = c.display_ini_entries;
 
 const debug = @import("debug.zig");
 const failure = @import("failure.zig");
@@ -2076,32 +2075,6 @@ pub fn closedir(strm: *Stream) void {
     _ = pc.php_stream_free(strm, c.PHP_STREAM_FREE_CLOSE);
 }
 
-pub fn sendfile(out_strm: *Stream, in_strm: *Stream, offset: ?*i64, len: u32) !u32 {
-    var original_pos: i64 = 0;
-    var copied: i64 = 0;
-    if (offset) |ptr| {
-        original_pos = pc._php_stream_tell(in_strm);
-        if (original_pos < 0) return error.Failure;
-        const pos = pc._php_stream_seek(in_strm, ptr.*, c.SEEK_SET);
-        if (pos < 0) return error.InvalidOffset;
-    }
-    var buf: [8192]u8 = undefined;
-    var remaining = len;
-    while (remaining > 0) {
-        const bytes_read = pc._php_stream_read(in_strm, &buf, @min(remaining, buf.len));
-        if (bytes_read == 0) break;
-        const written = pc._php_stream_write(out_strm, &buf, @intCast(bytes_read));
-        if (written < 0) return error.Failure;
-        copied += bytes_read;
-        remaining -= @intCast(bytes_read);
-    }
-    if (offset) |ptr| {
-        ptr.* += copied;
-        _ = pc._php_stream_seek(in_strm, original_pos, c.SEEK_SET);
-    }
-    return @intCast(copied);
-}
-
 pub fn copyFileRange(in_strm: *Stream, out_strm: *Stream, in_offset: ?*i64, out_offset: ?*i64, len: u64) !u32 {
     var original_in_pos: i64 = 0;
     var original_out_pos: i64 = 0;
@@ -2267,15 +2240,28 @@ pub fn infoTableStart() void {
     pc.php_info_print_table_start();
 }
 
-pub fn infoTableHeader(columns: anytype) void {
-    switch (columns.len) {
-        2 => pc.php_info_print_table_header(2, columns[0].ptr, columns[1].ptr),
-        else => @compileError("Unsupported column count"),
+pub fn infoTableHeader(cols: []const [*c]const u8) void {
+    switch (cols.len) {
+        2 => pc.php_info_print_table_header(2, cols[0], cols[1]),
+        3 => pc.php_info_print_table_header(3, cols[0], cols[1], cols[2]),
+        else => unreachable,
+    }
+}
+
+pub fn infoTableRow(cols: []const [*c]const u8) void {
+    switch (cols.len) {
+        2 => pc.php_info_print_table_row(2, cols[0], cols[1]),
+        3 => pc.php_info_print_table_row(3, cols[0], cols[1], cols[2]),
+        else => unreachable,
     }
 }
 
 pub fn infoTableEnd() void {
     pc.php_info_print_table_end();
+}
+
+pub fn displayIniEntries(module: *ModuleEntry) void {
+    pc.display_ini_entries(@ptrCast(module));
 }
 
 pub const object_handler_mapping = .{

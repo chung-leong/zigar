@@ -134,6 +134,7 @@ pub var convert_to_double: Ptr("convert_to_double") = undefined;
 pub var convert_to_long: Ptr("convert_to_long") = undefined;
 pub var convert_to_null: Ptr("convert_to_null") = undefined;
 pub var convert_to_object: Ptr("convert_to_object") = undefined;
+pub var display_ini_entries: Ptr("display_ini_entries") = undefined;
 pub var executor_globals: switch (@hasDecl(c, "ZTS")) {
     false => Ptr("executor_globals"),
     true => void,
@@ -155,6 +156,7 @@ pub var php_file_le_pstream: Ptr("php_file_le_pstream") = undefined;
 pub var php_file_le_stream: Ptr("php_file_le_stream") = undefined;
 pub var php_info_print_table_end: Ptr("php_info_print_table_end") = undefined;
 pub var php_info_print_table_header: Ptr("php_info_print_table_header") = undefined;
+pub var php_info_print_table_row: Ptr("php_info_print_table_row") = undefined;
 pub var php_info_print_table_start: Ptr("php_info_print_table_start") = undefined;
 pub var php_stream_locate_url_wrapper: Ptr("php_stream_locate_url_wrapper") = undefined;
 pub var php_stream_stdio_ops: Ptr("php_stream_stdio_ops") = undefined;
