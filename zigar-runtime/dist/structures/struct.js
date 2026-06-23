@@ -1,4 +1,4 @@
-import { MemberFlag, StructureFlag, StructFlag, StructurePurpose } from '../constants.js';
+import { MemberFlag, StructurePurpose, StructureFlag, StructFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { InvalidInitializer } from '../errors.js';
 import { VISIT, SETTERS, KEYS, INITIALIZE, VIVIFICATE, ENTRIES, PROPS } from '../symbols.js';
@@ -16,6 +16,11 @@ var struct = mixin({
     const backingInt = backingIntMember && this.defineMember(backingIntMember);
     const propApplier = this.createApplier(structure);
     const initializer = this.createInitializer(function(arg, allocator) {
+      if (purpose === StructurePurpose.File) {
+        arg = this.createFile(arg);
+      } else if (purpose == StructurePurpose.Directory) {
+        arg = this.createDirectory(arg);
+      }
       if (isCompatibleInstanceOf(arg, constructor)) {
         copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {

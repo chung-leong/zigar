@@ -2,9 +2,9 @@ const std = @import("std");
 
 const zigar = @import("zigar");
 
-pub fn render(image_out: zigar.image.Any) void {
+pub fn render(image_out: zigar.image.Any(.rw)) void {
     const Pixel = @Vector(4, f32);
-    inline for (zigar.image.Any.tags) |tag| {
+    inline for (zigar.image.formats) |tag| {
         if (image_out == tag) {
             const out = image_out.getField(tag);
             const width = out.getWidth();

@@ -211,6 +211,7 @@ pub const InternalType = enum {
     generator,
     any_image,
     web_image,
+    web_hdr_image,
     gd_image,
 };
 

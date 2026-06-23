@@ -3233,6 +3233,10 @@ function throwReadOnly() {
   throw new ReadOnly();
 }
 
+function throwNoSupport(feature) {
+  throw new Error(`Current platform does not support ${feature}`);
+}
+
 function deanimalizeErrorName(name) {
   // deal with snake_case first
   let s = name.replace(/_/g, ' ');
@@ -5704,7 +5708,7 @@ var generator = mixin({
         for await (const elem of iter) {
           if (elem !== null) {
             if (!args[YIELD](elem)) {
-              break;
+              return;
             }
           }
         }
@@ -6073,6 +6077,17 @@ var fdFdstatSetRights = mixin({
         throw new InvalidFileDescriptor();
       }
       entry[1] = rights;
+    });    
+  },
+});
+
+var fdFdstatSetSize = mixin({
+  fdFdstatSetSize(fd, newSize, canWait) {
+    return catchPosixError(canWait, PosixError.EBADF, () => {
+      const entry = this.getStream(fd);
+      const [ stream ] = entry;
+      checkStreamMethod(stream, 'truncate', PosixError.EINVAL);
+      return stream.truncate(safeInt(newSize));
     });    
   },
 });
@@ -7127,6 +7142,7 @@ var structureAcquisition = mixin({
             case 'fd_fdstat_get': this.use(fdFdstatGet); break;
             case 'fd_fdstat_set_flags': this.use(fdFdstatSetFlags); break;
             case 'fd_fdstat_set_rights': this.use(fdFdstatSetRights); break;
+            case 'fd_fdstat_set_size': this.use(fdFdstatSetSize); break;
             case 'fd_filestat_get':this.use(fdFilestatGet); break;
             case 'fd_filestat_set_times': this.use(fdFileStatSetTimes); break;
             case 'fd_pread': this.use(fdPread); break;
@@ -8989,7 +9005,7 @@ var all$1 = mixin({
                         : (type === MemberType.Int) ? 'Int' : 'Uint';
           const prefix = (byteSize > 4 && type !== MemberType.Float) ? 'Big' : '';
           const arrayName = prefix + intType + (byteSize * 8) + 'Array';
-          return globalThis[arrayName];
+          return globalThis[arrayName] ?? throwNoSupport.bind(null, arrayName);
         }        case StructureType.Array:
         case StructureType.Slice:
         case StructureType.Vector:
@@ -10035,10 +10051,12 @@ var pointer = mixin({
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[FINALIZE] = (targetType === StructureType.Function) && {
       value() {
-        const self = function(...args) {
-          const f = self['*'];
-          return f.call(this, ...args);
-        };
+        const self = (() => (
+          function(...args) {
+            const f = self['*'];
+            return f.call(this, ...args);
+          }
+        ))();
         self[MEMORY] = this[MEMORY];
         self[SLOTS] = this[SLOTS];
         Object.setPrototypeOf(self, constructor.prototype);
@@ -10371,6 +10389,11 @@ var struct = mixin({
     const backingInt = backingIntMember && this.defineMember(backingIntMember);
     const propApplier = this.createApplier(structure);
     const initializer = this.createInitializer(function(arg, allocator) {
+      if (purpose === StructurePurpose.File) {
+        arg = this.createFile(arg);
+      } else if (purpose == StructurePurpose.Directory) {
+        arg = this.createDirectory(arg);
+      }
       if (isCompatibleInstanceOf(arg, constructor)) {
         copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
@@ -10466,7 +10489,14 @@ var union = mixin({
         setSelector.call(this, index);
       };
     const propApplier = this.createApplier(structure);
-    const initializer = this.createInitializer(function(arg, allocator) {
+    const initializer = this.createInitializer(function(arg, allocator) {      
+      if (purpose == StructurePurpose.AnyImage && typeof(arg) === 'object') {
+        if (arg.data instanceof Uint8Array || arg.data instanceof Uint8ClampedArray) {
+          arg = { web: arg };
+        } else if (typeof(Float16Array) === 'function' && arg.data instanceof Float16Array) {
+          arg = { web_hdr: arg };
+        } 
+      }      
       if (isCompatibleInstanceOf(arg, constructor)) {
         copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
@@ -10775,6 +10805,8 @@ var vector = mixin({
   },
 });
 
+var fdCopyFileRange = undefined;
+
 var fdLockGet = mixin({
   fdLockGet(fd, flockAddress, canWait) {
     const le = this.littleEndian;
@@ -10831,7 +10863,37 @@ var fdLockSet = mixin({
   },
 });
 
-var fdSendfile = undefined;
+var pathFilestatSetSize = mixin({
+  pathFilestatSetSize(dirFd, pathAddress, pathLen, newSize, canWait) {
+    return catchPosixError(canWait, PosixError.EPERM, () => {
+      const loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
+      const rights = { write: true };
+      const flags = {
+        exclusive: true,
+        sync: true,
+      };
+      const truncate = (arg) => {
+        if (arg === undefined) {
+          return PosixError.ENOTSUP;
+        } else if (arg === false) {
+          return PosixError.ENOENT;
+        }
+        const stream = this.convertWriter(arg);
+        if (!stream) {
+          throw new InvalidStream(PosixDescriptorRight.write, arg);
+        }
+        checkStreamMethod(stream, 'truncate', PosixError.EINVAL);
+        return stream.truncate(safeInt(newSize));
+      };
+      const openResult = this.triggerEvent('open', { ...loc, rights, flags });
+      if (isPromise(openResult)) {
+        return openResult.then(truncate);
+      } else {
+        return truncate(openResult);
+      }
+    });
+  },
+});
 
 var all = mixin({
   defineVisitor() {
@@ -11121,10 +11183,12 @@ var mixins = /*#__PURE__*/Object.freeze({
   SyscallFdAdvise: fdAdvise,
   SyscallFdAllocate: fdAllocate,
   SyscallFdClose: fdClose,
+  SyscallFdCopyFileRange: fdCopyFileRange,
   SyscallFdDatasync: fdDatasync,
   SyscallFdFdstatGet: fdFdstatGet,
   SyscallFdFdstatSetFlags: fdFdstatSetFlags,
   SyscallFdFdstatSetRights: fdFdstatSetRights,
+  SyscallFdFdstatSetSize: fdFdstatSetSize,
   SyscallFdFilestatGet: fdFilestatGet,
   SyscallFdFilestatSetTimes: fdFileStatSetTimes,
   SyscallFdLockGet: fdLockGet,
@@ -11136,12 +11200,12 @@ var mixins = /*#__PURE__*/Object.freeze({
   SyscallFdRead: fdRead,
   SyscallFdReaddir: fdReaddir,
   SyscallFdSeek: fdSeek,
-  SyscallFdSendfile: fdSendfile,
   SyscallFdSync: fdSync,
   SyscallFdTell: fdTell,
   SyscallFdWrite: fdWrite,
   SyscallPathCreateDirectory: pathCreateDirectory,
   SyscallPathFilestatGet: pathFilestatGet,
+  SyscallPathFilestatSetSize: pathFilestatSetSize,
   SyscallPathFilestatSetTimes: pathFilestatSetTimes,
   SyscallPathOpen: pathOpen,
   SyscallPathReadlink: pathReadlink,

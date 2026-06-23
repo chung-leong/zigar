@@ -43,7 +43,14 @@ export default mixin({
         setSelector.call(this, index);
       };
     const propApplier = this.createApplier(structure);
-    const initializer = this.createInitializer(function(arg, allocator) {
+    const initializer = this.createInitializer(function(arg, allocator) {      
+      if (purpose == StructurePurpose.AnyImage && typeof(arg) === 'object') {
+        if (arg.data instanceof Uint8Array || arg.data instanceof Uint8ClampedArray) {
+          arg = { web: arg };
+        } else if (typeof(Float16Array) === 'function' && arg.data instanceof Float16Array) {
+          arg = { web_hdr: arg };
+        } 
+      }      
       if (isCompatibleInstanceOf(arg, constructor)) {
         copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {

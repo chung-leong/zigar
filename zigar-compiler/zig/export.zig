@@ -69,12 +69,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 else => get: {
                     if (util.IteratorReturnValue(T) != null) break :get .iterator;
                     if (util.getInternalType(T)) |it| break :get switch (it) {
-                        .promise => .promise,
-                        .generator => .generator,
-                        .abort_signal => .abort_signal,
-                        .any_image => .any_image,
-                        .web_image => .web_image,
-                        .gd_image => .gd_image,
+                        inline else => |t| @field(StructurePurpose, @tagName(t)),
                     };
                     break :get .unknown;
                 },

@@ -87,11 +87,7 @@ final class ImageProcessingTest extends ZigarTestCase
         $im_in = imagecreatefrompng(__DIR__ . '/images/malgorzata-socha.png');
         $im_out = imagecreatetruecolor(imagesx($im_in), imagesy($im_in));
         imagesavealpha($im_out, true);
-        $m->process([ 
-            'src' => $im_in,
-        ], [ 
-            'dst' => $im_out, 
-        ], [
+        $m->apply($im_in, $im_out, [
             'fill' => 0.2,
             'scale' => 1,
             'distort' => [ 5, 2 ],
@@ -174,6 +170,7 @@ final class ImageProcessingTest extends ZigarTestCase
         $m->process([], [ 
             'dst' => $im_out, 
         ], [
+            // BUG: these are supposed to trigger a error since the struct doesn't have these fields
             'outputWidth' => 512,
             'outputHeight' => 512,
         ]);

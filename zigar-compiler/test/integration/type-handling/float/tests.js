@@ -67,7 +67,7 @@ export function addTests(importModule, options) {
       const [ after3 ] = await capture(() => print1());
       expect(after3).to.equal('{ 3.5, 3.5, 3.5, 3.5 }');
       expect(module.array2.typedArray).to.be.instanceOf(Float64Array);
-      if (global.Float16Array) {
+      if (typeof(Float16Array) === 'function') {
         expect(module.array1.typedArray).to.be.instanceOf(Float16Array);
       } else {
         expect(() => module.array1.typedArray).to.throw(Error)

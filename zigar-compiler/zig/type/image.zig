@@ -7,18 +7,30 @@ const is_wasm = builtin.target.cpu.arch.isWasm();
 const runtime_safety = builtin.mode == .Debug or builtin.mode == .ReleaseSafe;
 
 pub const Access = enum { ro, rw };
-pub const Format = @typeInfo(AnyImage(.rw)).@"union".tag_type.?;
+pub const Format = enum {
+    web,
+    web_hdr,
+    gd,
+
+    pub fn Type(self: @This(), acc: Access) type {
+        return switch (self) {
+            .web => WebImage(acc, .@"rgba-unorm8"),
+            .web_hdr => WebImage(acc, .@"rgba-float16"),
+            .gd => if (!is_wasm) GdImage(acc) else void,
+        };
+    }
+};
 
 pub const formats = init: {
-    const fields = @typeInfo(AnyImage(.rw)).@"union".fields;
+    const fields = std.meta.fields(Format);
     var count: usize = 0;
     for (fields) |field| {
-        if (field.type != void) count += 1;
+        if (@field(Format, field.name).Type(.rw) != void) count += 1;
     }
     var list: [count]Format = undefined;
     var index: usize = 0;
     for (fields) |field| {
-        if (field.type != void) {
+        if (@field(Format, field.name).Type(.rw) != void) {
             list[index] = @field(Format, field.name);
             index += 1;
         }
@@ -27,18 +39,14 @@ pub const formats = init: {
 };
 
 pub fn AnyImage(acc: Access) type {
-    return union(enum) {
-        web: WebImage(acc, .@"rgba-unorm8"),
-        web_hdr: WebImage(acc, .@"rgba-float16"),
-        gd: if (!is_wasm) GdImage(acc) else void,
+    return union(Format) {
+        web: Format.web.Type(acc),
+        web_hdr: Format.web_hdr.Type(acc),
+        gd: Format.gd.Type(acc),
 
         pub const internal_type: util.InternalType = .any_image;
 
-        pub fn FieldType(comptime tag: Format) type {
-            return @FieldType(@This(), @tagName(tag));
-        }
-
-        pub fn getField(self: @This(), comptime tag: Format) FieldType(tag) {
+        pub fn getField(self: @This(), comptime tag: Format) tag.Type(acc) {
             return @field(self, @tagName(tag));
         }
     };
@@ -80,7 +88,6 @@ pub fn WebImage(acc: Access, format: PixelFormat) type {
         }
 
         pub fn getPixel(self: *const @This(), comptime T: type, x: usize, y: usize) T {
-            const E = Child(T);
             const len = channels(T);
             const index = (y * self.width) + x;
             if (runtime_safety and index >= self.data.len) {
@@ -95,9 +102,9 @@ pub fn WebImage(acc: Access, format: PixelFormat) type {
                         break :calc one / max;
                     };
                     const float_vec: T = switch (len) {
-                        1 => @floatFromInt(@shuffle(E, int_vec, undefined, @Vector(1, i32){0})),
-                        2 => @floatFromInt(@shuffle(E, int_vec, undefined, @Vector(2, i32){ 0, 3 })),
-                        3 => @floatFromInt(@shuffle(E, int_vec, undefined, @Vector(3, i32){ 0, 1, 2 })),
+                        1 => @floatFromInt(@shuffle(u8, int_vec, undefined, @Vector(1, i32){0})),
+                        2 => @floatFromInt(@shuffle(u8, int_vec, undefined, @Vector(2, i32){ 0, 3 })),
+                        3 => @floatFromInt(@shuffle(u8, int_vec, undefined, @Vector(3, i32){ 0, 1, 2 })),
                         4 => @floatFromInt(int_vec),
                         else => unreachable,
                     };
@@ -106,9 +113,9 @@ pub fn WebImage(acc: Access, format: PixelFormat) type {
                 .@"rgba-float16" => convert: {
                     const src_vec: @Vector(4, f16) = self.data[index];
                     const dst_vec: T = switch (len) {
-                        1 => @floatCast(@shuffle(E, src_vec, undefined, @Vector(1, i32){0})),
-                        2 => @floatCast(@shuffle(E, src_vec, undefined, @Vector(2, i32){ 0, 3 })),
-                        3 => @floatCast(@shuffle(E, src_vec, undefined, @Vector(3, i32){ 0, 1, 2 })),
+                        1 => @floatCast(@shuffle(f16, src_vec, undefined, @Vector(1, i32){0})),
+                        2 => @floatCast(@shuffle(f16, src_vec, undefined, @Vector(2, i32){ 0, 3 })),
+                        3 => @floatCast(@shuffle(f16, src_vec, undefined, @Vector(3, i32){ 0, 1, 2 })),
                         4 => @floatCast(src_vec),
                         else => unreachable,
                     };

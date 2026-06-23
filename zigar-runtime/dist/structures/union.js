@@ -1,4 +1,4 @@
-import { UnionFlag, StructureFlag, VisitorFlag, StructurePurpose } from '../constants.js';
+import { UnionFlag, StructurePurpose, StructureFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { MultipleUnionInitializers, MissingUnionInitializer, InvalidInitializer, InactiveUnionProperty, InaccessiblePointer } from '../errors.js';
 import { NAME, VISIT, SETTERS, KEYS, RESTRICT, INITIALIZE, TAG, VIVIFICATE, ENTRIES, PROPS, GETTERS, TARGET } from '../symbols.js';
@@ -35,7 +35,14 @@ var union = mixin({
         setSelector.call(this, index);
       };
     const propApplier = this.createApplier(structure);
-    const initializer = this.createInitializer(function(arg, allocator) {
+    const initializer = this.createInitializer(function(arg, allocator) {      
+      if (purpose == StructurePurpose.AnyImage && typeof(arg) === 'object') {
+        if (arg.data instanceof Uint8Array || arg.data instanceof Uint8ClampedArray) {
+          arg = { web: arg };
+        } else if (typeof(Float16Array) === 'function' && arg.data instanceof Float16Array) {
+          arg = { web_hdr: arg };
+        } 
+      }      
       if (isCompatibleInstanceOf(arg, constructor)) {
         copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
