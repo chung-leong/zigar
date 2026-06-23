@@ -45,6 +45,7 @@
     "chai-as-promised": "^8.0.2",
     "mocha": "^11.7.5",
     "mocha-skip-if": "^1.0.4",
-    "rollup": "^4.53.3"
+    "rollup": "^4.53.3",
+    "sharp": "^0.35.2"
   }
 }

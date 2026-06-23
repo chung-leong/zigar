@@ -22,6 +22,8 @@ pub const io = struct {
 };
 
 pub const image = struct {
+    pub const formats = host.image.formats;
+
     pub const Any = host.image.AnyImage;
     pub const Gd = host.image.GdImage;
     pub const Web = host.image.WebImage;
