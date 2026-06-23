@@ -74,6 +74,7 @@ const ModuleHost = struct {
         fd_advise: ?Ref = null,
         fd_allocate: ?Ref = null,
         fd_close: ?Ref = null,
+        fd_copy_file_range: ?Ref = null,
         fd_datasync: ?Ref = null,
         fd_fdstat_get: ?Ref = null,
         fd_fdstat_set_flags: ?Ref = null,
@@ -91,7 +92,6 @@ const ModuleHost = struct {
         fd_read1: ?Ref = null,
         fd_readdir: ?Ref = null,
         fd_seek: ?Ref = null,
-        fd_sendfile: ?Ref = null,
         fd_sync: ?Ref = null,
         fd_tell: ?Ref = null,
         fd_write: ?Ref = null,
@@ -620,13 +620,16 @@ const ModuleHost = struct {
         return try env.createTypedarray(.uint8_array, read, buffer, 0);
     }
 
-    fn writeFile(self: *@This(), handle: Value, chunk: Value) !void {
+    fn writeFile(self: *@This(), handle: Value, chunk: Value, position: Value) !void {
         const env = self.env;
         const file = try self.getFile(handle);
         _, const len, const opaque_ptr, _, _ = try env.getTypedarrayInfo(chunk);
         const u8_ptr: [*]const u8 = @ptrCast(opaque_ptr);
         const u8_slice = u8_ptr[0..len];
-        _ = try file.write(u8_slice);
+        _ = if (env.getValueUsize(position)) |pos|
+            try file.pwrite(u8_slice, pos)
+        else |_|
+            try file.write(u8_slice);
     }
 
     fn getFileHandle(self: *@This(), fd: Value) !Value {
@@ -1078,7 +1081,6 @@ const ModuleHost = struct {
                 .symlink => try self.handleSymlink(futex, &call.u.symlink),
                 .rename => try self.handleRename(futex, &call.u.rename),
                 .poll => try self.handlePoll(futex, &call.u.poll),
-                .sendfile => try self.handleSendFile(futex, &call.u.sendfile),
                 .copyfilerange => try self.handleCopyFileRange(futex, &call.u.copyfilerange),
                 .environ => try self.handleGetEnvironmentStrings(futex, &call.u.environ),
                 .write_stderr => try self.handleWriteStderr(futex, &call.u.write_stderr),
@@ -1524,25 +1526,17 @@ const ModuleHost = struct {
         });
     }
 
-    fn handleSendFile(self: *@This(), futex: Value, args: anytype) !E {
-        const env = self.env;
-        return try self.callPosixFunction(self.js.fd_sendfile, &.{
-            try env.createInt32(args.out_fd),
-            try env.createInt32(args.in_fd),
-            try env.createBigintInt64(if (args.offset) |ptr| ptr.* else 0),
-            try env.createUsize(@intFromPtr(args.offset)),
-            try env.createUint32(args.len),
-            try env.createUsize(@intFromPtr(&args.sent)),
-            futex,
-        });
-    }
-
     fn handleCopyFileRange(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
-        _ = env;
-        _ = futex;
-        _ = args;
-        return .OPNOTSUPP;
+        return try self.callPosixFunction(self.js.fd_copy_file_range, &.{
+            try env.createInt32(args.in_fd),
+            try env.createUsize(if (args.in_offset) |ptr| @intFromPtr(ptr) else 0),
+            try env.createInt32(args.out_fd),
+            try env.createUsize(if (args.out_offset) |ptr| @intFromPtr(ptr) else 0),
+            try env.createBigintUint64(args.len),
+            try env.createUsize(@intFromPtr(&args.copied)),
+            futex,
+        });
     }
 
     fn handleGetEnvironmentStrings(self: *@This(), futex: Value, args: anytype) !E {

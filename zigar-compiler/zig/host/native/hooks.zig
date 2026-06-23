@@ -59,12 +59,12 @@ pub const Syscall = extern struct {
             fd: i32,
         },
         copyfilerange: extern struct {
-            out_fd: i32,
             in_fd: i32,
-            out_offset: ?*i64,
+            out_fd: i32,
             in_offset: ?*i64,
+            out_offset: ?*i64,
             len: u64,
-            copied: u32 = undefined,
+            copied: u64 = undefined,
         },
         datasync: extern struct {
             fd: i32,
@@ -186,13 +186,6 @@ pub const Syscall = extern struct {
             whence: u32,
             position: u64 = undefined,
         },
-        sendfile: extern struct {
-            out_fd: i32,
-            in_fd: i32,
-            offset: ?*i64,
-            len: u32,
-            sent: u32 = undefined,
-        },
         setfl: extern struct {
             fd: i32,
             fdflags: Fdflags = undefined,
@@ -283,7 +276,6 @@ pub const Syscall = extern struct {
         rename,
         rmdir,
         seek,
-        sendfile,
         setfl,
         setlk,
         stat,
@@ -526,23 +518,19 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
-        pub fn copy_file_range(in_fd: c_int, in_offset: [*c]off_t, out_fd: c_int, out_offset: [*c]off_t, len: size_t, _: c_int, result: *ssize_t) callconv(.c) bool {
+        pub fn copy_file_range(in_fd: c_int, in_offset: [*c]off64_t, out_fd: c_int, out_offset: [*c]off64_t, len: size_t, _: c_int, result: *ssize_t) callconv(.c) bool {
             if (isPrivateDescriptor(out_fd) or isPrivateDescriptor(in_fd)) {
-                var in_offset64: off64_t = if (in_offset) |ptr| ptr.* else 0;
-                var out_offset64: off64_t = if (out_offset) |ptr| ptr.* else 0;
                 var call: Syscall = .{ .cmd = .copyfilerange, .u = .{
                     .copyfilerange = .{
                         .in_fd = in_fd,
                         .out_fd = out_fd,
-                        .in_offset = if (in_offset != null) &in_offset64 else null,
-                        .out_offset = if (out_offset != null) &out_offset64 else null,
+                        .in_offset = in_offset,
+                        .out_offset = out_offset,
                         .len = @intCast(len),
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
                 if (err == .SUCCESS) {
-                    if (in_offset) |ptr| ptr.* = @intCast(in_offset64);
-                    if (out_offset) |ptr| ptr.* = @intCast(out_offset64);
                     result.* = @intCast(call.u.copyfilerange.copied);
                     return true;
                 } else if (err != .OPNOTSUPP) {
@@ -1537,18 +1525,20 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         fn sendfileT(comptime T: type, out_fd: c_int, in_fd: c_int, offset: [*c]T, len: size_t, result: *ssize_t) bool {
             if (isPrivateDescriptor(out_fd) or isPrivateDescriptor(in_fd)) {
                 var offset64: off64_t = if (offset) |ptr| ptr.* else 0;
-                var call: Syscall = .{ .cmd = .sendfile, .u = .{
-                    .sendfile = .{
-                        .out_fd = out_fd,
+                var call: Syscall = .{ .cmd = .copyfilerange, .u = .{
+                    .copyfilerange = .{
                         .in_fd = in_fd,
-                        .offset = if (offset != null) &offset64 else null,
+                        .in_offset = if (offset != null) &offset64 else null,
+                        .out_fd = out_fd,
+                        .out_offset = null,
                         .len = @intCast(len),
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
                 if (err == .SUCCESS) {
                     if (offset) |ptr| ptr.* = @intCast(offset64);
-                    result.* = @intCast(call.u.sendfile.sent);
+                    std.debug.print("copied = {d}\n", .{call.u.copyfilerange.copied});
+                    result.* = @intCast(call.u.copyfilerange.copied);
                     return true;
                 } else if (err != .OPNOTSUPP) {
                     result.* = intFromError(err);

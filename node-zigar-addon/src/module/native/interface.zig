@@ -274,7 +274,14 @@ pub const StructureFlags = packed union {
         is_async: bool = false,
         _: u24 = 0,
     };
-    pub const Function = Common;
+    pub const Function = packed struct(u32) {
+        has_value: bool = false,
+        has_object: bool = false,
+        has_pointer: bool = false,
+        has_slot: bool = false,
+        has_proxy: bool = false,
+        _: u27 = 0,
+    };
     pub const Comptime = Common;
 };
 

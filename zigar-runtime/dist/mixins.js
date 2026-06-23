@@ -95,6 +95,7 @@ export { default as SyscallEnvironSizesGet } from './syscalls/environ-sizes-get.
 export { default as SyscallFdAdvise } from './syscalls/fd-advise.js';
 export { default as SyscallFdAllocate } from './syscalls/fd-allocate.js';
 export { default as SyscallFdClose } from './syscalls/fd-close.js';
+export { default as SyscallFdCopyFileRange } from './syscalls/fd-copy-file-range.js';
 export { default as SyscallFdDatasync } from './syscalls/fd-datasync.js';
 export { default as SyscallFdFdstatGet } from './syscalls/fd-fdstat-get.js';
 export { default as SyscallFdFdstatSetFlags } from './syscalls/fd-fdstat-set-flags.js';
@@ -111,7 +112,6 @@ export { default as SyscallFdPwrite } from './syscalls/fd-pwrite.js';
 export { default as SyscallFdRead } from './syscalls/fd-read.js';
 export { default as SyscallFdReaddir } from './syscalls/fd-readdir.js';
 export { default as SyscallFdSeek } from './syscalls/fd-seek.js';
-export { default as SyscallFdSendfile } from './syscalls/fd-sendfile.js';
 export { default as SyscallFdSync } from './syscalls/fd-sync.js';
 export { default as SyscallFdTell } from './syscalls/fd-tell.js';
 export { default as SyscallFdWrite } from './syscalls/fd-write.js';

@@ -1649,7 +1649,6 @@ final class StreamHandlingTest extends ZigarTestCase
             unlink($out_path);
         }
     }
-
 }
 
 class VariableStream {

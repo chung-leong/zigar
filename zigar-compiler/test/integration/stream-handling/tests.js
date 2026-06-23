@@ -2671,6 +2671,75 @@ export function addTests(importModule, options) {
         }
       }
     })
+    skip.entirely.if(target !== 'linux').
+    it('should copy real file to virtual file using copy_file_range', async function() {
+      const { copy } = await importTest('copy-real-file-to-virtual-file-with-copy-file-range');
+      const file = await open(absolute('data/macbeth.txt'));
+      try {
+        let chunk, offset;
+        const strm = {
+          write() {
+          },
+          pwrite(c, o) {
+            chunk = c;
+            offset = o;
+          },
+        };
+        const copied = copy(file, strm, 28, 4, 32);
+        expect(copied).to.equal(32);
+        const buffer = new Uint8Array(32);
+        await file.read(buffer, 0, 32, 28);
+        expect(chunk).to.be.instanceOf(Uint8Array);
+        expect(chunk).to.eql(buffer);
+      } finally {
+        file.close();
+      }
+    })
+    skip.entirely.if(target !== 'linux').
+    it('should copy virtual file to real file using copy_file_range', async function() {
+      const { copy } = await importTest('copy-virtual-file-to-real-file-with-copy-file-range');
+      const outPath = absolute('data/virtual-file-test.txt');
+      const inPath = absolute('data/macbeth.txt');
+      try {
+        const file = await open(outPath, 'w');
+        await file.write('Hello world');
+        const input = await readFile(inPath, 'utf-8');
+        const copied = copy(input, file, 28, 4, 32);
+        expect(copied).to.equal(32);
+        file.close();
+        const content = await readFile(outPath, 'utf-8');
+        expect(content).to.equal(`Hell${input.slice(28, 60)}`);
+      } finally {
+        try {
+          await unlink(outPath);
+        } catch {          
+        }
+      }
+    })
+
+    // public function testCopyVirtualFileToRealFileUsingCopyFileRange(): void 
+    // {
+    //     global $input;
+    //     $m = ZigImporter::load(__DIR__ . '/copy-virtual-file-to-real-file-with-copy-file-range.zig');
+    //     $path = __DIR__ . '/data/macbeth.txt';
+    //     $input = file_get_contents($path);
+    //     $out_path = __DIR__ . '/data/copy-file-range-test.txt';        
+    //     try {
+    //         $out_file = fopen($out_path, 'w');
+    //         fwrite($out_file, "Hello world");
+    //         $initial_pos = ftell($out_file);
+    //         $in_file = fopen("var://input", 'r');
+    //         $copied = $m->copy($in_file, $out_file, 28, 4, 32);
+    //         fclose($out_file);
+    //         fclose($in_file);
+    //         $content = file_get_contents($out_path);
+    //         $chunk = substr($input, 28, 32);
+    //         $this->assertSame("Hell$chunk", $content);
+    //     } finally {
+    //         unlink($out_path);
+    //     }
+    // }
+
     it('should get file descriptor using libc function', async function() {
       const { __zigar, get } = await importTest('get-file-descriptor-with-libc-function');
       __zigar.on('open', (evt) => {
