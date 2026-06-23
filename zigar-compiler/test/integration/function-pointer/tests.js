@@ -212,6 +212,21 @@ export function addTests(importModule, options) {
         'real_name = Tony Stark, superhero_name = Ironman, age = 53',
         'error = Unexpected'
       ]);
+      const f3 = function({ allocator, callback }) {
+        callback({ 
+          real_name: allocator.dupe('Natasha Romanoff'), // manual allocation
+          superhero_name: 'Black Widow',  // auto allocation from allocator
+          age: 39 
+        });
+        callback(null);
+      };
+      const lines3 = await capture(async () => {
+        call(f3);
+        await delay(10);
+      });
+      expect(lines3).to.eql([
+        'real_name = Natasha Romanoff, superhero_name = Black Widow, age = 39',
+      ]);
     })
     skip.if(platform() === 'win32' && arch() === 'x64').
     or(platform() === 'linux' && arch() === 'aarch64').

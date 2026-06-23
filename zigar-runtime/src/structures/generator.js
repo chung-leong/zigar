@@ -1,3 +1,4 @@
+import { StructurePurpose } from '../constants.js';
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
 import {
@@ -60,7 +61,7 @@ export default mixin({
     }
     args[RETURN] = result => callback(ptr, result);
     const generator = { ptr, callback };
-    const allocatorMember = members.find(m => m.name === 'allocator');
+    const allocatorMember = members.find(m => m.purpose === StructurePurpose.Allocator);
     if (allocatorMember) {
       const { structure } = allocatorMember;     
       generator.allocator = this.createJsAllocator(args, structure, true);

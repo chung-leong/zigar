@@ -104,6 +104,7 @@ export default mixin({
       value() {
         let options;
         let allocatorCount = 0, callbackCount = 0, signalCount = 0;
+        let generatorAlloc;
         const args = [];
         for (const [ srcIndex, { structure, type } ] of members.entries()) {
           // error unions will throw on access, in which case we pass the error as the argument
@@ -130,6 +131,8 @@ export default mixin({
                   optName = 'callback';
                   if (++callbackCount === 1) {
                     opt = thisEnv.createGeneratorCallback(this, arg);
+                    // put allocator from the generator into the options object when there's one
+                    generatorAlloc = arg.allocator;
                   }
                   break;
                 case StructurePurpose.AbortSignal:
@@ -154,6 +157,9 @@ export default mixin({
           }
         }
         if (options) {
+          if (generatorAlloc) {
+            options.allocator = generatorAlloc;
+          }
           args.push(options);
         }
         return args[Symbol.iterator]();
