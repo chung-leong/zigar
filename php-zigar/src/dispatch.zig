@@ -45,7 +45,7 @@ pub const CallDispatcher = struct {
     redirecting_root: bool = false,
     redirecting_other_libraries: bool = false,
     function_list: std.ArrayList(CallbackEntry) = .empty,
-    next_function_id: usize = 1,
+    next_function_id: usize = 5, // 1-4 are reserve for the methods of the host allocator
     stream_list: std.ArrayList(StreamEntry) = .empty,
     host: *ModuleHost,
     hooks_installed: bool = false,
@@ -221,7 +221,7 @@ pub const CallDispatcher = struct {
     fn saveCallback(self: *@This(), class: *ZigClassEntry, callable: *Value) !usize {
         const cache = try FunctionCallCache.init(callable);
         const fn_id = self.next_function_id;
-        self.next_function_id +%= 1;
+        self.next_function_id += 1;
         try self.function_list.append(php.allocator, .{
             .id = fn_id,
             .class = class,
@@ -294,13 +294,18 @@ pub const CallDispatcher = struct {
     }
 
     fn performJsCall(self: *@This(), call: *Jscall) !E {
-        const cb = self.findCallback(call.fn_id) orelse return .FAULT;
         const arg_ptr: [*]u8 = @ptrFromInt(call.arg_address);
         const arg_bytes = arg_ptr[0..call.arg_size];
-        // use the function structure's static method to run the callback
-        const fn_static = cb.class.getStaticData(structure.Function);
-        try fn_static.runCallback(&cb.cache, arg_bytes, call.futex_handle);
-        return .SUCCESS;
+        switch (call.fn_id) {
+            1...4 => |id| return try ModuleHost.handleAllocatorMethodCall(id, arg_bytes),
+            else => {
+                const cb = self.findCallback(call.fn_id) orelse return .FAULT;
+                // use the function structure's static method to run the callback
+                const fn_static = cb.class.getStaticData(structure.Function);
+                try fn_static.runCallback(&cb.cache, arg_bytes, call.futex_handle);
+                return .SUCCESS;
+            },
+        }
     }
 
     pub fn handleSyscall(self: *@This(), call: *Syscall) !E {

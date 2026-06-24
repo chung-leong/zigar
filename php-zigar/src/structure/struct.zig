@@ -533,7 +533,8 @@ pub const Struct = struct {
                     const src_struct = fromObject(src_obj);
                     try self.buffer.copy(src_struct.buffer);
                 } else {
-                    const byte_ptr: [*]u8 = @ptrCast(&class.host.allocator);
+                    const allocator = try class.host.getAllocator(class);
+                    const byte_ptr: [*]const u8 = @ptrCast(&allocator);
                     const bytes = byte_ptr[0..@sizeOf(std.mem.Allocator)];
                     try self.buffer.copyBytes(bytes);
                 }

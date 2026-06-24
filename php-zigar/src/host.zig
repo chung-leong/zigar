@@ -6,6 +6,7 @@ const BufferMap = @import("buffer.zig").BufferMap;
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
 const DynLib = @import("dyn-lib.zig").DynLib;
 const GarbageCollectionBuffer = @import("gc.zig").GarbageCollectionBuffer;
+const ArgStruct = @import("module/arg-struct.zig").ArgStruct;
 const ModuleGeneric = @import("module/native/interface.zig").Module;
 const ObjectMap = @import("object.zig").ObjectMap;
 const php = @import("php.zig");
@@ -13,9 +14,11 @@ const Array = php.Array;
 const ClassEntry = php.ClassEntry;
 const HashTable = php.HashTable;
 const Long = php.Long;
+const N = php.getStaticString;
 const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
+const structure = @import("structure.zig");
 const StructureImporter = @import("import.zig").StructureImporter;
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 const ZigException = @import("exception.zig").ZigException;
@@ -28,7 +31,8 @@ pub const ModuleHost = struct {
     library: ?DynLib = null,
     importer: *StructureImporter = undefined,
     dispatcher: *CallDispatcher = undefined,
-    allocator: std.mem.Allocator = undefined,
+    allocator_vtable: ?std.mem.Allocator.VTable = null,
+    allocator_controllers: [std.meta.fields(AllocatorMethodId).len]usize = undefined,
     unclaimed_buffer_map: BufferMap = .{},
     object_map: ObjectMap = .{},
     gc_buffer: GarbageCollectionBuffer = .empty,
@@ -36,6 +40,7 @@ pub const ModuleHost = struct {
     exception_table: HashTable,
 
     const Module = ModuleGeneric(StructureImporter.Handle);
+    const AllocatorMethodId = enum(usize) { alloc = 1, resize, remap, free };
 
     pub fn load(path: []const u8) !Value {
         var lib: DynLib = try DynLib.open(path);
@@ -50,7 +55,6 @@ pub const ModuleHost = struct {
             .plain_object_table = php.createHashTable(null),
             .exception_table = php.createHashTable(php.getDestructor(.value)),
         };
-        self.allocator = .{ .ptr = self, .vtable = &BufferAllocator.vtable };
         // install hooks
         self.dispatcher = try .init(self);
         errdefer self.dispatcher.deinit();
@@ -84,6 +88,7 @@ pub const ModuleHost = struct {
             self.object_map.deinit();
             self.dispatcher.deinit();
             self.gc_buffer.deinit();
+            self.freeAllocatorVTable();
             if (self.library) |*lib| lib.close();
             php.allocator.destroy(self);
         }
@@ -242,68 +247,120 @@ pub const ModuleHost = struct {
         php.setHashEntryRef(&self.exception_table, code, &ex_value);
         return ex_struct;
     }
-};
 
-const BufferAllocator = struct {
-    pub const vtable: std.mem.Allocator.VTable = .{
-        .alloc = alloc,
-        .resize = resize,
-        .remap = remap,
-        .free = free,
+    pub fn getAllocator(self: *@This(), allocator_class: *ZigClassEntry) !std.mem.Allocator {
+        if (self.allocator_vtable == null) {
+            const enum_fields = std.meta.fields(AllocatorMethodId);
+            const vtable_ptr_class = if (allocator_class.getMember(.instance, N("vtable"))) |m| m.class else |_| return error.Unexpected;
+            const vtable_class = if (vtable_ptr_class.getMember(.instance, 0)) |m| m.class else |_| return error.Unexpected;
+            const exports = self.module.exports;
+            var vtable: std.mem.Allocator.VTable = undefined;
+            var failure_index: usize = undefined;
+            errdefer {
+                inline for (enum_fields, 0..) |field, i| {
+                    if (i == failure_index) break;
+                    const thunk_address = @intFromPtr(@field(vtable, field.name));
+                    var fn_id: usize = undefined;
+                    const controller_address = self.allocator_controllers[i];
+                    _ = exports.destroy_js_thunk(controller_address, thunk_address, &fn_id);
+                }
+            }
+            inline for (enum_fields, 0..) |field, i| {
+                errdefer failure_index = i;
+                const ptr_class = if (vtable_class.getMember(.instance, N(field.name))) |m| m.class else |_| return error.Unexpected;
+                const fn_class = if (ptr_class.getMember(.instance, 0)) |m| m.class else |_| return error.Unexpected;
+                const fn_static = fn_class.getStaticData(structure.Function);
+                const fn_id = @intFromEnum(@field(AllocatorMethodId, field.name));
+                const controller_address = fn_static.controller_address;
+                var thunk_address: usize = 0;
+                const result = exports.create_js_thunk(controller_address, fn_id, &thunk_address);
+                if (result != .SUCCESS) return error.Failure;
+                @field(vtable, field.name) = @ptrFromInt(thunk_address);
+                self.allocator_controllers[i] = controller_address;
+            }
+            self.allocator_vtable = vtable;
+        }
+        return .{ .ptr = self, .vtable = &self.allocator_vtable.? };
+    }
+
+    pub fn freeAllocatorVTable(self: *@This()) void {
+        const vtable = self.allocator_vtable orelse return;
+        const enum_fields = std.meta.fields(AllocatorMethodId);
+        const exports = self.module.exports;
+        inline for (enum_fields, 0..) |field, i| {
+            const controller_address = self.allocator_controllers[i];
+            const thunk_address = @intFromPtr(@field(vtable, field.name));
+            var fn_id: usize = undefined;
+            _ = exports.destroy_js_thunk(controller_address, thunk_address, &fn_id);
+        }
+    }
+
+    pub fn handleAllocatorMethodCall(fd_id: usize, arg_bytes: []u8) !E {
+        const method_id: AllocatorMethodId = @enumFromInt(fd_id);
+        switch (method_id) {
+            inline else => |t| {
+                const method = @field(allocator_methods, @tagName(t));
+                const Method = @TypeOf(method);
+                const Args = ArgStruct(Method);
+                if (@sizeOf(Args) != arg_bytes.len) return error.SizeMismatch;
+                const args: *Args = @ptrCast(@alignCast(arg_bytes.ptr));
+                var arg_tuple: std.meta.ArgsTuple(Method) = undefined;
+                inline for (&arg_tuple, 0..) |*arg_ptr, i| {
+                    arg_ptr.* = @field(args, std.fmt.comptimePrint("{d}", .{i}));
+                }
+                args.retval = @call(.auto, method, arg_tuple);
+                return .SUCCESS;
+            },
+        }
+    }
+
+    const allocator_methods = struct {
+        fn alloc(
+            self: *ModuleHost,
+            len: usize,
+            alignment: std.mem.Alignment,
+            _: usize,
+        ) ?[*]u8 {
+            const buf = self.unclaimed_buffer_map.add(len, alignment) catch return null;
+            return buf.bytes.ptr;
+        }
+
+        fn resize(
+            _: *ModuleHost,
+            memory: []u8,
+            _: std.mem.Alignment,
+            new_len: usize,
+            _: usize,
+        ) bool {
+            return new_len <= memory.len;
+        }
+
+        fn remap(
+            self: *ModuleHost,
+            memory: []u8,
+            alignment: std.mem.Alignment,
+            new_len: usize,
+            return_address: usize,
+        ) ?[*]u8 {
+            if (resize(self, memory, alignment, new_len, return_address)) {
+                return memory.ptr;
+            }
+            return null;
+        }
+
+        fn free(
+            self: *ModuleHost,
+            memory: []u8,
+            _: std.mem.Alignment,
+            _: usize,
+        ) void {
+            // try releasing buffer that has just been allocated
+            if (!self.unclaimed_buffer_map.free(memory)) {
+                // failing that, look for a buffer that's being used by an object
+                self.object_map.freeBuffer(memory);
+            }
+        }
     };
-
-    fn alloc(
-        ctx: *anyopaque,
-        len: usize,
-        alignment: std.mem.Alignment,
-        return_address: usize,
-    ) ?[*]u8 {
-        _ = return_address;
-        const host: *ModuleHost = @ptrCast(@alignCast(ctx));
-        const buf = host.unclaimed_buffer_map.add(len, alignment) catch return null;
-        return buf.bytes.ptr;
-    }
-
-    fn resize(
-        _: *anyopaque,
-        memory: []u8,
-        alignment: std.mem.Alignment,
-        new_len: usize,
-        return_address: usize,
-    ) bool {
-        _ = alignment;
-        _ = return_address;
-        return new_len <= memory.len;
-    }
-
-    fn remap(
-        ctx: *anyopaque,
-        memory: []u8,
-        alignment: std.mem.Alignment,
-        new_len: usize,
-        return_address: usize,
-    ) ?[*]u8 {
-        if (resize(ctx, memory, alignment, new_len, return_address)) {
-            return memory.ptr;
-        }
-        return null;
-    }
-
-    fn free(
-        ctx: *anyopaque,
-        memory: []u8,
-        alignment: std.mem.Alignment,
-        return_address: usize,
-    ) void {
-        _ = alignment;
-        _ = return_address;
-        const host: *ModuleHost = @ptrCast(@alignCast(ctx));
-        // try releasing buffer that has just been allocated
-        if (!host.unclaimed_buffer_map.free(memory)) {
-            // failing that, look for a buffer that's being used by an object
-            host.object_map.freeBuffer(memory);
-        }
-    }
 };
 
 inline fn camelize(comptime name: []const u8) [:0]const u8 {
