@@ -440,6 +440,28 @@ pub fn StructLike(comptime S: type) type {
 
         const MemberCache = cache.MemberCache;
 
+        pub fn getValue(self: *S, transform: accessor.Transform) !Value {
+            switch (transform) {
+                .string, .integer => return error.Unsupported,
+                .plain => {
+                    const obj = object(self);
+                    const class = ZigClassEntry.fromObject(obj);
+                    var plain = class.host.getPlainObject(obj, class.flags.@"struct".is_tuple);
+                    if (plain.status == .existing) return plain.value;
+                    defer class.host.removePlainObject(obj);
+                    var iter: iterator.PropertyIterator(S) = .init(obj);
+                    defer iter.deinit();
+                    while (iter.next()) |prop_value| {
+                        try transform.apply(prop_value);
+                        plain.add(iter.current_name.?, prop_value);
+                    }
+                    return plain.value;
+                },
+                else => {},
+            }
+            return Super.getValue(self, transform);
+        }
+
         pub fn getProperty(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) Error!Value {
             return if (findMember(self, name, cache_slot)) |member|
                 try member.accessors.get(self)
@@ -526,7 +548,6 @@ pub fn StructLike(comptime S: type) type {
         pub const initialize = Super.initialize;
         pub const finalize = Super.finalize;
         pub const externalize = Super.externalize;
-        pub const getValue = Super.getValue;
         pub const setValue = Super.setValue;
         pub const findMethod = Super.findMethod;
         pub const checkArguments = Super.checkArguments;

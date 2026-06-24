@@ -196,8 +196,9 @@ pub const Union = struct {
                     // available for debug purpose; throwing an error because the operation is illegal
                     return self.reportFieldError(name, .read, err);
                 }
+            } else if (err != error.Missing) {
+                return @errorCast(err);
             }
-            return @errorCast(err);
         };
         return Super.getProperty(self, name, cache_slot);
     }

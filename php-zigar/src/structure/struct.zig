@@ -300,32 +300,12 @@ pub const Struct = struct {
     }
 
     pub fn getValue(self: *@This(), transform: accessor.Transform) !Value {
-        switch (transform) {
-            .string => return error.Unsupported,
-            .integer => {
-                const class = ZigClassEntry.fromStructure(self);
-                const static = class.getStaticData(@This());
-                if (static.backing_int) |int| {
-                    return try int.accessors.get(self);
-                } else {
-                    return error.Unsupported;
-                }
-            },
-            .plain => {
-                const obj = ZigObject(@This()).fromStructure(self).object();
-                const class = ZigClassEntry.fromStructure(self);
-                var plain = class.host.getPlainObject(obj, class.flags.@"struct".is_tuple);
-                if (plain.status == .existing) return plain.value;
-                defer class.host.removePlainObject(obj);
-                var iter: iterator.PropertyIterator(@This()) = .init(obj);
-                defer iter.deinit();
-                while (iter.next()) |prop_value| {
-                    try transform.apply(prop_value);
-                    plain.add(iter.current_name.?, prop_value);
-                }
-                return plain.value;
-            },
-            else => {},
+        if (transform == .integer) {
+            const class = ZigClassEntry.fromStructure(self);
+            const static = class.getStaticData(@This());
+            if (static.backing_int) |int| {
+                return try int.accessors.get(self);
+            }
         }
         return Super.getValue(self, transform);
     }
