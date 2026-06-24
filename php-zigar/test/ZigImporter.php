@@ -12,9 +12,12 @@ final class ZigImporter
         if (!self::$initialized) {
             $env = getenv();
             if (isset($env['OPTIMIZE'])) {
-                self::$optimize =  $env['OPTIMIZE'];
+                self::$optimize = $env['OPTIMIZE'];
             }
             self::$initialized = true;
+        }
+        if (self::$optimize !== 'Debug') {
+            $options['optimize'] = self::$optimize;
         }
         return zigar_use($src_path, $options);
     }
