@@ -86,8 +86,9 @@ pub const ZigException = struct {
         };
         // initialize the PHP portion
         const obj = self.object();
-        obj.handlers = &handlers;
         php.initializeStandardObject(obj, class_entry);
+        // handlers need to be set after zend_object_std_init() due to change in PHP 8.3
+        obj.handlers = &handlers;
         return obj;
     }
 

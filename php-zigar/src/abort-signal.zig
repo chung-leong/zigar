@@ -69,9 +69,9 @@ pub const AbortSignal = struct {
         const self: *@This() = @ptrCast(@alignCast(mem));
         self.* = .{};
         const obj = self.object();
-        obj.handlers = &handlers;
         php.initializeStandardObject(obj, ce);
-        php.initializeObjectProperties(obj, ce);
+        // handlers need to be set after zend_object_std_init() due to change in PHP 8.3
+        obj.handlers = &handlers;
         if (timeout) |v| try self.setTimeout(&v);
         return self;
     }
