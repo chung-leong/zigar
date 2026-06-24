@@ -238,7 +238,7 @@ pub const Union = struct {
                             break :match compareSelectors(sel_value, &active_sel_value);
                         };
                         if (run) {
-                            if (try member.accessors.getObject(self, !options.ignore_return_value)) |obj| {
+                            if (try member.accessors.getObject(self, !options.ignore_uncreated)) |obj| {
                                 try structure.invokeMethod(obj, "visitPointers", .{ cb, args, options });
                             }
                             if (options.ignore_inactive) break;
