@@ -1595,6 +1595,10 @@ pub fn isException(obj: *Object) bool {
     return instanceOf(obj, getInterface(.throwable));
 }
 
+pub fn isValueException(value: *const Value) bool {
+    return if (getValueObject(value)) |obj| isException(obj) else |_| false;
+}
+
 pub fn getValueException(value: *const Value) !*Object {
     const obj = try getValueObject(value);
     if (!isException(obj)) return error.NotException;

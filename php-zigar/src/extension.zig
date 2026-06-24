@@ -75,6 +75,8 @@ export fn php_zigar_req_shutdown(_: c_int, _: c_int) php.Result {
     CallDispatcher.event_loop.reset();
     for (request_shutdown_callbacks.items) |cb| cb.fn_ptr(cb.ptr);
     request_shutdown_callbacks.clearAndFree(php.allocator);
+    // free any unclaimed message (just in case)
+    failure.clearMessage();
     return php.SUCCESS;
 }
 

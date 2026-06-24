@@ -93,10 +93,17 @@ pub fn reportLengthMismatch(class: *ZigClassEntry, expected: usize, received: us
 }
 
 const oom_msg = "out of memory";
-var error_message: ?[]const u8 = null;
+threadlocal var error_message: ?[]const u8 = null;
 
 pub fn hasMessage() bool {
     return error_message != null;
+}
+
+pub fn clearMessage() void {
+    if (error_message) |msg| {
+        freeMessage(msg);
+        error_message = null;
+    }
 }
 
 pub fn acquireMessage(err: anytype) []const u8 {

@@ -79,21 +79,17 @@ pub const ErrorUnion = struct {
             if (try self.copySelf(value)) return;
             const class = ZigClassEntry.fromStructure(self);
             var static = class.getStaticData(@This());
-            const err_maybe = switch (php.getValueType(value)) {
-                .object => check: {
-                    // see if value is an Throwable
-                    const obj = php.getValueObject(value) catch unreachable;
-                    const is_throwable = php.instanceOf(obj, php.getInterface(.throwable));
-                    break :check if (is_throwable) value else null;
-                },
-                else => null,
-            };
-            if (err_maybe) |err| {
-                try static.error_acc.set(self.buffer, err);
-            } else {
-                try static.payload_acc.set(self, value);
+            // attempt to set payload without checking if value contains an exception,
+            // since the payload could potentially be something that accepts an exception
+            if (static.payload_acc.set(self, value)) {
+                // clear error value
                 const zero = php.createValueLong(0);
                 try static.error_acc.int.set(self, &zero);
+            } else |err| {
+                if (!php.isValueException(value)) return err;
+                // clear any error that might have been reported by payload accessor
+                failure.clearMessage();
+                try static.error_acc.set(self.buffer, value);
             }
         } else {
             try Super.setValue(self, value, transform);
