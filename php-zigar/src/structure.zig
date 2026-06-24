@@ -118,10 +118,19 @@ pub fn Parent(comptime S: type) type {
             const class = ZigClassEntry.fromStructure(self);
             const len = class.byte_size.?;
             try self.buffer.allocate(allocator, len);
-            if (initializer) |value| {
-                try self.setValue(value, .none);
-            } else if (class.instance.template.buffer) |def| {
-                try self.buffer.copy(def);
+            const initialized = attempt: {
+                if (initializer) |value| {
+                    if (!php.isValueNull(value)) {
+                        try self.setValue(value, .none);
+                        break :attempt true;
+                    }
+                }
+                break :attempt false;
+            };
+            if (!initialized) {
+                if (class.instance.template.buffer) |def| {
+                    try self.buffer.copy(def);
+                }
             }
             if (read_only) self.buffer.protect();
         }
