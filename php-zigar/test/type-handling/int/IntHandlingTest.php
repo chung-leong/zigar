@@ -216,7 +216,7 @@ final class IntHandlingTest extends ZigarTestCase
         $m->print();
 
         $m->error_union = new Exception('no money');
-        $this->expectException('ZigError');
+        $this->expectException('ZigException');
         $x = $m->error_union;
     }
 

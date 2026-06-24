@@ -75,7 +75,7 @@ final class MetaTypesTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/special-return-values.zig');
         $result = $m->returnTypedArray();
-        $this->assertEquals(new Float64Array([ 72, 101, 108, 108, 111,  32, 119, 111, 114, 108, 100 ]), $result);
+        $this->assertEquals(new Uint8Array([ 72, 101, 108, 108, 111,  32, 119, 111, 114, 108, 100 ]), $result);
     }
 
     public function testMakeReturnValueClampedArray(): void

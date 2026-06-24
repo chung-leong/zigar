@@ -66,13 +66,7 @@ final class ImageProcessingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/sepia.zig');
         $im_in = imagecreatefrompng(__DIR__ . '/images/malgorzata-socha.png');
         $im_out = imagecreatetruecolor(imagesx($im_in), imagesy($im_in));
-        $m->process([ 
-            'src' => $im_in,
-        ], [ 
-            'dst' => $im_out, 
-        ], [
-            'intensity' => 0.3,
-        ]);
+        $m->apply($im_in, $im_out, 0.3);
         $filename = 'sepia.png';
         $path = get_output_path($filename);
         imagepng($im_out, $path);
@@ -169,11 +163,7 @@ final class ImageProcessingTest extends ZigarTestCase
         $im_out = imagecreatetruecolor(512, 512);
         $m->process([], [ 
             'dst' => $im_out, 
-        ], [
-            // BUG: these are supposed to trigger a error since the struct doesn't have these fields
-            'outputWidth' => 512,
-            'outputHeight' => 512,
-        ]);
+        ], []);
         $filename = 'raytracer.png';
         $path = get_output_path($filename);
         imagepng($im_out, $path);
