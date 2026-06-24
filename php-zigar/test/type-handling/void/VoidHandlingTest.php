@@ -219,7 +219,7 @@ final class VoidHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/constructor.zig');
         $a = new $m->Void(null);
-        $this->assertFalse((boolean) $a);
+        $this->assertFalse((bool) $a);
         $b = $m->Void(new ArrayBuffer(0));
         $this->assertEquals($a, $b);
     }

@@ -221,12 +221,12 @@ final class BoolHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/constructor.zig');
         $a = new $m->Bool(true);
         $b = new $m->Bool(false);
-        $this->assertTrue((boolean) $a);
-        $this->assertFalse((boolean) $b);
+        $this->assertTrue((bool) $a);
+        $this->assertFalse((bool) $b);
         $c = $m->Bool(new ArrayBuffer("\x00"));
         $d = $m->Bool(new ArrayBuffer("\x01"));
-        $this->assertFalse((boolean) $c);
-        $this->assertTrue((boolean) $d);
+        $this->assertFalse((bool) $c);
+        $this->assertTrue((bool) $d);
     }
 }
 

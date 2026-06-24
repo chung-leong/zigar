@@ -241,13 +241,13 @@ final class FloatHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/constructor.zig');
         $a = new $m->Double(3.14);
-        $this->assertSame(3.14, (double) $a);
+        $this->assertSame(3.14, (float) $a);
         $b = $m->Double(pack('d', 0.1234));
-        $this->assertSame(0.1234, (double) $b);
+        $this->assertSame(0.1234, (float) $b);
         $c = new $m->Double('3.14');
-        $this->assertSame(3.14, (double) $c);
+        $this->assertSame(3.14, (float) $c);
         $d = new $m->Double(3);
-        $this->assertSame(3.0, (double) $d);
+        $this->assertSame(3.0, (float) $d);
         $this->assertExceptionMessage('not double', function() use($m) {
             $x = new $m->Double('Hello');
         });

@@ -12,6 +12,7 @@ pub const ExecuteData = c.zend_execute_data;
 pub const Fiber = c.zend_fiber;
 pub const FiberTransfer = c.zend_fiber_transfer;
 pub const Function = c.zend_function;
+pub const FunctionEntry = c._zend_function_entry;
 pub const FunctionInfo = c.zend_internal_function_info;
 pub const HashPosition = c.HashPosition;
 pub const HashTable = c.HashTable;
@@ -49,6 +50,7 @@ pub const MAY_BE_DOUBLE = c.MAY_BE_DOUBLE;
 pub const MAY_BE_STRING = c.MAY_BE_STRING;
 pub const MAY_BE_ARRAY = c.MAY_BE_ARRAY;
 pub const MAY_BE_OBJECT = c.MAY_BE_OBJECT;
+pub const ModuleEntry = c._zend_module_entry;
 pub const INTERNAL_CLASS = c.ZEND_INTERNAL_CLASS;
 pub const USER_CLASS = c.ZEND_USER_CLASS;
 pub const INTERNAL_FUNCTION = c.ZEND_INTERNAL_FUNCTION;
@@ -97,41 +99,6 @@ fn argCount(comptime Func: type) usize {
     };
 }
 
-pub const FunctionEntry = extern struct {
-    // zig_handler for some reason causes a "dependency loop detected" error
-    // need to change it to *const anyopaque
-    fname: [*c]const u8,
-    handler: *const anyopaque,
-    arg_info: [*c]const c.zend_internal_arg_info,
-    num_args: u32,
-    flags: u32,
-};
-pub const ModuleEntry = extern struct {
-    size: c_ushort,
-    zend_api: c_uint,
-    zend_debug: u8,
-    zts: u8,
-    ini_entry: [*c]const c.zend_ini_entry,
-    deps: [*c]const c.zend_module_dep,
-    name: [*c]const u8,
-    functions: [*c]const FunctionEntry,
-    module_startup_func: ?*const fn (c_int, c_int) callconv(.c) c.zend_result,
-    module_shutdown_func: ?*const fn (c_int, c_int) callconv(.c) c.zend_result,
-    request_startup_func: ?*const fn (c_int, c_int) callconv(.c) c.zend_result,
-    request_shutdown_func: ?*const fn (c_int, c_int) callconv(.c) c.zend_result,
-    info_func: ?*const fn ([*c]@This()) callconv(.c) void,
-    version: [*c]const u8,
-    globals_size: usize,
-    globals_ptr: ?*anyopaque,
-    globals_ctor: ?*const fn (?*anyopaque) callconv(.c) void,
-    globals_dtor: ?*const fn (?*anyopaque) callconv(.c) void,
-    post_deactivate_func: ?*const fn () callconv(.c) c.zend_result,
-    module_started: c_int,
-    type: u8,
-    handle: ?*anyopaque,
-    module_number: c_int,
-    build_id: [*c]const u8,
-};
 pub const PURPOSE_DEBUG = 0;
 pub const PURPOSE_ARRAY_CAST = 1;
 pub const PURPOSE_SERIALIZE = 2;

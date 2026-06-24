@@ -1328,7 +1328,7 @@ final class StreamHandlingTest extends ZigarTestCase
         }
         $lib_path = __DIR__ . "/data/print.$ext";
         $zig_path = __DIR__ . '/redirect-shared-lib-target.zig';
-        `zig build-lib "$zig_path" -target $arch-$os -dynamic -O ReleaseSmall -femit-bin="$lib_path"`;
+        shell_exec("zig build-lib '$zig_path' -target $arch-$os -dynamic -O ReleaseSmall -femit-bin='$lib_path'");
         ob_start();
         $m->use($lib_path);
         $text = ob_get_clean();
