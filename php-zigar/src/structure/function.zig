@@ -233,10 +233,6 @@ pub const Function = struct {
     }
 
     pub fn handleCall(ed: *ExecuteData, return_value: *Value) !void {
-        errdefer {
-            std.debug.print("failed\n", .{});
-            @breakpoint();
-        }
         const func: *php.Function = @ptrCast(ed.func);
         const closure: *Closure = @fieldParentPtr("php_portion", func);
         const self: *@This() = closure.self;

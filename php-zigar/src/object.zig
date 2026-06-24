@@ -52,8 +52,10 @@ pub fn ZigObject(comptime S: type) type {
             self.zig_portion = .{};
             // initialize the PHP portion
             const obj = self.object();
-            obj.handlers = getHandlers();
             php.initializeStandardObject(obj, ce);
+            // handlers get set to null by zend_object_std_init() starting from PHP 8.3
+            // so this call needs to happen here
+            obj.handlers = getHandlers();
             return self;
         }
 
