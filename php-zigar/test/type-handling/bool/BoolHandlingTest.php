@@ -223,8 +223,8 @@ final class BoolHandlingTest extends ZigarTestCase
         $b = new $m->Bool(false);
         $this->assertTrue((boolean) $a);
         $this->assertFalse((boolean) $b);
-        $c = $m->Bool("\x00");
-        $d = $m->Bool("\x01");
+        $c = $m->Bool(new ArrayBuffer("\x00"));
+        $d = $m->Bool(new ArrayBuffer("\x01"));
         $this->assertFalse((boolean) $c);
         $this->assertTrue((boolean) $d);
     }

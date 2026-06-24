@@ -48,7 +48,8 @@ pub fn ZigObject(comptime S: type) type {
             const mem = php.emalloc(size, @src()) orelse return error.OutOfMemory;
             errdefer php.efree(mem, @src());
             const self: *@This() = @ptrCast(@alignCast(mem));
-            self.* = .{};
+            // initialize the Zig portion
+            self.zig_portion = .{};
             // initialize the PHP portion
             const obj = self.object();
             obj.handlers = getHandlers();

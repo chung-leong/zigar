@@ -114,7 +114,7 @@ pub const Function = struct {
                 // switch to a different fiber) when we have a promise or generator interface
                 CallDispatcher.releaseCallingThread(futex_handle, .SUCCESS);
             }
-            const result = cache.invoke(args) catch |err| get: {                
+            const result = cache.invoke(args) catch |err| get: {
                 const ex = php.captureException() catch throw: {
                     _ = &php.throwError(err);
                     break :throw php.captureException() catch unreachable;
@@ -233,6 +233,10 @@ pub const Function = struct {
     }
 
     pub fn handleCall(ed: *ExecuteData, return_value: *Value) !void {
+        errdefer {
+            std.debug.print("failed\n", .{});
+            @breakpoint();
+        }
         const func: *php.Function = @ptrCast(ed.func);
         const closure: *Closure = @fieldParentPtr("php_portion", func);
         const self: *@This() = closure.self;

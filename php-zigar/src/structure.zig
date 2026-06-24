@@ -1,10 +1,10 @@
 const std = @import("std");
 
+const interface = @import("./module/native/interface.zig");
+const StructureType = interface.StructureType;
 const accessor = @import("accessor.zig");
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const cache = @import("cache.zig");
-const interface = @import("./module/native/interface.zig");
-const StructureType = interface.StructureType;
 const failure = @import("failure.zig");
 const Error = failure.Error;
 const iterator = @import("iterator.zig");
