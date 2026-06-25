@@ -246,7 +246,7 @@ pub fn Class(comptime S: type) type {
             var special_args: struct {
                 allocator: ?Value = null,
             } = .{};
-            arg_iter.extractNamedArguments(&special_args, .{ .allocator = true });
+            arg_iter.extractNamed(&special_args, .{ .allocator = true });
             defer if (special_args.allocator) |a| php.release(&a);
             const src_value = special_args.allocator orelse return null;
             const src_obj = try php.getValueObject(&src_value);

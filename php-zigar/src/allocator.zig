@@ -41,7 +41,7 @@ pub const AllocatorStatic = struct {
 
     pub fn handleAlloc(ed: *ExecuteData, return_value: *Value) !void {
         var arg_iter: ArgumentIterator = .init(ed);
-        if (arg_iter.len < 1 or arg_iter.len > 2) return failure.reportArgCountMismatch("alloc", 1, 2, arg_iter.len);
+        try arg_iter.verifyCount(1, 2, "alloc");
         const arg0 = arg_iter.next().?;
         const len = try php.getValueUlong(arg0);
         const alignment_bu = if (arg_iter.next()) |arg1| try php.getValueUlong(arg1) else 1;
@@ -59,7 +59,7 @@ pub const AllocatorStatic = struct {
 
     pub fn handleFree(ed: *ExecuteData, _: *Value) !void {
         var arg_iter: ArgumentIterator = .init(ed);
-        if (arg_iter.len != 1) return failure.reportArgCountMismatch("free", 1, 1, arg_iter.len);
+        try arg_iter.verifyCount(1, 1, "free");
         const arg0 = arg_iter.next().?;
         var obj = try php.getValueObject(arg0);
         const buf = get: {
@@ -96,7 +96,7 @@ pub const AllocatorStatic = struct {
 
     pub fn handleDupe(ed: *ExecuteData, return_value: *Value) !void {
         var arg_iter: ArgumentIterator = .init(ed);
-        if (arg_iter.len != 1) return failure.reportArgCountMismatch("dupe", 1, 2, arg_iter.len);
+        try arg_iter.verifyCount(1, 2, "dupe");
         const arg0 = arg_iter.next().?;
         const bytes = get: {
             if (php.getValueString(arg0)) |str| {

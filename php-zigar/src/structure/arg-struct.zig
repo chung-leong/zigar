@@ -118,7 +118,7 @@ pub const ArgStruct = struct {
         const static = class.getStaticData(@This());
         // take out initializers for special arguments
         var special_args: structure.Struct.SpecialArgs = .{};
-        arg_iter.extractNamedArguments(&special_args, .{
+        arg_iter.extractNamed(&special_args, .{
             .allocator = static.allocator != null,
             .callback = static.promise != null or static.generator != null,
             .signal = static.abort_signal != null,

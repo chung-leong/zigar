@@ -151,36 +151,11 @@ const Options = extern struct {
 
 const functions = struct {
     pub const zigar_compile = struct {
-        pub const arg_info = [_]InteralArgInfo{
-            .{
-                .name = "source_path",
-                .type = .{
-                    .type_mask = php.MAY_BE_STRING,
-                    .ptr = null,
-                },
-            },
-            .{
-                .name = "module_path",
-                .type = .{
-                    .type_mask = php.MAY_BE_STRING | php.MAY_BE_ARRAY,
-                    .ptr = null,
-                },
-            },
-            .{
-                .name = "options",
-                .type = .{
-                    .type_mask = php.MAY_BE_ARRAY,
-                    .ptr = null,
-                },
-            },
-        };
-        pub const info = FunctionInfo{ .required_num_args = 1 };
+        pub const required_num_args = 1;
 
         pub fn run(ed: *ExecuteData, retval: *Value) !void {
             var arg_iter = ArgumentIterator.init(ed);
-            if (arg_iter.len < 1 or arg_iter.len > 3) {
-                return failure.reportArgCountMismatch("zigar_compile", 1, 3, arg_iter.len);
-            }
+            try arg_iter.verifyCount(1, 3, "zigar_compile");
             if (!options.compilation) {
                 retval.* = php.createValueBool(false);
                 return;
@@ -210,29 +185,11 @@ const functions = struct {
         }
     };
     pub const zigar_use = struct {
-        pub const arg_info = [_]InteralArgInfo{
-            .{
-                .name = "source_path",
-                .type = .{
-                    .type_mask = php.MAY_BE_STRING,
-                    .ptr = null,
-                },
-            },
-            .{
-                .name = "options",
-                .type = .{
-                    .type_mask = php.MAY_BE_ARRAY,
-                    .ptr = null,
-                },
-            },
-        };
-        pub const info = FunctionInfo{ .required_num_args = 1 };
+        pub const required_num_args = 1;
 
         pub fn run(ed: *ExecuteData, retval: *Value) !void {
             var arg_iter = ArgumentIterator.init(ed);
-            if (arg_iter.len < 1 or arg_iter.len > 2) {
-                return failure.reportArgCountMismatch("zigar_use", 1, 2, arg_iter.len);
-            }
+            try arg_iter.verifyCount(1, 2, "zigar_use");
             const src_path, const mod_path = get: {
                 const path = try getResolvedPath(php.allocator, arg_iter.next().?);
                 errdefer php.allocator.free(path);
@@ -256,36 +213,11 @@ const functions = struct {
         }
     };
     pub const zigar_import = struct {
-        pub const arg_info = [_]InteralArgInfo{
-            .{
-                .name = "source_path",
-                .type = .{
-                    .type_mask = php.MAY_BE_STRING,
-                    .ptr = null,
-                },
-            },
-            .{
-                .name = "callback",
-                .type = .{
-                    .type_mask = php.MAY_BE_STRING | php.MAY_BE_OBJECT,
-                    .ptr = null,
-                },
-            },
-            .{
-                .name = "options",
-                .type = .{
-                    .type_mask = php.MAY_BE_ARRAY,
-                    .ptr = null,
-                },
-            },
-        };
-        pub const info = FunctionInfo{ .required_num_args = 1 };
+        pub const required_num_args = 1;
 
         pub fn run(ed: *ExecuteData, retval: *Value) !void {
             var arg_iter = ArgumentIterator.init(ed);
-            if (arg_iter.len < 1 or arg_iter.len > 3) {
-                return failure.reportArgCountMismatch("zigar_import", 1, 3, arg_iter.len);
-            }
+            try arg_iter.verifyCount(1, 3, "zigar_import");
             const src_path, const mod_path = get: {
                 const path = try getResolvedPath(php.allocator, arg_iter.next().?);
                 errdefer php.allocator.free(path);
@@ -338,23 +270,10 @@ comptime {
     const decls = std.meta.declarations(functions);
     var entries: [decls.len + 1]FunctionEntry = undefined;
     for (decls, 0..) |decl, i| {
-        const function = @field(functions, decl.name);
-        const handler = php.transform(function.run);
+        const func = @field(functions, decl.name);
+        const handler = php.transform(func.run);
         @export(&handler, .{ .name = decl.name });
-        const arg_info = init: {
-            var buf: [function.arg_info.len + 1]InteralArgInfo = undefined;
-            const info_ptr: *FunctionInfo = @ptrCast(&buf[0]);
-            info_ptr.* = function.info;
-            for (function.arg_info, 0..) |a, j| buf[j + 1] = a;
-            break :init buf;
-        };
-        entries[i] = .{
-            .fname = decl.name,
-            .handler = &handler,
-            .arg_info = @ptrCast(&arg_info),
-            .num_args = @truncate(function.arg_info.len),
-            .flags = 0,
-        };
+        entries[i] = php.createFunctionEntry(&handler, decl.name, func.required_num_args, true);
     }
     entries[decls.len] = std.mem.zeroes(FunctionEntry);
     const const_entries = entries;

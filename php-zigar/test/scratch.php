@@ -3,5 +3,5 @@
 // require __DIR__ . '/../vendor/autoload.php';
 // use Revolt\EventLoop;
 
-$m = zigar_use(__DIR__ . '/scratch.zig', [ 'optimize' => 'ReleaseSmall' ]);
+$m = zigar_use(__DIR__ . '/scratch.zig', optimize: 'ReleaseSmall');
 echo $m->hello(), "\n";

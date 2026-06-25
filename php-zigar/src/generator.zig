@@ -241,7 +241,7 @@ pub const GeneratorStatic = struct {
 
     pub fn handleYield(ed: *ExecuteData, return_value: *Value) !void {
         var arg_iter: ArgumentIterator = .init(ed);
-        if (arg_iter.len != 1) return failure.reportArgCountMismatch("yield", 1, 1, arg_iter.len);
+        try arg_iter.verifyCount(1, 1, "yield");
         const value = arg_iter.next().?;
         const generator_struct = try structure.Struct.fromValue(arg_iter.this);
         const allocator = try generator_struct.getAllocator();

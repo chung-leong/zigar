@@ -207,7 +207,7 @@ pub const ArgumentIterator = struct {
         }
     }
 
-    pub fn extractNamedArguments(self: *@This(), set: anytype, using: anytype) void {
+    pub fn extractNamed(self: *@This(), set: anytype, using: anytype) void {
         if (self.named_params == null) return;
         const ht = getValueHashTable(&self.named_params.?) catch unreachable;
         const T = @TypeOf(set.*);
@@ -224,6 +224,24 @@ pub const ArgumentIterator = struct {
         if (getHashLength(ht) == 0) {
             self.named_params = null;
             self.len -= 1;
+        }
+    }
+
+    pub fn verifyCount(self: *const @This(), min: usize, max: usize, fn_name: []const u8) !void {
+        if (self.len < min or self.len > max) {
+            return failure.report("{s}() expects {s} {d} argument{s}, {d} given{s}", .{
+                fn_name,
+                if (max > min)
+                    "at most"
+                else if (self.len < min)
+                    "at least"
+                else
+                    "exactly",
+                if (max > min) max else min,
+                if (min != 1) "s" else "",
+                self.len,
+                if (self.named_params != null) " (the last being named arguments)" else "",
+            });
         }
     }
 };
@@ -1397,7 +1415,7 @@ pub fn createFunction(
 }
 
 pub fn createFunctionEx(
-    func_ptr: c.zif_handler,
+    handler: c.zif_handler,
     name: ?*String,
     comptime arg_count: usize,
     comptime is_variadic: bool,
@@ -1409,12 +1427,30 @@ pub fn createFunctionEx(
         .internal_function = .{
             .type = c.ZEND_INTERNAL_FUNCTION,
             .function_name = name orelse getStaticString("fn"),
-            .handler = func_ptr,
+            .handler = handler,
             .num_args = arg_count,
             .required_num_args = arg_count,
             .arg_info = @constCast(arg_info.ptr),
             .fn_flags = fn_flags,
         },
+    };
+}
+
+pub fn createFunctionEntry(
+    handler: c.zif_handler,
+    name: [*:0]const u8,
+    comptime arg_count: usize,
+    comptime is_variadic: bool,
+) FunctionEntry {
+    const arg_info = emptyArgInfo(arg_count + if (is_variadic) 1 else 0);
+    var fn_flags: u32 = c.ZEND_ACC_PUBLIC;
+    if (is_variadic) fn_flags |= c.ZEND_ACC_VARIADIC;
+    return .{
+        .fname = name,
+        .handler = handler,
+        .arg_info = @constCast(arg_info.ptr),
+        .num_args = @truncate(arg_count),
+        .flags = fn_flags,
     };
 }
 

@@ -167,18 +167,17 @@ pub const AbortSignalStatic = struct {
     }
 
     pub fn handleOn(ed: *ExecuteData, return_value: *Value) !void {
-        const state = try getState(ed);
-        return_value.* = php.createValueBool(state);
+        try handleState(ed, return_value, true);
     }
 
     pub fn handleOff(ed: *ExecuteData, return_value: *Value) !void {
-        const state = try getState(ed);
-        return_value.* = php.createValueBool(!state);
+        try handleState(ed, return_value, false);
     }
 
-    fn getState(ed: *ExecuteData) !bool {
+    fn handleState(ed: *ExecuteData, return_value: *Value, expected: bool) !void {
         const arg_iter: ArgumentIterator = .init(ed);
-        if (arg_iter.len != 0) return failure.reportArgCountMismatch("on", 0, 0, arg_iter.len);
+        const fn_name = if (expected) "on" else "off";
+        try arg_iter.verifyCount(0, 0, fn_name);
         const signal_struct = try structure.Struct.fromValue(arg_iter.this);
         const ptr = try signal_struct.getProperty(N("ptr"), null);
         defer php.release(&ptr);
@@ -186,7 +185,7 @@ pub const AbortSignalStatic = struct {
         const int_obj = try ptr_struct.getTarget();
         const int_struct = structure.Primitive.fromObject(int_obj);
         const long_value = try int_struct.getValue(.none);
-        const long = try php.getValueLong(&long_value);
-        return long != 0;
+        const state = try php.getValueLong(&long_value) != 0;
+        return_value.* = php.createValueBool(state == expected);
     }
 };

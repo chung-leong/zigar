@@ -65,24 +65,6 @@ pub fn report(comptime fmt: []const u8, params: anytype) error{FailureReported} 
     return error.FailureReported;
 }
 
-pub fn reportArgCountMismatch(fn_name: []const u8, max_arg_count: usize, min_arg_count: usize, arg_count: usize) error{FailureReported} {
-    return report("{s}() expects {s} {d} argument{s}, {d} given", .{
-        fn_name,
-        if (max_arg_count > min_arg_count)
-            "at most"
-        else if (arg_count < min_arg_count)
-            "at least"
-        else
-            "exactly",
-        if (max_arg_count > min_arg_count)
-            max_arg_count
-        else
-            min_arg_count,
-        if (min_arg_count != 1) "s" else "",
-        arg_count,
-    });
-}
-
 pub fn reportLengthMismatch(class: *ZigClassEntry, expected: usize, received: usize) error{FailureReported} {
     return report("{s} '{s}' expects {d} bytes, received {d}", .{
         class.getStructureName(),

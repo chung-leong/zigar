@@ -166,18 +166,14 @@ pub const SpecialExports = struct {
 
     pub fn handleAlignOf(ed: *ExecuteData, retval: *Value) !void {
         var arg_iter: ArgumentIterator = .init(ed);
-        if (arg_iter.len != 1) {
-            return failure.reportArgCountMismatch("alignOf", 1, 1, arg_iter.len);
-        }
+        try arg_iter.verifyCount(1, 1, "alignOf");
         const class = try getClassFromArgument(&arg_iter);
         retval.* = php.createValueAnyInt(class.alignment.toByteUnits());
     }
 
     pub fn handleRedirect(ed: *ExecuteData, _: *Value) !void {
         var arg_iter: ArgumentIterator = .init(ed);
-        if (arg_iter.len != 2) {
-            return failure.reportArgCountMismatch("redirect", 2, 2, arg_iter.len);
-        }
+        try arg_iter.verifyCount(2, 2, "redirect");
         const obj = try php.getValueObject(arg_iter.this);
         const self = fromObject(obj);
         if (!self.host.isRedirecting()) {
@@ -212,27 +208,21 @@ pub const SpecialExports = struct {
 
     pub fn handleSizeOf(ed: *ExecuteData, retval: *Value) !void {
         var arg_iter: ArgumentIterator = .init(ed);
-        if (arg_iter.len != 1) {
-            return failure.reportArgCountMismatch("sizeOf", 1, 1, arg_iter.len);
-        }
+        try arg_iter.verifyCount(1, 1, "sizeOf");
         const class = try getClassFromArgument(&arg_iter);
         retval.* = if (class.byte_size) |sz| php.createValueAnyInt(sz) else php.createValueNull();
     }
 
     pub fn handleTypeOf(ed: *ExecuteData, retval: *Value) !void {
         var arg_iter: ArgumentIterator = .init(ed);
-        if (arg_iter.len != 1) {
-            return failure.reportArgCountMismatch("typeOf", 1, 1, arg_iter.len);
-        }
+        try arg_iter.verifyCount(1, 1, "typeOf");
         const class = try getClassFromArgument(&arg_iter);
         retval.* = php.createValueStringContent(class.getStructureName());
     }
 
     pub fn handleImport(ed: *ExecuteData, retval: *Value) !void {
         var arg_iter: ArgumentIterator = .init(ed);
-        if (arg_iter.len > 1) {
-            return failure.reportArgCountMismatch("import", 0, 1, arg_iter.len);
-        }
+        try arg_iter.verifyCount(0, 1, "import");
         const callback = arg_iter.next();
         const root_static = try getRootStaticData(&arg_iter);
         retval.* = try root_static.exportSymbolsToGlobalNamespace(callback);
@@ -240,9 +230,7 @@ pub const SpecialExports = struct {
 
     pub fn handleUnimport(ed: *ExecuteData, _: *Value) !void {
         var arg_iter: ArgumentIterator = .init(ed);
-        if (arg_iter.len != 0) {
-            return failure.reportArgCountMismatch("unimport", 0, 0, arg_iter.len);
-        }
+        try arg_iter.verifyCount(0, 0, "unimport");
         const root_static = try getRootStaticData(&arg_iter);
         try root_static.removeSymbolsFromGlobalNamespace();
     }

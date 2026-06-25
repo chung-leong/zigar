@@ -189,7 +189,7 @@ pub const PromiseStatic = struct {
 
     pub fn handleResolve(ed: *ExecuteData, _: *Value) !void {
         var arg_iter: ArgumentIterator = .init(ed);
-        if (arg_iter.len != 1) return failure.reportArgCountMismatch("resolve", 1, 1, arg_iter.len);
+        try arg_iter.verifyCount(1, 1, "resolve");
         const value = arg_iter.next().?;
         // see if there's an allocator stashed in the buffer
         const promise_struct = try structure.Struct.fromValue(arg_iter.this);
