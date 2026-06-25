@@ -178,8 +178,14 @@ pub const ArgumentIterator = struct {
     }
 
     pub fn next(self: *@This()) ?*Value {
+        return if (self.peek()) |v| get: {
+            self.index += 1;
+            break :get v;
+        } else null;
+    }
+
+    pub fn peek(self: *@This()) ?*Value {
         if (self.index < self.len) {
-            defer self.index += 1;
             var index = self.index;
             // return named parameters as last argument
             if (index == self.len - 1) {
@@ -1253,6 +1259,10 @@ pub fn isObjectFreed(obj: *Object) bool {
     return (obj.gc.u.type_info & c.IS_OBJ_FREE_CALLED) != 0;
 }
 
+pub fn isCallable(callable: *const Value) bool {
+    return c.zend_is_callable(@constCast(callable), 0, null);
+}
+
 pub fn invokeMethod(container: ?*const Value, fn_name: *const Value, arguments: []const Value) !Value {
     return invokeMethodEx(container, fn_name, arguments, null);
 }
@@ -1386,18 +1396,18 @@ pub fn MethodCallCaches(comptime names: anytype) type {
     };
 }
 
-pub fn emptyArgInfo(comptime count: usize) []const InternalArgInfo {
-    const rem = @rem(count, 8);
+pub fn emptyArgInfo(comptime count: usize, comptime is_variadic: bool) []const InternalArgInfo {
+    const len = count + if (is_variadic) 1 else 0;
+    const rem = @rem(len, 8);
     if (rem > 0) {
-        const larger = emptyArgInfo(count + (8 - rem));
-        return larger[0..count];
+        // reuse the same list if the number of arguments is less than 8
+        const larger = emptyArgInfo(len + (8 - rem), false);
+        return larger[0..len];
     } else {
         const ns = struct {
             const array = init: {
-                var buffer: [count]InternalArgInfo = undefined;
-                for (&buffer) |*ptr| ptr.* = .{
-                    .name = "",
-                };
+                var buffer: [len]InternalArgInfo = undefined;
+                for (&buffer) |*ptr| ptr.* = .{ .name = "" };
                 break :init buffer;
             };
         };
@@ -1420,7 +1430,7 @@ pub fn createFunctionEx(
     comptime arg_count: usize,
     comptime is_variadic: bool,
 ) Function {
-    const arg_info = emptyArgInfo(arg_count + if (is_variadic) 1 else 0);
+    const arg_info = emptyArgInfo(arg_count, is_variadic);
     var fn_flags: u32 = c.ZEND_ACC_PUBLIC;
     if (is_variadic) fn_flags |= c.ZEND_ACC_VARIADIC;
     return .{
@@ -1436,22 +1446,25 @@ pub fn createFunctionEx(
     };
 }
 
-pub fn createFunctionEntry(
-    handler: c.zif_handler,
-    name: [*:0]const u8,
-    comptime arg_count: usize,
-    comptime is_variadic: bool,
-) FunctionEntry {
-    const arg_info = emptyArgInfo(arg_count + if (is_variadic) 1 else 0);
-    var fn_flags: u32 = c.ZEND_ACC_PUBLIC;
-    if (is_variadic) fn_flags |= c.ZEND_ACC_VARIADIC;
-    return .{
-        .fname = name,
-        .handler = handler,
-        .arg_info = @constCast(arg_info.ptr),
-        .num_args = @truncate(arg_count),
-        .flags = fn_flags,
+pub fn argInfo(comptime arg_list: anytype, comptime is_variadic: bool) []const InternalArgInfo {
+    const ns = struct {
+        const array = init: {
+            const len = arg_list.len + if (is_variadic) 1 else 0;
+            var buffer: [len + 8]InternalArgInfo = undefined;
+            for (&buffer, 0..) |*ptr, i| {
+                ptr.* = .{
+                    .name = if (i < arg_list.len)
+                        arg_list[i]
+                    else if (i >= len)
+                        ""
+                    else
+                        "cow",
+                };
+            }
+            break :init buffer;
+        };
     };
+    return &ns.array;
 }
 
 pub inline fn createTransformedFunction(
@@ -1710,8 +1723,12 @@ pub fn estrdup(s: [*:0]const u8, comptime src: std.builtin.SourceLocation) [*:0]
 }
 
 pub fn malloc(size: usize) ?*anyopaque {
-    const ptr = pc.__zend_malloc(size);
-    return ptr;
+    const src = @src();
+    return switch (comptime argCount(@TypeOf(c.__zend_malloc))) {
+        5 => c.__zend_malloc(size, src.file, src.line + 1, null, 0),
+        1 => c.__zend_malloc(size),
+        else => @compileError("Unexpected __zend_malloc argument count"),
+    };
 }
 
 pub fn free(ptr: ?*anyopaque) void {
@@ -1858,10 +1875,10 @@ pub fn openDescriptor(fd: c_int, mode: [*c]const u8) !*Stream {
     const src = @src();
     // arg count varies depending on PHP version and whether debug is enabled
     return switch (comptime argCount(@TypeOf(pc._php_stream_fopen_from_fd))) {
-        3 => pc._php_stream_fopen_from_fd(fd, mode, null),
+        3 => pc._php_stream_fopen_from_fd(fd, mode, null), // function in PHP 8.1 doesn't have zero_position
         4 => pc._php_stream_fopen_from_fd(fd, mode, null, false),
         8 => pc._php_stream_fopen_from_fd(fd, mode, null, 1, src.file, src.line, src.file, src.line),
-        9 => pc._php_stream_fopen_from_fd(fd, mode, null, 1, src.file, src.line, src.file, src.line, false),
+        9 => pc._php_stream_fopen_from_fd(fd, mode, null, false, 1, src.file, src.line, src.file, src.line),
         else => @compileError("Unexpected _php_stream_fopen_from_fd argument count"),
     } orelse error.Failure;
 }

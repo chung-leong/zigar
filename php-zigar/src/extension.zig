@@ -151,11 +151,13 @@ const Options = extern struct {
 
 const functions = struct {
     pub const zigar_compile = struct {
-        pub const required_num_args = 1;
+        pub const required = .{"src_path"};
+        pub const optional = .{ "mod_path", "params" };
+        pub const variadic = true;
 
         pub fn run(ed: *ExecuteData, retval: *Value) !void {
             var arg_iter = ArgumentIterator.init(ed);
-            try arg_iter.verifyCount(1, 3, "zigar_compile");
+            try arg_iter.verifyCount(required.len, required.len + optional.len, "zigar_compile");
             if (!options.compilation) {
                 retval.* = php.createValueBool(false);
                 return;
@@ -185,11 +187,13 @@ const functions = struct {
         }
     };
     pub const zigar_use = struct {
-        pub const required_num_args = 1;
+        pub const required = .{"src_path"};
+        pub const optional = .{"params"};
+        pub const variadic = true;
 
         pub fn run(ed: *ExecuteData, retval: *Value) !void {
             var arg_iter = ArgumentIterator.init(ed);
-            try arg_iter.verifyCount(1, 2, "zigar_use");
+            try arg_iter.verifyCount(required.len, required.len + optional.len, "zigar_use");
             const src_path, const mod_path = get: {
                 const path = try getResolvedPath(php.allocator, arg_iter.next().?);
                 errdefer php.allocator.free(path);
@@ -213,11 +217,13 @@ const functions = struct {
         }
     };
     pub const zigar_import = struct {
-        pub const required_num_args = 1;
+        pub const required = .{"src_path"};
+        pub const optional = .{ "callback", "params" };
+        pub const variadic = true;
 
         pub fn run(ed: *ExecuteData, retval: *Value) !void {
             var arg_iter = ArgumentIterator.init(ed);
-            try arg_iter.verifyCount(1, 3, "zigar_import");
+            try arg_iter.verifyCount(required.len, required.len + optional.len, "zigar_import");
             const src_path, const mod_path = get: {
                 const path = try getResolvedPath(php.allocator, arg_iter.next().?);
                 errdefer php.allocator.free(path);
@@ -231,7 +237,26 @@ const functions = struct {
             };
             defer if (src_path) |path| php.allocator.free(path);
             defer php.allocator.free(mod_path);
-            const callback = arg_iter.next();
+            const callback = if (arg_iter.peek()) |arg1| get: {
+                if (arg_iter.named_params) |*named_params| {
+                    if (arg1 == named_params) {
+                        // obviously meant to be params
+                        break :get null;
+                    }
+                }
+                if (arg_iter.len == 2) {
+                    switch (php.getValueType(arg1)) {
+                        .object, .array => {
+                            // if the argument isn't callable, then it's meant to be params
+                            if (!php.isCallable(arg1)) {
+                                break :get null;
+                            }
+                        },
+                        else => {},
+                    }
+                }
+                break :get arg_iter.next();
+            } else null;
             const params = if (arg_iter.next()) |arg2| try php.getValueHashTable(arg2) else null;
             if (src_path) |path| {
                 if (options.compilation) try ZigCompiler.compile(path, mod_path, params);
@@ -270,10 +295,37 @@ comptime {
     const decls = std.meta.declarations(functions);
     var entries: [decls.len + 1]FunctionEntry = undefined;
     for (decls, 0..) |decl, i| {
-        const func = @field(functions, decl.name);
-        const handler = php.transform(func.run);
+        const function = @field(functions, decl.name);
+        const handler = php.transform(function.run);
         @export(&handler, .{ .name = decl.name });
-        entries[i] = php.createFunctionEntry(&handler, decl.name, func.required_num_args, true);
+        const arg_info = init: {
+            var len = function.required.len + function.optional.len;
+            if (function.variadic) len += 1;
+            var buffer: [1 + len]InteralArgInfo = undefined;
+            for (&buffer, 0..) |*ptr, j| {
+                if (j == 0) {
+                    // the first array entry is actually used to store a FuntionInfo
+                    const info_ptr: *FunctionInfo = @ptrCast(ptr);
+                    info_ptr.* = .{ .required_num_args = function.required.len };
+                } else if (j < 1 + function.required.len) {
+                    ptr.* = .{ .name = function.required[j - 1] };
+                } else if (j < 1 + function.required.len + function.optional.len) {
+                    ptr.* = .{ .name = function.optional[j - function.required.len - 1] };
+                } else {
+                    ptr.* = .{ .name = "" };
+                }
+            }
+            break :init buffer;
+        };
+        var flags = php.c.ZEND_ACC_PUBLIC;
+        if (function.variadic) flags |= php.c.ZEND_ACC_VARIADIC;
+        entries[i] = .{
+            .fname = decl.name,
+            .handler = &handler,
+            .arg_info = @ptrCast(&arg_info),
+            .num_args = function.required.len + function.optional.len,
+            .flags = flags,
+        };
     }
     entries[decls.len] = std.mem.zeroes(FunctionEntry);
     const const_entries = entries;

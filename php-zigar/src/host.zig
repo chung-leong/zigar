@@ -84,11 +84,11 @@ pub const ModuleHost = struct {
             php.destroyHashTable(&self.plain_object_table);
             php.destroyHashTable(&self.exception_table);
             php.release(self.module_path);
+            self.freeAllocatorVTable();
             self.unclaimed_buffer_map.deinit();
             self.object_map.deinit();
             self.dispatcher.deinit();
             self.gc_buffer.deinit();
-            self.freeAllocatorVTable();
             if (self.library) |*lib| lib.close();
             php.allocator.destroy(self);
         }

@@ -207,6 +207,7 @@ pub var zend_hash_str_find: Ptr("zend_hash_str_find") = undefined;
 pub var zend_hash_str_update: Ptr("zend_hash_str_update") = undefined;
 pub var zend_hash_update: Ptr("zend_hash_update") = undefined;
 pub var zend_initialize_class_data: Ptr("zend_initialize_class_data") = undefined;
+pub var zend_is_callable: Ptr("zend_is_callable") = undefined;
 pub var zend_is_valid_class_name: Ptr("zend_is_valid_class_name") = undefined;
 pub var zend_iterator_dtor: Ptr("zend_iterator_dtor") = undefined;
 pub var zend_iterator_init: Ptr("zend_iterator_init") = undefined;
