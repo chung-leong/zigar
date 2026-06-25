@@ -333,6 +333,17 @@ pub const ByteBuffer = struct {
         };
     }
 
+    pub fn dump(self: *const @This(), label: []const u8) void {
+        if (self.ref_count == 0) {
+            std.debug.print("[INVALID BUFFER]\n", .{});
+        }
+        std.debug.print("[{x}] {s}:", .{ @intFromPtr(self), label });
+        for (self.bytes) |byte| {
+            std.debug.print(" {X}", .{byte});
+        }
+        std.debug.print("\n", .{});
+    }
+
     pub fn compare(a: *const @This(), b: anytype) RelativePosition {
         const a_start = @intFromPtr(a.bytes.ptr);
         const a_end = a_start + a.bytes.len;

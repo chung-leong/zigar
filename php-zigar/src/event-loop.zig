@@ -52,9 +52,11 @@ pub fn EventLoop(comptime cb: fn () void) type {
         }
 
         pub fn deinit(self: *@This()) void {
-            self.terminated = true;
-            // jump into the loop fiber so the loop would terminate
-            self.resumeLoop() catch {};
+            if (!self.terminated) {
+                self.terminated = true;
+                // jump into the loop fiber so the loop would terminate
+                self.resumeLoop() catch {};
+            }
             php.release(&self.fiber);
             self.fiber_cache.deinit();
             self.fiber_class_cache.deinit();
@@ -162,6 +164,10 @@ pub fn EventLoop(comptime cb: fn () void) type {
                 const count = php.getValueLong(&result) catch 0;
                 if (count == 1) {
                     cb();
+                    if (php.exceptionThrown()) {
+                        // when the main fiber exits, the loop fiber receive a GracefulExit exception
+                        self.terminated = true;
+                    }
                 }
             }
         }

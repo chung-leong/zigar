@@ -1654,6 +1654,11 @@ pub fn getValueException(value: *const Value) !*Object {
     return obj;
 }
 
+pub fn exceptionThrown() bool {
+    const eg = getExecutorGlobals();
+    return eg.exception != null;
+}
+
 pub fn getExceptionMessage(obj: *Object) !Value {
     const context = createValueObject(obj);
     var call_cache: MethodCallCaches(.{.getMessage}) = try .init(&context);

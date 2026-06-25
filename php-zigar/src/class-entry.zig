@@ -843,10 +843,13 @@ pub const ZigClassEntry = struct {
 
     pub fn obtainObjectFromBuffer(self: *@This(), buf: *ByteBuffer) !*Object {
         const result = self.host.object_map.search(buf.bytes, self, buf.flags.read_only);
-        return if (result.match == .yes)
-            php.reuse(result.value())
-        else
-            try self.createObjectFromBuffer(buf, null);
+        if (result.match == .yes) {
+            // need to bump the buffer's refcount, since that's what happens when a new object is created
+            buf.addRef();
+            return php.reuse(result.value());
+        } else {
+            return try self.createObjectFromBuffer(buf, null);
+        }
     }
 
     pub fn createObjectFromBuffer(self: *@This(), buf: *ByteBuffer, prefilled: ?*const Value) !*Object {

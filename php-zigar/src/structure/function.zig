@@ -85,7 +85,7 @@ pub const Function = struct {
             return this_obj.ce == arg_class.entry() and this_obj != arg_class.object;
         }
 
-        pub fn runCallback(self: *@This(), cache: *FunctionCallCache, arg_bytes: []u8, futex_handle: usize) !void {
+        pub fn runCallback(self: *@This(), call_cache: *FunctionCallCache, arg_bytes: []u8, futex_handle: usize) !void {
             // need to make a copy of the arguments, since arg_bytes are on the stack
             const arg_buffer = try ByteBuffer.create(self.argument_class.alignment);
             defer arg_buffer.release();
@@ -104,17 +104,17 @@ pub const Function = struct {
             defer if (args_allocated) php.allocator.free(args);
             try arg_struct.extractArguments(args);
             defer for (args) |*arg| php.release(arg);
-            const arg_info = cache.argumentInfo();
+            const arg_info = call_cache.argumentInfo();
             var named_args: ?*HashTable = null;
             try arg_struct.extractNamedArguments(arg_info, &named_args);
             defer if (named_args) |ht| php.release(ht);
-            cache.useNamedArguments(named_args);
+            call_cache.useNamedArguments(named_args);
             if (arg_struct.hasAsyncCallback()) {
                 // wake the calling thread prior to invoking the callback (which could potentially
                 // switch to a different fiber) when we have a promise or generator interface
                 CallDispatcher.releaseCallingThread(futex_handle, .SUCCESS);
             }
-            const result = cache.invoke(args) catch |err| get: {
+            const result = call_cache.invoke(args) catch |err| get: {
                 const ex = php.captureException() catch throw: {
                     _ = &php.throwError(err);
                     break :throw php.captureException() catch unreachable;
@@ -259,7 +259,7 @@ pub const Function = struct {
                 // if the argument struct has a function pointer, assume that the Zig code is retaining a copy of it
                 // or has released it already; mark it as detached in the PHP object so it doesn't get freed
                 try arg_struct.detachFunctionThunks();
-                return_value.* = get: {
+                const result = get: {
                     var retval = try arg_struct.getReturnValue();
                     if (arg_struct.flags.has_promise) {
                         const promise_struct = try arg_struct.getSpecialArgument(Promise);
@@ -291,6 +291,7 @@ pub const Function = struct {
                         break :get retval;
                     }
                 };
+                return_value.* = result;
             },
             .variadic_struct => {
                 const arg_struct = structure.VariadicStruct.fromObject(arg);

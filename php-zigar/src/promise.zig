@@ -4,7 +4,6 @@ const accessor = @import("accessor.zig");
 const Transform = accessor.Transform;
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
-const failure = @import("failure.zig");
 const php = @import("php.zig");
 const ArgumentIterator = php.ArgumentIterator;
 const ExecuteData = php.ExecuteData;
@@ -17,7 +16,6 @@ const String = php.String;
 const Value = php.Value;
 const structure = @import("structure.zig");
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
-const ZigObject = @import("object.zig").ZigObject;
 
 pub const Promise = struct {
     status: enum { unused, waiting, resolved, released } = .unused,
@@ -75,7 +73,8 @@ pub const Promise = struct {
                 return php.throwException(obj);
             }
         }
-        return self.result;
+        // it's up to the caller to dispose of the result
+        return php.reuse(&self.result).*;
     }
 
     pub fn resolve(self: *@This(), value: *Value) !void {
