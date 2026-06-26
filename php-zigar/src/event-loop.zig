@@ -181,7 +181,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
         handler_id: Value,
 
         pub fn init(self: *@This(), stream: *const Value) !void {
-            var func = php.createTransformedFunction(onReadable, "onReadable", 0, false);
+            var func = php.createTransformedFunction(handleOnReadable, "onReadable", 2, false);
             const closure = php.createValueClosure(&func, null, null, null);
             defer php.release(&closure);
             const class = php.createValueString(N("Revolt\\EventLoop"));
@@ -219,7 +219,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
             self.handler_id = try self.revolt_class_cache.method.onReadable.invoke(&.{ timeout, closure });
         }
 
-        pub fn onReadable(_: *ExecuteData, _: *Value) void {
+        pub fn handleOnReadable(_: *ExecuteData, _: *Value) void {
             cb();
         }
 
