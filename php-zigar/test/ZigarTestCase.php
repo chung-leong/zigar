@@ -62,3 +62,5 @@ function timeout($cb, $ms) {
        $cb();
    });
 }
+
+set_time_limit(0);

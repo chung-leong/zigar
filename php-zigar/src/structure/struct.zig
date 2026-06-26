@@ -602,7 +602,7 @@ pub const Struct = struct {
                 }
             },
             inline .promise, .generator, .abort_signal => |t| {
-                if (self.buffer.flags.contains_special_contents) {
+                if (self.buffer.flags.contains_special_contents and !php.isObjectFreed(obj)) {
                     const T = switch (t) {
                         .promise => Promise,
                         .generator => Generator,

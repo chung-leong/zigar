@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 const MemoryMap = @import("memory-map.zig").MemoryMap;
 const php = @import("php.zig");
@@ -54,6 +55,14 @@ pub const ByteBuffer = struct {
         false => []const u8,
         true => []u8,
     } {
+        if (builtin.mode == .Debug) {
+            if (self.ref_count == 0) {
+                var buffer: [128]u8 = undefined;
+                @panic(std.fmt.bufPrint(&buffer, "Accessing buffer that has already been freed: 0x{x}", .{
+                    @intFromPtr(self),
+                }) catch unreachable);
+            }
+        }
         if (self.flags.read_only and write_access) return error.WriteProtected;
         if (self.flags.uninitialized) return error.AccessingDeallocatedMemory;
         if (index > self.bytes.len) return error.OutOfBound;
