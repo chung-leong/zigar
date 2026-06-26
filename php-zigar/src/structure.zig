@@ -354,6 +354,10 @@ pub fn Parent(comptime S: type) type {
                 else => return php.FAILURE,
             };
             retval.* = try self.getValue(transform);
+            if (php.getValueType(retval) != desired_type) {
+                php.release(retval);
+                return php.FAILURE;
+            }
             return php.SUCCESS;
         }
 
@@ -583,18 +587,14 @@ pub fn ArrayLike(comptime S: type) type {
 
         pub fn getValue(self: *S, transform: accessor.Transform) !Value {
             switch (transform) {
-                .plain => {
-                    const len = self.getLength();
-                    const ht = php.createArray();
-                    for (0..len) |i| {
-                        var value = try self.getElement(i);
-                        try transform.apply(&value);
-                        _ = php.appendHashEntry(ht, &value);
-                    }
-                    return php.createValueArray(ht);
-                },
+                .plain => return try createPlainArray(self, transform),
                 .string => {
-                    if (!isString(self)) return error.Unsupported;
+                    if (!isString(self)) {
+                        if (S == Slice or S == Array) {
+                            return try createPlainArray(self, .string);
+                        }
+                        return error.Unsupported;
+                    }
                     const len = self.getLength();
                     const bytes = try self.buffer.data(0, false);
                     if (bytes.len == len) {
@@ -634,43 +634,58 @@ pub fn ArrayLike(comptime S: type) type {
             return Super.getValue(self, transform);
         }
 
+        fn createPlainArray(self: *S, elem_transform: accessor.Transform) !Value {
+            const len = self.getLength();
+            const ht = php.createArray();
+            for (0..len) |i| {
+                var value = try self.getElement(i);
+                try elem_transform.apply(&value);
+                _ = php.appendHashEntry(ht, &value);
+            }
+            return php.createValueArray(ht);
+        }
+
         pub fn setValue(self: *S, orig_value: *const Value, transform: accessor.Transform) Error!void {
             if (try copySelf(self, orig_value)) return;
             const value = &php.convertIterator(orig_value);
             defer php.release(value);
-            if (transform == .string) {
-                if (!isString(self)) return error.Unsupported;
-                const len = self.getLength();
-                const bytes = try self.buffer.data(0, true);
-                const str_bytes = try php.getValueStringContent(value);
-                const class = ZigClassEntry.fromStructure(self);
-                if (bytes.len == len) {
-                    const str_len = str_bytes.len;
-                    if (len != str_len) return failure.reportLengthMismatch(class, len, str_len);
-                    @memcpy(bytes, str_bytes);
-                } else if (bytes.len == len * 2) {
-                    const str_len = std.unicode.calcWtf16LeLen(str_bytes) catch return error.IncorrectEncoding;
-                    if (len != str_len) return failure.reportLengthMismatch(class, len, str_len);
-                    const wtf16_ptr: [*]u16 = @ptrCast(@alignCast(bytes.ptr));
-                    const wtf16_slice = wtf16_ptr[0..len];
-                    _ = std.unicode.wtf8ToWtf16Le(wtf16_slice, str_bytes) catch return error.IncorrectEncoding;
-                } else unreachable;
-                return;
-            } else if (transform == .none) {
-                if (isString(self) and php.getValueType(value) == .string) {
-                    return self.setValue(value, .string);
-                }
-                const ht = try php.getValueArray(value);
-                const len = self.getLength();
-                var iter: HashTableIterator = .init(ht, .{});
-                while (iter.next()) |field_value| {
-                    const key = iter.currentIndex() orelse return error.KeyIsNotInteger;
-                    if (key < 0) return error.NegativeIndex;
-                    const index: usize = @intCast(key);
-                    if (index >= len) return error.OutOfBound;
-                    try self.setElement(index, field_value);
-                }
-                return;
+            switch (transform) {
+                .string => {
+                    if (!isString(self)) return error.Unsupported;
+                    const len = self.getLength();
+                    const bytes = try self.buffer.data(0, true);
+                    const str_bytes = try php.getValueStringContent(value);
+                    const class = ZigClassEntry.fromStructure(self);
+                    if (bytes.len == len) {
+                        const str_len = str_bytes.len;
+                        if (len != str_len) return failure.reportLengthMismatch(class, len, str_len);
+                        @memcpy(bytes, str_bytes);
+                    } else if (bytes.len == len * 2) {
+                        const str_len = std.unicode.calcWtf16LeLen(str_bytes) catch return error.IncorrectEncoding;
+                        if (len != str_len) return failure.reportLengthMismatch(class, len, str_len);
+                        const wtf16_ptr: [*]u16 = @ptrCast(@alignCast(bytes.ptr));
+                        const wtf16_slice = wtf16_ptr[0..len];
+                        _ = std.unicode.wtf8ToWtf16Le(wtf16_slice, str_bytes) catch return error.IncorrectEncoding;
+                    } else unreachable;
+                    return;
+                },
+                .none => {
+                    if (isString(self) and php.getValueType(value) == .string) {
+                        return self.setValue(value, .string);
+                    }
+                    const ht = try php.getValueArray(value);
+                    const len = self.getLength();
+                    var iter: HashTableIterator = .init(ht, .{});
+                    while (iter.next()) |field_value| {
+                        const key = iter.currentIndex() orelse return error.KeyIsNotInteger;
+                        if (key < 0) return error.NegativeIndex;
+                        const index: usize = @intCast(key);
+                        if (index >= len) return error.OutOfBound;
+                        try self.setElement(index, field_value);
+                    }
+                    return;
+                },
+                else => {},
             }
             return Super.setValue(self, value, transform);
         }

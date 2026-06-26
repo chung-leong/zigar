@@ -94,4 +94,19 @@ final class MetaTypesTest extends ZigarTestCase
             'number2' => 1234,            
         ], $result);
     }
+
+    public function testHandleArrayAndSliceOfStrings(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/slice-of-strings.zig');
+        $this->assertEquals([
+            "Agnieszka",
+            "Basia",
+            "Carmen",
+        ], $m->names);
+        $this->assertEquals([
+            "Agnieszka",
+            "Basia",
+        ], $m->getNames());
+    }
+
 }

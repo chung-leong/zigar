@@ -8,11 +8,13 @@ $m = zigar_use(__DIR__ . '/scratch.zig');
 // $number = $m->getNumber();
 // echo "$number\n";
 
-$numbers = $m->getNumbers();
-print_r($numbers);
+// $numbers = $m->getNumbers();
+// print_r($numbers);
 
-// $list = $m->getList();
-// echo "Got list\n";
-// print_r($list);
+$list = $m->getList();
+debug_zval_dump($list);
 
 $m->shutdown();
+
+print_r($m->names);
+print_r($m->getNames());

@@ -952,9 +952,9 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .pointer => |pt| switch (pt.size) {
                     .one => canBeString(pt.child),
                     .many, .c => if (pt.sentinel_ptr != null) pt.child == u8 or pt.child == u16 else false,
-                    .slice => pt.child == u8 or pt.child == u16,
+                    .slice => pt.child == u8 or pt.child == u16 or canBeString(pt.child),
                 },
-                .array => |pt| pt.child == u8 or pt.child == u16,
+                .array => |ar| ar.child == u8 or ar.child == u16 or canBeString(ar.child),
                 .optional => |op| canBeString(op.child),
                 .error_union => |eu| canBeString(eu.payload),
                 .@"fn" => |f| inline for (f.params) |param| {

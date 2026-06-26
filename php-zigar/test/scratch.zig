@@ -28,8 +28,18 @@ pub const getList = work_queue.promisify(worker.getList);
 pub const getNumber = work_queue.promisify(worker.getNumber);
 pub const getNumbers = work_queue.promisify(worker.getNumbers);
 
+pub const names: []const []const u8 = &.{
+    "Agnieszka",
+    "Basia",
+    "Carmen",
+};
+
+pub fn getNames() []const []const u8 {
+    return names;
+}
+
 pub const @"meta(zigar)" = struct {
-    pub fn isFieldString(comptime T: type, comptime _: std.meta.FieldEnum(T)) bool {
+    pub fn isDeclString(comptime T: type, comptime _: std.meta.DeclEnum(T)) bool {
         return true;
     }
 };
