@@ -3674,6 +3674,7 @@ var callMarshalingInbound = mixin({
       value() {
         let options;
         let allocatorCount = 0, callbackCount = 0, signalCount = 0;
+        let generatorAlloc;
         const args = [];
         for (const [ srcIndex, { structure, type } ] of members.entries()) {
           // error unions will throw on access, in which case we pass the error as the argument
@@ -3700,6 +3701,8 @@ var callMarshalingInbound = mixin({
                   optName = 'callback';
                   if (++callbackCount === 1) {
                     opt = thisEnv.createGeneratorCallback(this, arg);
+                    // put allocator from the generator into the options object when there's one
+                    generatorAlloc = arg.allocator;
                   }
                   break;
                 case StructurePurpose.AbortSignal:
@@ -3724,6 +3727,9 @@ var callMarshalingInbound = mixin({
           }
         }
         if (options) {
+          if (generatorAlloc) {
+            options.allocator = generatorAlloc;
+          }
           args.push(options);
         }
         return args[Symbol.iterator]();
@@ -5503,33 +5509,25 @@ var abortSignal = mixin({
 var allocator = mixin({
   init() {
     this.defaultAllocator = null;
-    this.allocatorVtable =  null;
     this.allocatorContextMap = new Map();
     this.nextAllocatorContextId = usize(0x1000);
   },
   createDefaultAllocator(args, structure) {
-    let allocator = this.defaultAllocator;
-    if (!allocator) {
-      allocator = this.defaultAllocator = this.createJsAllocator(args, structure, false);
-    }
-    return allocator;
+    return this.defaultAllocator ??= this.createJsAllocator(args, structure, false);
   },
   createJsAllocator(args, structure, resettable) {
     const { constructor: Allocator } = structure;
-    let vtable = this.allocatorVtable;
-    if (!vtable) {      
-      const { noResize, noRemap } = Allocator;
-      vtable = this.allocatorVtable = {
-        alloc: this.allocateHostMemory.bind(this),
-        free: this.freeHostMemory.bind(this),
-        resize: noResize,
-      };
-      if (noRemap) {
-        vtable.remap = noRemap;
-      }
-      this.destructors.push(() => this.freeFunction(vtable.alloc));
-      this.destructors.push(() => this.freeFunction(vtable.free));
+    const { noResize, noRemap } = Allocator;
+    const vtable = {
+      alloc: this.allocateHostMemory.bind(this),
+      free: this.freeHostMemory.bind(this),
+      resize: noResize,
+    };
+    if (noRemap) {
+      vtable.remap = noRemap;
     }
+    this.destructors.push(() => this.freeFunction(vtable.alloc));
+    this.destructors.push(() => this.freeFunction(vtable.free));
     let contextId = usizeMax;
     if (resettable) {
       // create list used to clean memory allocated for generator
@@ -5685,7 +5683,7 @@ var generator = mixin({
     }
     args[RETURN] = result => callback(ptr, result);
     const generator = { ptr, callback };
-    const allocatorMember = members.find(m => m.name === 'allocator');
+    const allocatorMember = members.find(m => m.purpose === StructurePurpose.Allocator);
     if (allocatorMember) {
       const { structure } = allocatorMember;     
       generator.allocator = this.createJsAllocator(args, structure, true);
@@ -8476,6 +8474,23 @@ var sentinel = mixin({
   } ),
 });
 
+var stringArray = mixin({
+  defineStringArray(structure) {
+    return markAsSpecial({
+      get() {
+        const array = [];
+        for (const child of this) {
+          array.push(child.string);
+        }
+        return array;
+      },
+      set(array, allocator) {
+        this[INITIALIZE](array, allocator);
+      },
+    });
+  },
+});
+
 var string = mixin({
   defineString(structure) {
     const thisEnv = this;
@@ -9123,6 +9138,27 @@ var arrayLike = mixin({
     };
     return { value };
   },
+  hasStringProperty(structure) {
+    switch (structure.type) {
+      case StructureType.Array:
+        if (structure.flags & ArrayFlag.IsString) {
+          return true;
+        }
+      case StructureType.Slice:
+        if (structure.flags & SliceFlag.IsString) {
+          return true;
+        }
+    }
+    switch (structure.type) {
+      case StructureType.Array:
+      case StructureType.Slice:
+      case StructureType.Optional:
+      case StructureType.ErrorUnion:
+      case StructureType.Pointer:
+        return this.hasStringProperty(structure.instance.members[0].structure);
+    }  
+    return false;
+  }  
 });
 
 var array = mixin({
@@ -9178,6 +9214,9 @@ var array = mixin({
       if (flags & ArrayFlag.IsClampedArray) {
         descriptors.clampedArray = this.defineClampedArray(structure);
       }
+    }
+    if (!(flags & ArrayFlag.IsString) && this.hasStringProperty(structure)) {
+      descriptors.string = this.defineStringArray(structure);
     }
     descriptors[Symbol.iterator] = this.defineArrayIterator();
     descriptors[INITIALIZE] = defineValue(initializer);
@@ -10285,6 +10324,9 @@ var slice = mixin({
         descriptors.clampedArray = this.defineClampedArray(structure);
       }
     }
+    if (!(flags & SliceFlag.IsString) && this.hasStringProperty(structure)) {
+      descriptors.string = this.defineStringArray(structure);
+    }
     descriptors.entries = descriptors[ENTRIES] = this.defineArrayEntries();
     descriptors.subarray = {
       value(begin, end) {
@@ -11141,6 +11183,7 @@ var mixins = /*#__PURE__*/Object.freeze({
   MemberRetval: retval,
   MemberSentinel: sentinel,
   MemberString: string,
+  MemberStringArray: stringArray,
   MemberToJson: toJson,
   MemberType: type,
   MemberTypedArray: typedArray,

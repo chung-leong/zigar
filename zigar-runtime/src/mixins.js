@@ -53,6 +53,7 @@ export { default as MemberObject } from './members/object.js';
 export { default as MemberPrimitive } from './members/primitive.js';
 export { default as MemberRetval } from './members/retval.js';
 export { default as MemberSentinel } from './members/sentinel.js';
+export { default as MemberStringArray } from './members/string-array.js';
 export { default as MemberString } from './members/string.js';
 export { default as MemberToJson } from './members/to-json.js';
 export { default as MemberType } from './members/type.js';
