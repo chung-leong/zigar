@@ -48,6 +48,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
             self.timer = try .start();
             self.timeouts = .empty;
             // star the loop fiber
+            self.in_loop = true;
             _ = try self.fiber_cache.method.start.invoke(&.{});
         }
 
@@ -79,6 +80,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
         }
 
         pub fn suspendLoop(self: *@This()) !void {
+            self.in_loop = false;
             _ = try self.fiber_class_cache.method.@"suspend".invoke(&.{});
         }
 
@@ -88,7 +90,6 @@ pub fn EventLoop(comptime cb: fn () void) type {
             }
             self.in_loop = true;
             _ = try self.fiber_cache.method.@"resume".invoke(&.{});
-            self.in_loop = false;
         }
 
         pub fn addTimeout(self: *@This(), seconds: f64, signal: *AbortSignal) !void {
@@ -140,7 +141,11 @@ pub fn EventLoop(comptime cb: fn () void) type {
             const except_fds = php.createValueReference(&php.createValueNull());
             defer php.release(&except_fds);
             // wait for activation by main fiber
-            self.suspendLoop() catch unreachable;
+            self.suspendLoop() catch {
+                // main fiber has exited already
+                self.terminated = true;
+                return;
+            };
             const stream_select_name = php.createValueString(N("stream_select"));
             var stream_select_cache = FunctionCallCache.init(&stream_select_name) catch {
                 @panic("stream_select() is not available");
@@ -297,6 +302,13 @@ pub fn EventLoop(comptime cb: fn () void) type {
             switch (self.loop) {
                 inline else => |*impl| impl.deinit(),
             }
+        }
+
+        pub fn isProper(self: *@This()) bool {
+            return switch (self.loop) {
+                .temporary => false,
+                else => true,
+            };
         }
 
         pub fn getFiber(self: *@This()) !Value {

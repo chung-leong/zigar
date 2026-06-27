@@ -1255,6 +1255,11 @@ pub fn reuse(value: anytype) @TypeOf(value) {
     return value;
 }
 
+pub fn inResourceCleanup() bool {
+    const eg = getExecutorGlobals();
+    return (eg.flags & c.EG_FLAGS_IN_SHUTDOWN) != 0;
+}
+
 pub fn isObjectFreed(obj: *Object) bool {
     return (obj.gc.u.type_info & c.IS_OBJ_FREE_CALLED) != 0;
 }

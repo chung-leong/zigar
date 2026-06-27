@@ -274,6 +274,11 @@ pub const Function = struct {
                             // wait for promise to resolve when there's no callback function
                             break :get try promise.await();
                         } else {
+                            if (!CallDispatcher.event_loop.isProper()) {
+                                return failure.report("callback functions cannot be used without a proper event loop", .{});
+                            }
+                            // bump ref count and instruct the promise to release itself when the callback is invoked
+                            promise.detach();
                             break :get php.createValueNull();
                         }
                     } else if (arg_struct.flags.has_generator) {

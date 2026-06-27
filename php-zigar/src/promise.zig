@@ -18,7 +18,7 @@ const structure = @import("structure.zig");
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 
 pub const Promise = struct {
-    status: enum { unused, waiting, resolved, released } = .unused,
+    status: enum { unused, waiting, resolved, detached, released } = .unused,
     fiber: Value,
     result: Value,
     callback: ?Value,
@@ -42,7 +42,7 @@ pub const Promise = struct {
     }
 
     pub fn release(self: *@This()) void {
-        if (self.status != .resolved and self.status != .unused) {
+        if (self.status != .resolved and self.status != .unused and self.status != .detached) {
             // preserve the promise object until the callback is called
             self.status = .released;
             return;
@@ -57,6 +57,12 @@ pub const Promise = struct {
         }
         // this needs to happen last, since self points to the memory in the buffer
         self.buffer.release();
+    }
+
+    pub fn detach(self: *@This()) void {
+        std.debug.assert(self.callback != null);
+        self.status = .detached;
+        self.buffer.addRef();
     }
 
     pub fn await(self: *@This()) !Value {
@@ -88,13 +94,14 @@ pub const Promise = struct {
             else => {},
         }
         self.result = php.reuse(value).*;
-        self.status = .resolved;
         if (self.transform) |tm| try tm.apply(&self.result);
-        if (self.callback != null) {
-            defer php.release(&self.result);
+        if (self.status == .detached) {
+            defer self.release();
             const args: []Value = @ptrCast(&self.result);
             const retval = try self.callback_cache.invoke(args);
             php.release(&retval);
+        } else {
+            self.status = .resolved;
         }
     }
 
