@@ -5,6 +5,24 @@ final class FunctionHandlingTest extends ZigarTestCase
     public function testImportFunctionAsStaticVariables(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-static-variables.zig');
+        $this->assertTrue(is_callable($m->func));
+
+        $this->expectOutputString(<<<OUTPUT
+        hello
+        world
+        Hello world
+
+        OUTPUT);
+
+        $m->func();
+        $m->func = $m->world;
+        $m->func();
+
+        $this->assertTrue(is_callable($m->hello));
+        $this->assertTrue(is_callable($m->hello2));
+        $this->assertTrue(is_callable($m->hello3));
+        $this->assertTrue(is_callable($m->{" \nthis is a totally weird function name!! :-)"}));
+        $m->{" \nthis is a totally weird function name!! :-)"}();
     }
 
     public function testIgnoreFunctionAcceptingFunction(): void

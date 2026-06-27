@@ -129,17 +129,27 @@ pub fn Class(comptime S: type) type {
             defer php.release(&field);
             const field_obj = php.getValueObject(&field) catch return null;
             const field_class = ZigClassEntry.fromObject(field_obj);
-            if (field_class.type == .function) {
-                const func_struct = structure.Function.fromObject(field_obj);
+            if (field_obj == field_class.object) {
+                // field is a type--it's being used as a casting operator
+                const class_struct = fromObject(field_obj);
+                return &class_struct.closure.php_portion;
+            } else {
+                const func_obj = switch (field_class.type) {
+                    .function => field_obj,
+                    .pointer => deref: {
+                        const ptr_struct = structure.Pointer.fromObject(field_obj);
+                        const target_obj = ptr_struct.getTarget() catch return null;
+                        const target_class = ZigClassEntry.fromObject(target_obj);
+                        if (target_class.type != .function) return null;
+                        break :deref target_obj;
+                    },
+                    else => return null,
+                };
+                const func_struct = structure.Function.fromObject(func_obj);
                 const func = &func_struct.closure.php_portion;
                 func.internal_function.function_name = name;
                 return func;
-            } else if (field_obj.handlers.*.get_closure != php.getStandardObjectHandler(.get_closure)) {
-                // aside from Function, only Class implements getClosure()
-                const class_struct = fromObject(field_obj);
-                return &class_struct.closure.php_portion;
             }
-            return null;
         }
 
         pub fn getClosure(obj: *Object, _: *[*c]ClassEntry, fn_ptr: *[*c]Function, _: *[*c]Object, _: bool) c_int {

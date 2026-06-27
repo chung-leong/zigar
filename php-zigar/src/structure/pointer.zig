@@ -7,15 +7,13 @@ const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const failure = @import("../failure.zig");
 const Error = failure.Error;
 const js_compat = @import("../js-compat.zig");
-const ArrayBuffer = js_compat.ArrayBuffer;
 const TypedArrayOf = js_compat.TypedArrayOf;
 const TypedArray = js_compat.TypedArray;
-const ZigObject = @import("../object.zig").ZigObject;
 const getObjectBuffer = @import("../object.zig").getObjectBuffer;
 const php = @import("../php.zig");
-const HashTable = php.HashTable;
+const ClassEntry = php.ClassEntry;
+const Function = php.Function;
 const Object = php.Object;
-const ObjectIterator = php.ObjectIterator;
 const String = php.String;
 const Value = php.Value;
 const structure = @import("../structure.zig");
@@ -332,6 +330,18 @@ pub const Pointer = struct {
 
     pub fn getChildObject(self: *@This()) ?*Object {
         return self.getTarget() catch return null;
+    }
+
+    pub fn getClosure(obj: *Object, ce: *[*c]ClassEntry, func: *[*c]Function, this: ?*[*c]Object, _: bool) c_int {
+        const self = Super.fromObject(obj);
+        const target_obj = self.getTarget() catch return php.FAILURE;
+        const target_class = ZigClassEntry.fromObject(target_obj);
+        if (target_class.type != .function) return php.FAILURE;
+        const func_struct = structure.Function.fromObject(target_obj);
+        func.* = &func_struct.closure.php_portion;
+        ce.* = target_obj.ce;
+        if (this) |ptr| ptr.* = null;
+        return php.SUCCESS;
     }
 
     pub fn compare(a: *Value, b: *Value) !c_int {
