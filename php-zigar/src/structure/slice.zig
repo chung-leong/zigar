@@ -215,7 +215,7 @@ pub const Slice = struct {
             defer buf.release();
             try buf.allocate(allocator, content_len + sentinel_bytes.len);
             @memcpy(buf.bytes[content_len..], sentinel_bytes);
-            self.buffer.referenceBuffer(buf, 0, content_len);
+            self.buffer.referenceBytes(buf.bytes[0..content_len], buf);
         } else {
             try self.buffer.allocate(allocator, content_len);
         }

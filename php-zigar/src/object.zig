@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
-const MemoryMap = @import("memory-map.zig").MemoryMap;
+const memory_map = @import("memory-map.zig");
 const php = @import("php.zig");
 const ClassEntry = php.ClassEntry;
 const HashTable = php.HashTable;
@@ -9,7 +9,6 @@ const ObjectHandlers = php.ObjectHandlers;
 const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
-const RelativePosition = @import("memory-map.zig").RelativePosition;
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 
 pub fn ZigObject(comptime S: type) type {
@@ -30,11 +29,6 @@ pub fn ZigObject(comptime S: type) type {
         pub inline fn fromObject(obj: *Object) *@This() {
             return @fieldParentPtr("php_portion", obj);
         }
-
-        // pub fn fromValue(value: *const Value) !*@This() {
-        //     const obj = try php.getValueObject(value);
-        //     return fromObject(obj);
-        // }
 
         pub inline fn fromStructure(s: *S) *@This() {
             return @alignCast(@fieldParentPtr("zig_portion", s));
@@ -82,124 +76,79 @@ pub fn ZigObject(comptime S: type) type {
 pub const ObjectMap = struct {
     map: Map = .{},
 
-    const Map = MemoryMap(*Object, php.allocator, compareObjects);
-    const SearchResult = Map.SearchResult;
+    const Map = memory_map.MemoryMap(*Object, php.allocator, compare);
+    const SearchResult = memory_map.SearchResult;
+    const RelativePosition = memory_map.RelativePosition;
 
     pub fn deinit(self: *@This()) void {
         self.map.deinit();
-    }
-
-    pub fn add(self: *@This(), obj: *Object) !void {
-        const buf = getObjectBuffer(obj);
-        std.debug.assert(!buf.flags.uninitialized and !buf.flags.transient);
-        try self.map.add(obj);
     }
 
     pub fn insert(self: *@This(), result: SearchResult, obj: *Object) !void {
         try self.map.insert(result, obj);
     }
 
-    pub fn remove(self: *@This(), obj: *Object) bool {
-        const buf = getObjectBuffer(obj);
-        std.debug.assert(!buf.flags.uninitialized and !buf.flags.transient);
-        return self.map.remove(obj);
+    pub fn remove(self: *@This(), result: SearchResult) void {
+        self.map.remove(result);
     }
 
-    pub fn search(self: *@This(), bytes: []const u8, class: *ZigClassEntry, read_only: bool) SearchResult {
-        return self.map.search(.{ .bytes = bytes, .class = class, .read_only = read_only });
+    pub fn get(self: *@This(), result: SearchResult) ?*Object {
+        return self.map.get(result);
     }
 
-    pub fn freeBuffer(self: *@This(), bytes: []const u8) void {
-        // mark all buffers within the given range as freed; only the one
-        // that performed the allocation will free the actual memory (that
-        // should be the one that yields .yes)
-        while (true) {
-            const result = self.map.search(.{ .bytes = bytes });
-            switch (result.match) {
-                .yes, .inside => {
-                    const buf = getObjectBuffer(result.value());
-                    buf.free();
-                },
-                else => break,
-            }
+    pub fn getBuffer(self: *@This(), result: SearchResult) ?*ByteBuffer {
+        const obj = self.map.get(result) orelse return null;
+        return getObjectBuffer(obj);
+    }
+
+    pub fn getNearestBuffer(self: *@This(), result: SearchResult) ?*ByteBuffer {
+        const nearest = self.map.getNearest(result) orelse return null;
+        return getObjectBuffer(nearest);
+    }
+
+    pub fn find(self: *@This(), b: anytype) SearchResult {
+        return self.map.find(b);
+    }
+
+    pub fn free(self: *@This(), b: anytype) void {
+        var result = self.map.findFirst(b);
+        while (self.map.get(result)) |obj| {
+            const buf = getObjectBuffer(obj);
+            buf.free();
+            self.remove(result);
+            result = self.map.findAgain(b, result);
         }
     }
 
-    pub fn acquireBuffer(self: *@This(), bytes: []const u8, alignment: std.mem.Alignment, read_only: bool) !?*ByteBuffer {
-        const result = self.map.search(.{ .bytes = bytes, .read_only = read_only });
-        switch (result.match) {
-            .yes, .outside => {
-                var buf = getObjectBuffer(result.value());
-                while (true) {
-                    if (buf.bytes.ptr == bytes.ptr and buf.bytes.len == bytes.len) {
-                        if (buf.flags.read_only == read_only) {
-                            buf.addRef();
-                            return buf;
-                        }
-                    }
-                    // try the parent buffer if there's one
-                    if (buf.getParent()) |p_buf| {
-                        buf = p_buf;
-                    } else break;
-                }
-                const offset = @intFromPtr(bytes.ptr) - @intFromPtr(buf.bytes.ptr);
-                const len = bytes.len;
-                buf = try buf.slice(offset, len, alignment, 0);
-                if (read_only) buf.protect();
-                return buf;
-            },
-            else => return null,
-        }
-    }
-
-    fn compareObjects(a: *const Object, b: anytype) RelativePosition {
-        const B = @TypeOf(b);
-        if (B == *Object) {
-            if (a.handle == b.handle) return .a_is_b;
+    pub fn compareBuffer(a: *const Object, b: anytype) ?RelativePosition {
+        switch (@TypeOf(b)) {
+            *Object, *const Object => if (a == b) return null,
+            else => {},
         }
         const a_buf = getObjectBuffer(a);
-        const b_buf = if (B == *Object) getObjectBuffer(b) else {};
-        const b_bytes = if (@TypeOf(b_buf) != void) b_buf.bytes else b.bytes;
-        // get class entry from B
-        const b_ce = if (@typeInfo(B) == .@"struct" and @hasField(B, "class"))
-            b.class.entry()
-        else if (B == *Object)
-            b.ce
-        else {};
-        // get read-only flag from B
-        const b_ro = if (@typeInfo(B) == .@"struct" and @hasField(B, "read_only"))
-            b.read_only
-        else if (@TypeOf(b_buf) != void)
-            b_buf.flags.read_only
-        else {};
-        return switch (a_buf.compare(.{ .bytes = b_bytes })) {
-            .a_is_b => switch (compare(a.ce, b_ce)) {
-                .a_is_b => compare(a_buf.flags.read_only, b_ro),
-                else => |pos| pos,
-            },
-            else => |pos| check: {
-                if (@TypeOf(b_ce) == void) {
-                    if (a_buf.getParent()) |p_buf| {
-                        switch (p_buf.compare(.{ .bytes = b_bytes })) {
-                            .a_is_b, .a_inside_b, .b_inside_a => |p_pos| {
-                                break :check p_pos;
-                            },
-                            else => {},
-                        }
-                    }
-                }
-                break :check pos;
-            },
+        const b_buf = switch (@TypeOf(b)) {
+            *Object, *const Object => getObjectBuffer(b),
+            else => b,
         };
+        return a_buf.compare(b_buf);
     }
 
-    fn compare(a: anytype, b: anytype) RelativePosition {
-        if (@TypeOf(b) == void or a == b) return .a_is_b;
-        if (@TypeOf(b) == bool) {
-            return if (b) .a_before_b else .b_before_a;
-        } else {
-            return if (a < b) .a_before_b else .b_before_a;
-        }
+    pub fn compareClass(a: *const Object, b: anytype) ?RelativePosition {
+        const b_ce = if (comptime hasField(@TypeOf(b), "ce")) b.ce else return null;
+        if (@intFromPtr(a.ce) < @intFromPtr(b_ce)) return .ab;
+        if (@intFromPtr(a.ce) > @intFromPtr(b_ce)) return .ba;
+        return null;
+    }
+
+    pub fn compare(a: *const Object, b: anytype) ?RelativePosition {
+        return compareBuffer(a, b) orelse compareClass(a, b);
+    }
+
+    fn hasField(comptime T: type, comptime name: []const u8) bool {
+        return switch (@typeInfo(T)) {
+            .pointer => |pt| hasField(pt.child, name),
+            else => @hasField(T, name),
+        };
     }
 };
 

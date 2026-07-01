@@ -1,13 +1,12 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const MemoryMap = @import("memory-map.zig").MemoryMap;
+const memory_map = @import("memory-map.zig");
 const php = @import("php.zig");
 const ClassEntry = php.ClassEntry;
 const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
-const RelativePosition = @import("memory-map.zig").RelativePosition;
 
 pub const ByteBuffer = struct {
     bytes: []u8 = undefined,
@@ -50,6 +49,7 @@ pub const ByteBuffer = struct {
         address: usize,
         len: usize = 1,
     };
+    pub const RelativePosition = memory_map.RelativePosition;
 
     pub fn data(self: *@This(), index: usize, comptime write_access: bool) !switch (write_access) {
         false => []const u8,
@@ -130,19 +130,25 @@ pub const ByteBuffer = struct {
         if (read_only) self.flags.read_only = true;
     }
 
-    pub fn referenceExternal(self: *@This(), bytes: []const u8) void {
+    pub fn referenceBytes(self: *@This(), bytes: []const u8, possible_parent: ?*@This()) void {
         std.debug.assert(self.flags.uninitialized);
         defer self.flags.uninitialized = false;
         self.bytes = @constCast(bytes);
-    }
-
-    pub fn referenceBuffer(self: *@This(), parent: *@This(), offset: usize, len: usize) void {
-        std.debug.assert(self.flags.uninitialized);
-        defer self.flags.uninitialized = false;
-        self.bytes = parent.bytes[offset .. offset + len];
-        self.source_type = .buffer;
-        self.source = .{ .buffer = parent };
-        parent.addRef();
+        if (possible_parent) |pp| {
+            const base = pp.getBase();
+            const base_start_addr = @intFromPtr(base.bytes.ptr);
+            const base_end_addr = base_start_addr + base.bytes.len;
+            const start_addr = @intFromPtr(bytes.ptr);
+            const end_addr = start_addr + bytes.len;
+            if (base_start_addr <= start_addr and end_addr <= base_end_addr) {
+                self.flags = base.flags.assign(.{ .has_allocator = false, .read_only = false });
+                if (pp.source_type != .none) {
+                    self.source_type = .buffer;
+                    self.source = .{ .buffer = base };
+                    base.addRef();
+                }
+            }
+        }
     }
 
     pub fn externalize(self: *@This()) bool {
@@ -168,30 +174,17 @@ pub const ByteBuffer = struct {
         while (src_buf.source_type == .buffer) {
             src_buf = src_buf.source.buffer;
         }
-        src_buf.addRef();
         new.* = .{
             .bytes = @constCast(slice_bytes),
             .alignment = slice_alignment,
             .bit_offset = slice_bit_offset,
             .flags = self.flags.assign(.{ .has_allocator = false }),
-            .source_type = .buffer,
-            .source = .{ .buffer = src_buf },
         };
-        return new;
-    }
-
-    pub fn duplciate(self: *@This()) !*@This() {
-        const bytes = try self.data(0, false);
-        const new = try php.allocator.create(@This());
-        new.* = .{
-            .bytes = bytes,
-            .alignment = self.alignment,
-            .bit_offset = self.bit_offset,
-            .flags = self.flags.assign(.{ .has_allocator = false }),
-            .source_type = .buffer,
-            .source = .{ .buffer = self },
-        };
-        self.addRef();
+        if (src_buf.source_type != .none) {
+            new.source_type = .buffer;
+            new.source = .{ .buffer = src_buf };
+            src_buf.addRef();
+        }
         return new;
     }
 
@@ -235,7 +228,7 @@ pub const ByteBuffer = struct {
     }
 
     pub fn free(self: *@This()) void {
-        self.flags.uninitialized = true;
+        // free memory associated with the buffer without freeing the buffer itself
         switch (self.source_type) {
             .allocator => {
                 self.source.allocator.rawFree(self.bytes, self.alignment, 0);
@@ -243,6 +236,7 @@ pub const ByteBuffer = struct {
             },
             else => {},
         }
+        self.flags = .{};
     }
 
     pub fn getBase(self: *const @This()) *@This() {
@@ -353,78 +347,82 @@ pub const ByteBuffer = struct {
         std.debug.print("\n", .{});
     }
 
-    pub fn compare(a: *const @This(), b: anytype) RelativePosition {
-        const a_start = @intFromPtr(a.bytes.ptr);
-        const a_end = a_start + a.bytes.len;
-        const b_start = @intFromPtr(b.bytes.ptr);
-        const b_end = b_start + b.bytes.len;
-        if (a_start < b_start) {
-            return if (a_end >= b_end)
-                .b_inside_a
-            else
-                .a_before_b;
-        } else if (a_start > b_start) {
-            return if (a_end <= b_end)
-                .a_inside_b
-            else
-                .b_before_a;
-        } else {
-            return if (a_end == b_end)
-                .a_is_b
-            else if (a_end <= b_end)
-                .a_inside_b
-            else
-                .b_inside_a;
+    pub fn compareAddress(a: *const @This(), b: anytype) ?RelativePosition {
+        if (@intFromPtr(a.bytes.ptr) < @intFromPtr(b.bytes.ptr)) return .ab;
+        if (@intFromPtr(a.bytes.ptr) > @intFromPtr(b.bytes.ptr)) return .ba;
+        return null;
+    }
+
+    pub fn compareLength(a: *const @This(), b: anytype) ?RelativePosition {
+        if (a.bytes.len < b.bytes.len) return .ab;
+        if (a.bytes.len > b.bytes.len) return .ba;
+        return null;
+    }
+
+    pub fn compareReadOnly(a: *const @This(), b: anytype) ?RelativePosition {
+        if (comptime hasField(@TypeOf(b), "flags")) {
+            if (a.flags.read_only and !b.flags.read_only) return .ab;
+            if (!a.flags.read_only and b.flags.read_only) return .ba;
         }
+        return null;
+    }
+
+    pub fn compareAlignment(a: *const @This(), b: anytype) ?RelativePosition {
+        if (comptime hasField(@TypeOf(b), "alignment")) {
+            if (@intFromEnum(a.alignment) < @intFromEnum(b.alignment)) return .ab;
+            if (@intFromEnum(a.alignment) > @intFromEnum(b.alignment)) return .ab;
+        }
+        return null;
+    }
+
+    pub fn compare(a: *const @This(), b: anytype) ?RelativePosition {
+        return compareAddress(a, b) orelse
+            compareLength(a, b) orelse
+            compareReadOnly(a, b) orelse
+            compareAlignment(a, b);
+    }
+
+    fn hasField(comptime T: type, comptime name: []const u8) bool {
+        return switch (@typeInfo(T)) {
+            .pointer => |pt| hasField(pt.child, name),
+            else => @hasField(T, name),
+        };
     }
 };
 
 pub const BufferMap = struct {
     map: Map = .{},
 
-    const Map = MemoryMap(*ByteBuffer, php.allocator, ByteBuffer.compare);
-    const SearchResult = Map.SearchResult;
+    const Map = memory_map.MemoryMap(*ByteBuffer, php.allocator, ByteBuffer.compare);
+    const SearchResult = memory_map.SearchResult;
 
     pub fn deinit(self: *@This()) void {
         for (self.map.list.items) |buf| buf.release();
         self.map.deinit();
     }
 
-    pub fn add(self: *@This(), len: usize, alignment: std.mem.Alignment) !*ByteBuffer {
-        const buf = try ByteBuffer.create(alignment);
-        try buf.allocate(null, len);
-        errdefer buf.release();
-        try self.map.add(buf);
-        try buf.clear();
-        return buf;
+    pub fn find(self: *@This(), b: anytype) SearchResult {
+        return self.map.find(b);
     }
 
-    pub fn claim(self: *@This(), bytes: []const u8, alignment: std.mem.Alignment) !?*ByteBuffer {
-        const result = self.map.search(.{ .bytes = bytes });
-        return switch (result.match) {
-            .yes => self.map.eject(result), // exact match
-            .outside => slice: {
-                // buffer contains the given bytes
-                const buf = self.map.eject(result);
-                defer buf.release();
-                const offset = @intFromPtr(bytes.ptr) - @intFromPtr(buf.bytes.ptr);
-                const len = bytes.len;
-                break :slice try buf.slice(offset, len, alignment, 0);
-            },
-            else => null,
-        };
+    pub fn get(self: *@This(), result: SearchResult) ?*ByteBuffer {
+        return self.map.get(result);
+    }
+
+    pub fn getNearest(self: *@This(), result: SearchResult) ?*ByteBuffer {
+        return self.map.getNearest(result);
+    }
+
+    pub fn insert(self: *@This(), result: SearchResult, buffer: *ByteBuffer) !void {
+        return try self.map.insert(result, buffer);
+    }
+
+    pub fn remove(self: *@This(), result: SearchResult) void {
+        return self.map.remove(result);
     }
 
     pub fn clear(self: *@This()) void {
         const buffers = self.map.items();
         for (buffers) |buf| buf.release();
-    }
-
-    pub fn free(self: *@This(), bytes: []const u8) bool {
-        const result = self.map.search(.{ .bytes = bytes });
-        if (result.match != .yes) return false;
-        const buf = self.map.eject(result);
-        buf.release();
-        return true;
     }
 };

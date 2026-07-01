@@ -7,6 +7,7 @@ pub const Error = error{
     AccessingDeallocatedMemory,
     AccessingMissingObject,
     CannotCreateObject,
+    CannotCloneObject,
     ComptimeValue,
     FailureReported,
     ExceptionThrown,

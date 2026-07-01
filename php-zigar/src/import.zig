@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const BufferMap = @import("buffer.zig").BufferMap;
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const Comptime = @import("structure.zig").Comptime;
 const Function = @import("structure.zig").Function;
@@ -19,6 +20,7 @@ const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 pub const StructureImporter = struct {
     value_list: std.ArrayList(Value),
     class_list: std.ArrayList(*Object),
+    buffer_map: BufferMap,
     structure_map: HashTable,
     counters: struct {
         @"struct": usize = 0,
@@ -41,6 +43,7 @@ pub const StructureImporter = struct {
         self.* = .{
             .value_list = value_list,
             .class_list = class_list,
+            .buffer_map = .{},
             .structure_map = php.createHashTable(null),
             .host = host,
         };
@@ -48,18 +51,11 @@ pub const StructureImporter = struct {
     }
 
     pub fn deinit(self: *@This()) void {
-        for (self.value_list.items) |*item| {
-            if (php.getValuePointer(*ByteBuffer, item) catch null) |b| {
-                b.release();
-            } else {
-                php.release(item);
-            }
-        }
-        for (self.class_list.items) |class_obj| {
-            php.release(class_obj);
-        }
+        for (self.value_list.items) |*item| php.release(item);
+        for (self.class_list.items) |class_obj| php.release(class_obj);
         self.value_list.deinit(php.allocator);
         self.class_list.deinit(php.allocator);
+        self.buffer_map.deinit();
         php.destroyHashTable(&self.structure_map);
         php.allocator.destroy(self);
     }
@@ -116,26 +112,49 @@ pub const StructureImporter = struct {
         return self.allocateHandle(value);
     }
 
-    pub fn createString(self: *@This(), bytes: [*]const u8, len: usize) !Handle {
-        const value = php.createValueStringContent(bytes[0..len]);
+    pub fn createString(self: *@This(), byte_ptr: [*]const u8, len: usize) !Handle {
+        const value = php.createValueStringContent(byte_ptr[0..len]);
         return self.allocateHandle(value);
     }
 
-    pub fn createView(self: *@This(), bytes: ?[*]const u8, len: usize, copying: bool, read_only: bool, _: usize, alignment: usize) !Handle {
-        if (!std.math.isPowerOfTwo(alignment)) return error.InvalidAlignment;
-        const buffer = try ByteBuffer.create(std.mem.Alignment.fromByteUnits(alignment));
-        if (bytes) |b| {
-            const slice = b[0..len];
+    pub fn createView(self: *@This(), byte_ptr: ?[*]const u8, len: usize, copying: bool, read_only: bool, _: usize, byte_align: usize) !Handle {
+        if (!std.math.isPowerOfTwo(byte_align)) return error.InvalidAlignment;
+        const alignment = std.mem.Alignment.fromByteUnits(byte_align);
+        const bytes = if (byte_ptr) |ptr| ptr[0..len] else &.{};
+        const buffer, const insertion_pos = get: {
             if (copying) {
-                try buffer.allocate(null, len);
-                try buffer.copyBytes(slice);
+                const buf = try ByteBuffer.create(alignment);
+                errdefer buf.release();
+                try buf.allocate(null, len);
+                try buf.copyBytes(bytes);
+                const result = self.buffer_map.find(.{
+                    .bytes = buf.bytes,
+                    .read_only = read_only,
+                    .alignment = alignment,
+                });
+                break :get .{ buf, result };
             } else {
-                buffer.referenceExternal(slice);
+                const result = self.buffer_map.find(.{
+                    .bytes = bytes,
+                    .read_only = read_only,
+                    .alignment = alignment,
+                });
+                if (self.buffer_map.get(result)) |buf| {
+                    // omit search result, since the buffer exists already
+                    break :get .{ buf, null };
+                }
+                const possible_parent = self.buffer_map.getNearest(result);
+                const buf = try ByteBuffer.create(alignment);
+                buf.referenceBytes(bytes, possible_parent);
+                errdefer buf.release();
+                // the map does not own the buffer
+                break :get .{ buf, result };
             }
-        } else {
-            buffer.referenceExternal(&.{});
+        };
+        if (insertion_pos) |pos| {
+            try self.buffer_map.insert(pos, buffer);
+            if (read_only) buffer.protect();
         }
-        if (read_only) buffer.protect();
         const value = php.createValuePointer(buffer);
         return self.allocateHandle(value);
     }
@@ -148,7 +167,7 @@ pub const StructureImporter = struct {
         const memory = self.dereference(dv_h);
         const buf = try php.getValuePointer(*ByteBuffer, memory);
         const prefilled_table = if (prefilled_table_h) |vh| self.dereference(vh) else null;
-        const instance = try class.createObjectFromBuffer(buf, prefilled_table);
+        const instance = try class.obtainObjectFromBuffer(buf, prefilled_table);
         const value = php.createValueObject(instance);
         return self.allocateHandle(value);
     }

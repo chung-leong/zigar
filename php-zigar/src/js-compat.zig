@@ -236,7 +236,7 @@ pub const ArrayBuffer = struct {
                 },
             }
         } else {
-            self.buffer.referenceExternal("");
+            self.buffer.referenceBytes(&.{}, null);
         }
     }
 
@@ -604,7 +604,7 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
                 }
             } else {
                 buf = try ByteBuffer.create(.@"1");
-                buf.referenceExternal("");
+                buf.referenceBytes(&.{}, null);
             }
             self.buffer = buf;
         }

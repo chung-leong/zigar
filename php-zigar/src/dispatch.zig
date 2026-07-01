@@ -82,10 +82,15 @@ pub const CallDispatcher = struct {
         class: *ZigClassEntry,
         callable: Value,
         cache: FunctionCallCache,
+        buffer: *ByteBuffer,
 
         pub fn deinit(self: *@This()) void {
             php.release(self.class.object);
             php.release(&self.callable);
+            // ByteBuffer.free() flags the contents of the buffer as invalid without
+            // releasing the buffer;
+            self.buffer.free();
+            self.buffer.release();
             self.cache.deinit();
         }
     };
@@ -192,23 +197,35 @@ pub const CallDispatcher = struct {
         redirection_controller.uninstallSignalHandler();
     }
 
-    pub fn createJsThunk(self: *@This(), class: *ZigClassEntry, callable: *Value) !usize {
-        const fn_id = try self.saveCallback(class, callable);
+    pub fn createJsThunk(self: *@This(), class: *ZigClassEntry, callable: *Value, buffer: *ByteBuffer) !void {
+        const fn_id = try self.saveCallback(class, callable, buffer);
         errdefer self.removeCallback(fn_id);
         const controller_address = try getControllerAddress(class);
         const exports = self.host.module.exports;
         var thunk_address: usize = 0;
         const result = exports.create_js_thunk(controller_address, fn_id, &thunk_address);
         if (result != .SUCCESS) return error.Failure;
-        return thunk_address;
+        const ptr: [*]const u8 = @ptrFromInt(thunk_address);
+        std.debug.assert(buffer.flags.uninitialized);
+        buffer.referenceBytes(ptr[0..0], null);
+        buffer.flags.contains_special_contents = true;
     }
 
-    pub fn destroyJsThunk(self: *@This(), class: *ZigClassEntry, thunk_address: usize) !void {
-        const controller_address = try getControllerAddress(class);
-        var fn_id: usize = 0;
-        const exports = self.host.module.exports;
-        if (exports.destroy_js_thunk(controller_address, thunk_address, &fn_id) == .SUCCESS) {
-            self.removeCallback(fn_id);
+    pub fn destroyJsThunk(self: *@This(), class: *ZigClassEntry, buffer: *ByteBuffer) !void {
+        if (!buffer.flags.uninitialized and buffer.flags.contains_special_contents) {
+            const controller_address = try getControllerAddress(class);
+            var fn_id: usize = 0;
+            const exports = self.host.module.exports;
+            const thunk_address = @intFromPtr(buffer.bytes.ptr);
+            if (exports.destroy_js_thunk(controller_address, thunk_address, &fn_id) == .SUCCESS) {
+                self.removeCallback(fn_id);
+            }
+        }
+    }
+
+    pub fn detachThunk(_: *@This(), buffer: *ByteBuffer) void {
+        if (buffer.flags.contains_special_contents) {
+            buffer.flags.contains_special_contents = false;
         }
     }
 
@@ -218,7 +235,7 @@ pub const CallDispatcher = struct {
         return if (controller_address != 0) controller_address else error.Unexpected;
     }
 
-    fn saveCallback(self: *@This(), class: *ZigClassEntry, callable: *Value) !usize {
+    fn saveCallback(self: *@This(), class: *ZigClassEntry, callable: *Value, buffer: *ByteBuffer) !usize {
         const cache = try FunctionCallCache.init(callable);
         const fn_id = self.next_function_id;
         self.next_function_id += 1;
@@ -227,9 +244,11 @@ pub const CallDispatcher = struct {
             .class = class,
             .callable = callable.*,
             .cache = cache,
+            .buffer = buffer,
         });
         php.addRef(callable);
         php.addRef(class.object);
+        buffer.addRef();
         return fn_id;
     }
 
@@ -242,6 +261,7 @@ pub const CallDispatcher = struct {
     fn removeCallback(self: *@This(), fn_id: usize) void {
         for (self.function_list.items, 0..) |*item, i| {
             if (item.id == fn_id) {
+                self.host.object_map.free(item.buffer);
                 item.deinit();
                 _ = self.function_list.swapRemove(i);
                 break;
@@ -253,7 +273,18 @@ pub const CallDispatcher = struct {
         // removal of the callback can cause the list to get deallocated
         // make a copy of it just in case
         var list = self.function_list;
-        for (list.items) |*item| item.deinit();
+        const exports = self.host.module.exports;
+        for (list.items) |*item| {
+            const buffer = item.buffer;
+            // destroy thunks that have been detached as well
+            if (!buffer.flags.uninitialized) {
+                const controller_address = getControllerAddress(item.class) catch continue;
+                var fn_id: usize = 0;
+                const thunk_address = @intFromPtr(buffer.bytes.ptr);
+                _ = exports.destroy_js_thunk(controller_address, thunk_address, &fn_id);
+            }
+            item.deinit();
+        }
         list.deinit(php.allocator);
     }
 

@@ -1766,7 +1766,8 @@ const allocator_impl = struct {
         _ = return_address;
         _ = alignment;
         std.debug.assert(len > 0);
-        return @ptrCast(emalloc(len, @src()));
+        const ptr = emalloc(len, @src());
+        return @ptrCast(ptr);
     }
 
     fn resize(

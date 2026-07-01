@@ -25,9 +25,32 @@ final class FunctionHandlingTest extends ZigarTestCase
         $m->{" \nthis is a totally weird function name!! :-)"}();
     }
 
-    public function testIgnoreFunctionAcceptingFunction(): void
+    public function testCallFunctionsPassedAsArguments(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
+        $m->call1($m->hello);
+        $m->call1($m->world);
+        $m->call1(function() {
+            echo "hello\n";
+            echo "world\n";
+        });
+        $this->expectOutputString(<<<OUTPUT
+        hello
+        world
+        hello
+        world
+
+        OUTPUT);
+        $dingo = false;
+        $f1 = new $m->Callback1(function() use(&$dingo) {
+            $dingo = true;
+        });
+        $m->call1($f1);
+        $this->assertTrue($dingo);
+        // $f1 is freed by call1()
+        $this->assertExceptionMessage('accessing deallocated memory', function() use($m, $f1) {
+            $m->call1($f1);
+        });
     }
 
     public function testIgnoreFunctionReturningFunction(): void

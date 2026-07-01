@@ -3,6 +3,7 @@ const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
 const BufferMap = @import("buffer.zig").BufferMap;
+const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
 const DynLib = @import("dyn-lib.zig").DynLib;
 const GarbageCollectionBuffer = @import("gc.zig").GarbageCollectionBuffer;
@@ -314,14 +315,40 @@ pub const ModuleHost = struct {
         }
     }
 
+    fn allocateMemory(host: *ModuleHost, len: usize, alignment: std.mem.Alignment) !*ByteBuffer {
+        const buf = try ByteBuffer.create(alignment);
+        errdefer buf.release();
+        try buf.allocate(null, len);
+        const result = host.unclaimed_buffer_map.find(buf);
+        try host.unclaimed_buffer_map.insert(result, buf);
+        return buf;
+    }
+
+    fn freeMemory(host: *ModuleHost, memory: []u8, alignment: std.mem.Alignment) void {
+        // try releasing buffer that has just been allocated
+        const unclaimed_result = host.unclaimed_buffer_map.find(.{
+            .bytes = memory,
+            .alignment = alignment,
+        });
+        if (host.unclaimed_buffer_map.get(unclaimed_result)) |buf| {
+            defer host.unclaimed_buffer_map.remove(unclaimed_result);
+            buf.release();
+        } else {
+            // failing that, look for a buffer that's being used by an object
+            // and free its memory, without releasing the buffer itself
+            // multiple objects can potentially be referencing the same memory range
+            host.object_map.free(.{ .bytes = memory });
+        }
+    }
+
     const allocator_methods = struct {
         fn alloc(
-            self: *ModuleHost,
+            host: *ModuleHost,
             len: usize,
             alignment: std.mem.Alignment,
             _: usize,
         ) ?[*]u8 {
-            const buf = self.unclaimed_buffer_map.add(len, alignment) catch return null;
+            const buf = host.allocateMemory(len, alignment) catch return null;
             return buf.bytes.ptr;
         }
 
@@ -336,29 +363,25 @@ pub const ModuleHost = struct {
         }
 
         fn remap(
-            self: *ModuleHost,
+            host: *ModuleHost,
             memory: []u8,
             alignment: std.mem.Alignment,
             new_len: usize,
             return_address: usize,
         ) ?[*]u8 {
-            if (resize(self, memory, alignment, new_len, return_address)) {
+            if (resize(host, memory, alignment, new_len, return_address)) {
                 return memory.ptr;
             }
             return null;
         }
 
         fn free(
-            self: *ModuleHost,
+            host: *ModuleHost,
             memory: []u8,
-            _: std.mem.Alignment,
+            alignment: std.mem.Alignment,
             _: usize,
         ) void {
-            // try releasing buffer that has just been allocated
-            if (!self.unclaimed_buffer_map.free(memory)) {
-                // failing that, look for a buffer that's being used by an object
-                self.object_map.freeBuffer(memory);
-            }
+            return host.freeMemory(memory, alignment);
         }
     };
 };

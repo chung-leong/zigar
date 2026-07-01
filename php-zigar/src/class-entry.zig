@@ -11,7 +11,6 @@ const accessor = @import("accessor.zig");
 const ArrayBuffer = @import("js-compat.zig").ArrayBuffer;
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const failure = @import("failure.zig");
-const GarbageCollectionBuffer = @import("gc.zig").GarbageCollectionBuffer;
 const getObjectBuffer = @import("object.zig").getObjectBuffer;
 const Host = @import("host.zig").ModuleHost;
 const php = @import("php.zig");
@@ -758,14 +757,19 @@ pub const ZigClassEntry = struct {
     }
 
     pub fn registerObject(self: *@This(), obj: *Object) !void {
-        try self.host.object_map.add(obj);
+        const buf = getObjectBuffer(obj);
+        std.debug.assert(!buf.flags.uninitialized and !buf.flags.transient);
+        const result = self.host.object_map.find(obj);
+        try self.host.object_map.insert(result, obj);
         // each instance needs a reference on the host, since the class object can be released
         // ahead of the instances during gc
         self.host.addRef();
     }
 
     pub fn unregisterObject(self: *@This(), obj: *Object) void {
-        if (self.host.object_map.remove(obj)) {
+        const result = self.host.object_map.find(obj);
+        if (result.found) {
+            self.host.object_map.remove(result);
             self.host.release();
         }
     }
@@ -797,9 +801,12 @@ pub const ZigClassEntry = struct {
         const parent_bytes = try parent_buf.data(offset + len, false);
         const bytes = parent_bytes[offset .. offset + len];
         // see if there's an existing object
-        const result = self.host.object_map.search(bytes, self, parent_buf.flags.read_only);
-        if (result.match == .yes) {
-            const obj = result.value();
+        const result = self.host.object_map.find(.{
+            .bytes = bytes,
+            .ce = self.entry(),
+            .flags = parent_buf.flags,
+        });
+        if (self.host.object_map.get(result)) |obj| {
             return php.reuse(obj);
         } else {
             // need to create the object
@@ -815,25 +822,40 @@ pub const ZigClassEntry = struct {
         const byte_ptr: [*]u8 = @ptrFromInt(address);
         const bytes = byte_ptr[0..len];
         // look for an existing object at that memory location
-        const result = self.host.object_map.search(bytes, self, is_const);
-        if (result.match == .yes) {
-            const obj = result.value();
+        const result = self.host.object_map.find(.{
+            .bytes = bytes,
+            .ce = self,
+            .flags = .{ .read_only = is_const },
+        });
+        if (self.host.object_map.get(result)) |obj| {
             return php.reuse(obj);
         } else {
             const buf = get: {
-                if (try self.host.unclaimed_buffer_map.claim(bytes, self.alignment)) |buf| {
-                    // use a buffer that has just been allocated
+                // look for buffer that has just been allocated
+                const unclaimed_result = self.host.unclaimed_buffer_map.find(.{
+                    .bytes = bytes,
+                });
+                if (self.host.unclaimed_buffer_map.get(unclaimed_result)) |buf| {
+                    defer self.host.unclaimed_buffer_map.remove(unclaimed_result);
                     if (is_const) buf.protect();
-                    break :get buf;
-                } else if (try self.host.object_map.acquireBuffer(bytes, self.alignment, is_const)) |buf| {
-                    // use a buffer that's attached to an existing object
                     break :get buf;
                 } else {
-                    // assume addresss is valid, pointing to memory somewhere inside the app's address space
-                    const buf = try ByteBuffer.create(self.alignment);
-                    buf.referenceExternal(bytes);
-                    if (is_const) buf.protect();
-                    break :get buf;
+                    // look for buffer that's attached to an existing object
+                    const existing_result = self.host.object_map.find(.{
+                        .bytes = bytes,
+                        .flags = .{ .read_only = is_const },
+                    });
+                    if (self.host.object_map.getBuffer(existing_result)) |buf| {
+                        buf.addRef();
+                        break :get buf;
+                    } else {
+                        // need to create a new buffer, possibly sub-section of an existing one
+                        const possible_parent = self.host.object_map.getNearestBuffer(existing_result);
+                        const buf = try ByteBuffer.create(self.alignment);
+                        buf.referenceBytes(bytes, possible_parent);
+                        if (is_const) buf.protect();
+                        break :get buf;
+                    }
                 }
             };
             defer buf.release();
@@ -841,14 +863,16 @@ pub const ZigClassEntry = struct {
         }
     }
 
-    pub fn obtainObjectFromBuffer(self: *@This(), buf: *ByteBuffer) !*Object {
-        const result = self.host.object_map.search(buf.bytes, self, buf.flags.read_only);
-        if (result.match == .yes) {
-            // need to bump the buffer's refcount, since that's what happens when a new object is created
-            buf.addRef();
-            return php.reuse(result.value());
+    pub fn obtainObjectFromBuffer(self: *@This(), buf: *ByteBuffer, prefilled: ?*const Value) !*Object {
+        const result = self.host.object_map.find(.{
+            .bytes = buf.bytes,
+            .ce = self.entry(),
+            .flags = buf.flags,
+        });
+        if (self.host.object_map.get(result)) |obj| {
+            return php.reuse(obj);
         } else {
-            return try self.createObjectFromBuffer(buf, null);
+            return try self.createObjectFromBuffer(buf, prefilled);
         }
     }
 

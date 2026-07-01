@@ -165,6 +165,8 @@ pub const Pointer = struct {
                         if (php.instanceOf(obj, target_class.entry())) {
                             // point to existing object
                             // TODO: check read-only flag
+                            const buf = getObjectBuffer(obj);
+                            if (buf.flags.uninitialized) return error.AccessingDeallocatedMemory;
                             break :init php.reuse(obj);
                         }
                         // only extract buffer from a TypedArray if it's compatible with the class
@@ -175,7 +177,7 @@ pub const Pointer = struct {
                                 });
                             }
                             try target_class.validateBuffer(buf);
-                            const new_obj = try target_class.obtainObjectFromBuffer(buf);
+                            const new_obj = try target_class.obtainObjectFromBuffer(buf, null);
                             break :init new_obj;
                         }
                         // TODO: deal with array -> slice cast

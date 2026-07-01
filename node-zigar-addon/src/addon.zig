@@ -860,11 +860,11 @@ const ModuleHost = struct {
         return try env.createStringUtf8(bytes[0..len]);
     }
 
-    fn createView(self: *@This(), bytes: ?[*]const u8, len: usize, copying: bool, read_only: bool, handle: usize, alignment: usize) !Value {
+    fn createView(self: *@This(), bytes: ?[*]const u8, len: usize, copying: bool, read_only: bool, handle: usize, byte_align: usize) !Value {
         const env = self.env;
         const pi_handle = if (handle != 0) handle - self.base_address else 0;
         _ = read_only; // can't make view read-only in JavaScript
-        _ = alignment; // cam\t control alignment in JavaScript
+        _ = byte_align; // cam\t control alignment in JavaScript
         return env.callFunction(
             try env.getNull(),
             try env.getReferenceValue(self.js.create_view orelse return error.Unexpected),

@@ -225,7 +225,7 @@ pub fn Class(comptime S: type) type {
                 else => class,
             };
             try target_class.validateBuffer(buf);
-            const new_obj = try target_class.obtainObjectFromBuffer(buf);
+            const new_obj = try target_class.obtainObjectFromBuffer(buf, null);
             return_value.* = php.createValueObject(new_obj);
         }
 

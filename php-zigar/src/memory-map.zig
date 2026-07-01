@@ -1,90 +1,81 @@
 const std = @import("std");
 const expectEqual = std.testing.expectEqual;
 
-pub const RelativePosition = enum { a_is_b, a_before_b, b_before_a, a_inside_b, b_inside_a };
+pub const RelativePosition = enum { ab, ba };
+pub const SearchResult = struct { found: bool, index: usize };
 
-pub fn MemoryMap(comptime T: type, comptime allocator: std.mem.Allocator, comptime compare: fn (T, anytype) RelativePosition) type {
+pub fn MemoryMap(comptime T: type, comptime allocator: std.mem.Allocator, comptime compare: fn (T, anytype) ?RelativePosition) type {
     return struct {
         list: std.ArrayList(T) = .empty,
 
-        pub const SearchResult = struct {
-            match: Match = .no,
-            index: usize = 0,
-            ptr: ?*T = null,
-
-            pub const Match = enum { yes, no, inside, outside };
-
-            pub inline fn value(self: @This()) T {
-                return self.ptr.?.*;
-            }
-        };
-
         pub fn deinit(self: *@This()) void {
             self.list.deinit(allocator);
-        }
-
-        pub fn add(self: *@This(), value: T) !void {
-            const result = self.search(value);
-            return try self.list.insert(allocator, result.index, value);
-        }
-
-        pub fn remove(self: *@This(), value: T) bool {
-            const result = self.search(value);
-            if (result.match != .yes) return false;
-            _ = self.list.orderedRemove(result.index);
-            return true;
         }
 
         pub fn insert(self: *@This(), result: SearchResult, value: T) !void {
             return try self.list.insert(allocator, result.index, value);
         }
 
-        pub fn eject(self: *@This(), result: SearchResult) T {
-            const index = switch (result.match) {
-                .yes, .inside => result.index,
-                .outside => result.index - 1, // index refers to the would-be insertion position
-                else => unreachable,
-            };
-            return self.list.orderedRemove(index);
+        pub fn remove(self: *@This(), result: SearchResult) void {
+            if (result.found) {
+                _ = self.list.orderedRemove(result.index);
+            }
         }
 
-        pub fn search(self: *@This(), b: anytype) SearchResult {
+        pub fn get(self: *@This(), result: SearchResult) ?T {
+            if (!result.found) return null;
+            return self.list.items[result.index];
+        }
+
+        pub fn getPointer(self: *@This(), result: SearchResult) ?*T {
+            if (!result.found) return null;
+            return &self.list.items[result.index];
+        }
+
+        pub fn getNearest(self: *@This(), result: SearchResult) ?T {
+            if (!result.found) return null;
+            if (result.index + 1 >= self.list.items.len) return null;
+            return self.list.items[result.index + 1];
+        }
+
+        pub fn find(self: *@This(), b: anytype) SearchResult {
             var low: usize = 0;
             var high = self.list.items.len;
-            if (high == 0) return .{};
-            var match: SearchResult.Match = .no;
-            var match_ptr: ?*T = null;
             while (low != high) {
                 const mid = (low + high) / 2;
                 const a_ptr = &self.list.items[mid];
                 const a = a_ptr.*;
-                const pos = compare(a, b);
-                switch (pos) {
-                    .a_before_b => low = mid + 1,
-                    .b_before_a => high = mid,
-                    .a_is_b => {
-                        match = .yes;
-                        match_ptr = a_ptr;
-                        high = mid;
-                        break;
-                    },
-                    .a_inside_b => {
-                        match = .inside;
-                        match_ptr = a_ptr;
-                        high = mid;
-                    },
-                    .b_inside_a => {
-                        match = .outside;
-                        match_ptr = a_ptr;
-                        low = mid + 1;
-                    },
+                if (compare(a, b)) |diff| switch (diff) {
+                    .ab => low = mid + 1,
+                    .ba => high = mid,
+                } else {
+                    return .{ .found = true, .index = mid };
                 }
             }
-            return .{
-                .match = match,
-                .index = high,
-                .ptr = match_ptr,
-            };
+            return .{ .found = false, .index = high };
+        }
+
+        pub fn findFirst(self: *@This(), b: anytype) SearchResult {
+            var result = self.find(b);
+            if (result.found) {
+                while (result.index > 0) {
+                    const prev = self.list.items[result.index - 1];
+                    if (compare(prev, b) != null) break;
+                    result.index -= 1;
+                }
+            }
+            return result;
+        }
+
+        pub fn findAgain(self: *@This(), b: anytype, result: SearchResult) SearchResult {
+            if (result.index < self.list.items.len) {
+                const next = self.list.items[result.index];
+                if (compare(next, b) == null) {
+                    // null means no differences
+                    return .{ .found = true, .index = result.index };
+                }
+            }
+            return .{ .found = false, .index = result.index };
         }
     };
 }
@@ -95,29 +86,20 @@ test "MemoryMap" {
     const Item = struct {
         bytes: []const u8,
 
-        pub fn compare(a: *const @This(), b: *const @This()) RelativePosition {
-            const a_start = @intFromPtr(a.bytes.ptr);
-            const a_end = a_start + a.bytes.len;
-            const b_start = @intFromPtr(b.bytes.ptr);
-            const b_end = b_start + b.bytes.len;
-            if (a_start < b_start) {
-                return if (a_end >= b_end)
-                    .b_inside_a
-                else
-                    .a_before_b;
-            } else if (a_start > b_start) {
-                return if (a_end <= b_end)
-                    .a_inside_b
-                else
-                    .b_before_a;
-            } else {
-                return if (a_end == b_end)
-                    .a_is_b
-                else if (a_end <= b_end)
-                    .a_inside_b
-                else
-                    .b_inside_a;
-            }
+        pub fn compareAddress(a: *const @This(), b: anytype) ?RelativePosition {
+            if (@intFromPtr(a.bytes.ptr) < @intFromPtr(b.bytes.ptr)) return .ab;
+            if (@intFromPtr(a.bytes.ptr) > @intFromPtr(b.bytes.ptr)) return .ba;
+            return null;
+        }
+
+        pub fn compareLength(a: *const @This(), b: anytype) ?RelativePosition {
+            if (a.bytes.len < b.bytes.len) return .ab;
+            if (a.bytes.len > b.bytes.len) return .ba;
+            return null;
+        }
+
+        pub fn compare(a: *const @This(), b: anytype) ?RelativePosition {
+            return compareAddress(a, b) orelse compareLength(a, b);
         }
     };
     const Map = MemoryMap(*const Item, gpa.allocator(), Item.compare);
@@ -134,48 +116,53 @@ test "MemoryMap" {
     const item5: Item = .{ .bytes = bytes2 };
     const item6: Item = .{ .bytes = bytes2[3..7] };
 
-    const result1 = map.search(&item1);
-    try expectEqual(.no, result1.match);
+    const result1 = map.find(&item1);
+    try expectEqual(false, result1.found);
     try expectEqual(0, result1.index);
     try map.insert(result1, &item1);
 
-    const result2 = map.search(&item1);
-    try expectEqual(.yes, result2.match);
+    const result2 = map.find(&item1);
+    try expectEqual(true, result2.found);
     try expectEqual(0, result2.index);
 
-    const result3 = map.search(&item2);
-    try expectEqual(.outside, result3.match);
+    const result3 = map.find(&item2);
+    try expectEqual(false, result3.found);
     try expectEqual(1, result3.index);
 
-    const result4 = map.search(&item5);
-    try expectEqual(.no, result4.match);
+    const result4 = map.find(&item5);
+    try expectEqual(false, result4.found);
     try expectEqual(1, result4.index);
 
-    const result5 = map.search(&item0);
-    try expectEqual(.no, result5.match);
+    const result5 = map.find(&item0);
+    try expectEqual(false, result5.found);
     try expectEqual(0, result5.index);
 
-    try map.add(&item3);
-    const result6 = map.search(&item5);
-    try expectEqual(.inside, result6.match);
-    try expectEqual(1, result6.index);
+    try map.insert(map.find(&item3), &item3);
+    const result6 = map.find(&item5);
+    try expectEqual(false, result6.found);
+    try expectEqual(2, result6.index);
 
-    try map.add(&item4);
-    const result7 = map.search(&item4);
-    try expectEqual(.yes, result7.match);
+    try map.insert(map.find(&item4), &item4);
+    const result7 = map.find(&item4);
+    try expectEqual(true, result7.found);
     try expectEqual(2, result7.index);
 
-    try map.add(&item5);
-    const result8 = map.search(&item5);
-    try expectEqual(.yes, result8.match);
-    try expectEqual(1, result8.index);
+    try map.insert(map.find(&item5), &item5);
+    const result8 = map.find(&item5);
+    try expectEqual(true, result8.found);
+    try expectEqual(2, result8.index);
 
-    const result9 = map.search(&item6);
-    try expectEqual(.outside, result9.match);
+    const result9 = map.find(&item6);
+    try expectEqual(false, result9.found);
     try expectEqual(3, result9.index);
 
-    try map.add(&item6);
-    const result10 = map.search(&item6);
-    try expectEqual(.yes, result10.match);
+    try map.insert(map.find(&item6), &item6);
+    const result10 = map.find(&item6);
+    try expectEqual(true, result10.found);
     try expectEqual(3, result10.index);
+
+    try map.insert(map.find(&item0), &item0);
+    const result11 = map.find(&item0);
+    try expectEqual(true, result11.found);
+    try expectEqual(0, result11.index);
 }
