@@ -314,7 +314,7 @@ pub const Function = struct {
         const self = Super.fromObject(obj);
         func.* = &self.closure.php_portion;
         ce.* = obj.ce;
-        if (this) |ptr| ptr.* = null;
+        if (this) |ptr| ptr.* = obj;
         return php.SUCCESS;
     }
 

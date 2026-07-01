@@ -56,6 +56,19 @@ final class FunctionHandlingTest extends ZigarTestCase
     public function testIgnoreFunctionReturningFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-return-value.zig');
+        $ptr = $m->getFunction();
+        $this->assertTrue(is_callable($ptr));
+        $f = $ptr->{'*'};
+        $this->assertTrue(is_callable($f));
+        $ptr();
+        $f();
+        $m->getFunction()();
+        $this->expectOutputString(<<<OUTPUT
+        hello
+        hello
+        hello
+
+        OUTPUT);
     }
 
     public function testHandleFunctionInArray(): void

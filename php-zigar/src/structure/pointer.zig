@@ -342,7 +342,7 @@ pub const Pointer = struct {
         const func_struct = structure.Function.fromObject(target_obj);
         func.* = &func_struct.closure.php_portion;
         ce.* = target_obj.ce;
-        if (this) |ptr| ptr.* = null;
+        if (this) |ptr| ptr.* = obj;
         return php.SUCCESS;
     }
 
