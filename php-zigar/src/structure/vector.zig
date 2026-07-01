@@ -102,6 +102,7 @@ pub const Vector = struct {
     pub const propertyExists = Super.propertyExists;
     pub const visitPointers = Super.Super.visitPointers;
     pub const getConstructor = Super.getConstructor;
+    pub const cloneObject = Super.cloneObject;
     pub const readElement = Super.readElement;
     pub const writeElement = Super.writeElement;
     pub const hasElement = Super.hasElement;

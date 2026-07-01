@@ -321,6 +321,7 @@ pub const Enum = struct {
     pub const findMethod = Super.findMethod;
     pub const visitPointers = Super.visitPointers;
     pub const getConstructor = Super.getConstructor;
+    pub const cloneObject = Super.cloneObject;
     pub const castObject = Super.castObject;
     pub const getMethod = Super.getMethod;
     pub const readProperty = Super.readProperty;

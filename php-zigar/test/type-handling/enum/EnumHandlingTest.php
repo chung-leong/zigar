@@ -224,6 +224,8 @@ final class EnumHandlingTest extends ZigarTestCase
         $this->assertSame('cat', (string) $e);
         $this->assertSame(-1, $m->Enum->dog <=> $m->Enum->cat);
         $this->assertSame(1, $m->Enum->monkey <=> $c);
+        $clone = clone $b;
+        $this->assertEquals($b, $clone);
     }    
 }
 

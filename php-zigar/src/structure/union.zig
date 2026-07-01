@@ -356,6 +356,7 @@ pub const Union = struct {
     pub const propertyExists = Super.propertyExists;
     pub const findMethod = Super.findMethod;
     pub const getConstructor = Super.getConstructor;
+    pub const cloneObject = Super.cloneObject;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;
     pub const getMethod = Super.getMethod;

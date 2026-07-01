@@ -247,7 +247,7 @@ final class ArrayHandlingTest extends ZigarTestCase
         });
     }
 
-    public function testHandleConstructArray(): void
+    public function testConstructArray(): void
     {
         $m = ZigImporter::load(__DIR__ . '/constructor.zig');
         $b = new $m->IntArray4([ 1, 2, 3, 4 ]);
@@ -264,6 +264,8 @@ final class ArrayHandlingTest extends ZigarTestCase
         $this->assertSame('AAAAAAAAAAAAAAAAAAAAAA', $f->__base64);
         $c->__base64 = $f->__base64;
         $this->assertSame([ 0, 0, 0, 0 ], $c->__plain);
+        $clone = clone $b;
+        $this->assertEquals($b, $clone);
     }
 }
 

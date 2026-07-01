@@ -341,6 +341,7 @@ pub const Function = struct {
     pub const checkArguments = Super.checkArguments;
     pub const visitPointers = Super.visitPointers;
     pub const getConstructor = Super.getConstructor;
+    pub const cloneObject = Super.cloneObject;
     pub const castObject = Super.castObject;
     pub const getProperties = Super.getProperties;
     pub const getPropertyPointer = Super.getPropertyPointer;

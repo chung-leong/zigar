@@ -301,6 +301,12 @@ pub fn Parent(comptime S: type) type {
             return &class_struct.constructor;
         }
 
+        pub fn cloneObject(obj: *Object) !*Object {
+            const class = ZigClassEntry.fromObject(obj);
+            const initializer = php.createValueObject(obj);
+            return try class.createObject(null, &initializer, false);
+        }
+
         pub fn freeObject(obj: *Object) void {
             const self = fromObject(obj);
             const class = ZigClassEntry.fromObject(obj);
@@ -569,6 +575,7 @@ pub fn StructLike(comptime S: type) type {
         pub const reportFieldError = Super.reportFieldError;
 
         pub const getConstructor = Super.getConstructor;
+        pub const cloneObject = Super.cloneObject;
         pub const readProperty = Super.readProperty;
         pub const writeProperty = Super.writeProperty;
         pub const hasProperty = Super.hasProperty;
@@ -805,6 +812,7 @@ pub fn ArrayLike(comptime S: type) type {
         pub const writeProperty = Super.writeProperty;
         pub const hasProperty = Super.hasProperty;
         pub const getPropertyPointer = Super.getPropertyPointer;
+        pub const cloneObject = Super.cloneObject;
         pub const freeObject = Super.freeObject;
         pub const castObject = Super.castObject;
         pub const getGarbageCollection = Super.getGarbageCollection;
@@ -884,6 +892,7 @@ pub fn OptionalLike(comptime S: type) type {
         pub const visitPointers = Super.visitPointers;
 
         pub const getConstructor = Super.getConstructor;
+        pub const cloneObject = Super.cloneObject;
         pub const readProperty = Super.readProperty;
         pub const writeProperty = Super.writeProperty;
         pub const hasProperty = Super.hasProperty;

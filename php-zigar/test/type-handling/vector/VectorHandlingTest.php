@@ -260,6 +260,8 @@ final class VectorHandlingTest extends ZigarTestCase
         $this->assertSame(1, $b <=> $f);
         $this->assertSame(1, $b <=> []);
         $this->assertSame(-1, 5 <=> $b);
+        $clone = clone $b;
+        $this->assertEquals($b, $clone);
     }
 }
 

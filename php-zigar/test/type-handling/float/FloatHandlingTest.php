@@ -251,5 +251,7 @@ final class FloatHandlingTest extends ZigarTestCase
         $this->assertExceptionMessage('not double', function() use($m) {
             $x = new $m->Double('Hello');
         });
+        $clone = clone $b;
+        $this->assertEquals($b, $clone);
     }
 }

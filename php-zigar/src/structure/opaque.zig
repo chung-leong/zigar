@@ -48,6 +48,7 @@ pub const Opaque = struct {
     pub const getConstructor = Super.getConstructor;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;
+    pub const cloneObject = Super.cloneObject;
     pub const getMethod = Super.getMethod;
     pub const readProperty = Super.readProperty;
     pub const writeProperty = Super.writeProperty;

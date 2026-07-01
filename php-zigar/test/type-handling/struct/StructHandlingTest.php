@@ -288,6 +288,8 @@ final class StructHandlingTest extends ZigarTestCase
         $this->assertSame(0, $b <=> $h);
         $i = new $m->Struct(number1: 1111, number2: 2222, number3: 3000);
         $this->assertSame(1, $b <=> $i);
+        $clone = clone $b;
+        $this->assertEquals($b, $clone);
     }
 }
 

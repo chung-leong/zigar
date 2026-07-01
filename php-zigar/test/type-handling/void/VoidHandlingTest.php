@@ -222,6 +222,8 @@ final class VoidHandlingTest extends ZigarTestCase
         $this->assertFalse((bool) $a);
         $b = $m->Void(new ArrayBuffer(0));
         $this->assertEquals($a, $b);
+        $clone = clone $b;
+        $this->assertEquals($b, $clone);
     }
 }
 

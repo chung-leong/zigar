@@ -227,6 +227,8 @@ final class BoolHandlingTest extends ZigarTestCase
         $d = $m->Bool(new ArrayBuffer("\x01"));
         $this->assertFalse((bool) $c);
         $this->assertTrue((bool) $d);
+        $clone = clone $b;
+        $this->assertEquals($b, $clone);
     }
 }
 

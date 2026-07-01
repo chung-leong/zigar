@@ -224,5 +224,7 @@ final class PointerHandlingTest extends ZigarTestCase
         $this->assertSame(-1, $b <=> $d);
         $d->{'*'} = 8;
         $this->assertSame(1, $b <=> $d);
+        $clone = clone $d;
+        $this->assertEquals($d, $clone);
     }
 }

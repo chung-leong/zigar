@@ -95,6 +95,7 @@ pub const Array = struct {
     pub const propertyExists = Super.propertyExists;
     pub const visitPointers = Super.visitPointers;
     pub const getConstructor = Super.getConstructor;
+    pub const cloneObject = Super.cloneObject;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;
     pub const readElement = Super.readElement;

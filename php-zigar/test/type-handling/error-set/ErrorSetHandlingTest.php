@@ -198,6 +198,8 @@ final class ErrorSetHandlingTest extends ZigarTestCase
         $c = $m->ErrorSet((int) $m->ErrorSet->DogAteAllMemory);
         $this->assertSame($m->ErrorSet->DogAteAllMemory, $c);
         $this->assertSame(0, $b->__value <=> $m->ErrorSet->DogAteAllMemory);
+        $clone = clone $b;
+        $this->assertEquals($b, $clone);
     }    
 }
 
