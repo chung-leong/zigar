@@ -203,6 +203,10 @@ pub const Function = struct {
         class.host.dispatcher.detachThunk(self.buffer);
     }
 
+    pub fn getCallable(self: *@This()) !*php.Function {
+        return &self.closure.php_portion;
+    }
+
     pub fn getArgumentClass(fn_value: *const Value, name: *const String) !*ZigClassEntry {
         const func_class = try ZigClassEntry.fromValue(fn_value);
         const arg_struct_member = try func_class.getMember(.instance, 0);
@@ -311,8 +315,8 @@ pub const Function = struct {
     }
 
     pub fn getClosure(obj: *Object, ce: *[*c]ClassEntry, func: *[*c]php.Function, this: ?*[*c]Object, _: bool) c_int {
-        const self = Super.fromObject(obj);
-        func.* = &self.closure.php_portion;
+        const self = fromObject(obj);
+        func.* = self.getCallable() catch return php.FAILURE;
         ce.* = obj.ce;
         if (this) |ptr| ptr.* = obj;
         return php.SUCCESS;

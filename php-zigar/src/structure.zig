@@ -505,6 +505,20 @@ pub fn StructLike(comptime S: type) type {
                 Super.propertyExists(self, name, cache_slot);
         }
 
+        pub fn findMethod(self: *S, name: *String) !?*php.Function {
+            return Super.findMethod(self, name) catch |err| {
+                if (err != error.Missing) return err;
+                // maybe we're invoking a function pointer
+                const value = try getProperty(self, name, null);
+                defer php.release(&value);
+                const obj = php.getValueObject(&value) catch return error.NotFunction;
+                const func = invokeMethod(obj, "getCallable", .{}) catch |prop_err| {
+                    return if (err == error.NotImplemented) error.NotFunction else prop_err;
+                };
+                return func;
+            };
+        }
+
         pub fn findMember(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) ?*const ZigClassEntry.Member {
             const class = ZigClassEntry.fromStructure(self);
             if (MemberCache.find(cache_slot, class) catch return null) |m| return m;
@@ -568,7 +582,6 @@ pub fn StructLike(comptime S: type) type {
         pub const finalize = Super.finalize;
         pub const externalize = Super.externalize;
         pub const setValue = Super.setValue;
-        pub const findMethod = Super.findMethod;
         pub const checkArguments = Super.checkArguments;
         pub const copySelf = Super.copySelf;
         pub const visitPointers = Super.visitPointers;

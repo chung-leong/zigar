@@ -310,7 +310,7 @@ pub fn transform(comptime func: anytype) Transformed(func) {
     return fn_transform.spreadArgs(ns.call, .c);
 }
 
-pub fn removeError(retval: anytype) switch (@typeInfo(@TypeOf(retval))) {
+fn removeError(retval: anytype) switch (@typeInfo(@TypeOf(retval))) {
     .error_union => |eu| eu.payload,
     else => @TypeOf(retval),
 } {

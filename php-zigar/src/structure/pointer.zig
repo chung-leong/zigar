@@ -334,14 +334,18 @@ pub const Pointer = struct {
         return self.getTarget() catch return null;
     }
 
-    pub fn getClosure(obj: *Object, ce: *[*c]ClassEntry, func: *[*c]Function, this: ?*[*c]Object, _: bool) c_int {
-        const self = Super.fromObject(obj);
-        const target_obj = self.getTarget() catch return php.FAILURE;
+    pub fn getCallable(self: *@This()) !*php.Function {
+        const target_obj = try self.getTarget();
         const target_class = ZigClassEntry.fromObject(target_obj);
-        if (target_class.type != .function) return php.FAILURE;
+        if (target_class.type != .function) return error.NotFunction;
         const func_struct = structure.Function.fromObject(target_obj);
-        func.* = &func_struct.closure.php_portion;
-        ce.* = target_obj.ce;
+        return func_struct.getCallable();
+    }
+
+    pub fn getClosure(obj: *Object, ce: *[*c]ClassEntry, func: *[*c]Function, this: ?*[*c]Object, _: bool) c_int {
+        const self = fromObject(obj);
+        func.* = self.getCallable() catch return php.FAILURE;
+        ce.* = obj.ce;
         if (this) |ptr| ptr.* = obj;
         return php.SUCCESS;
     }

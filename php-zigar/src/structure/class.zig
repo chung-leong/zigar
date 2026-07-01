@@ -152,10 +152,12 @@ pub fn Class(comptime S: type) type {
             }
         }
 
-        pub fn getClosure(obj: *Object, _: *[*c]ClassEntry, fn_ptr: *[*c]Function, _: *[*c]Object, _: bool) c_int {
+        pub fn getClosure(obj: *Object, ce: *[*c]ClassEntry, fn_ptr: *[*c]Function, this: ?*[*c]Object, _: bool) c_int {
             // the class reference object functions as a casting operator when called
             const self = fromObject(obj);
             fn_ptr.* = &self.closure.php_portion;
+            if (this) |ptr| ptr.* = obj;
+            ce.* = obj.ce;
             return php.SUCCESS;
         }
 

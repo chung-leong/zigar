@@ -74,11 +74,60 @@ final class FunctionHandlingTest extends ZigarTestCase
     public function testHandleFunctionInArray(): void
     {
         $m = ZigImporter::load(__DIR__ . '/array-of.zig');
+        foreach ($m->array as $ptr) {
+            $ptr();
+            echo "\n";
+        }
+        $this->expectOutputString(<<<OUTPUT
+        hello
+        hello
+        world
+        hello
+        world
+        world
+        hello
+        world
+
+        OUTPUT);
+        $result = $m->getFunctions();
+        foreach ($result as $ptr) {
+            $ptr();
+            echo "\n";
+        }
     }
 
     public function testHandleFunctionInStruct(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-struct.zig');
+        $this->assertTrue($m->struct_a instanceof $m->StructA);
+        $this->assertSame(1234, $m->struct_a->number);
+        $this->assertTrue(is_callable($m->struct_a->function1));
+        $this->assertTrue(is_callable($m->struct_a->function1->{'*'}));
+        $this->assertTrue(is_callable($m->struct_a->function2));
+        $this->assertTrue(is_callable($m->struct_a->function2->{'*'}));
+        $m->struct_a->function1();
+        echo "\n";
+        $m->struct_a->function2();
+        echo "\n";
+        $this->expectOutputString(<<<OUTPUT
+        hello
+        world
+        world
+        hello
+        world
+        hello
+
+        OUTPUT);
+        $result = $m->getStruct();
+        $result->function1();
+        echo "\n";
+        $result->function2();
+        echo "\n";
+        $m->struct_a = $result;
+        $m->struct_a->function1();
+        echo "\n";
+        $m->struct_a->function2();
+        echo "\n";
     }
 
     public function testFailWithFunctionInPackedStruct(): void
