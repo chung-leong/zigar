@@ -116,7 +116,7 @@ pub fn Parent(comptime S: type) type {
         pub fn initialize(self: *S, allocator: ?*std.mem.Allocator, initializer: ?*const Value, read_only: bool) !void {
             if (!@hasField(S, "buffer")) return;
             const class = ZigClassEntry.fromStructure(self);
-            const len = class.byte_size.?;
+            const len = class.byte_size orelse 0;
             try self.buffer.allocate(allocator, len);
             const initialized = attempt: {
                 if (initializer) |value| {

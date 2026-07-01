@@ -6,6 +6,7 @@ const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const failure = @import("../failure.zig");
 const iterator = @import("../iterator.zig");
 const php = @import("../php.zig");
+const ArgumentIterator = php.ArgumentIterator;
 const ClassEntry = php.ClassEntry;
 const Object = php.Object;
 const ObjectIterator = php.ObjectIterator;
@@ -17,6 +18,10 @@ pub const Opaque = struct {
     buffer: *ByteBuffer = undefined,
 
     pub const Super = structure.StructLike(@This());
+
+    pub fn checkArguments(_: *@This(), _: *ArgumentIterator) !void {
+        return error.InvalidOperation;
+    }
 
     pub fn compare(a: *Value, b: *Value) !c_int {
         const obj_a = php.getValueObject(a) catch return -1;
@@ -37,7 +42,6 @@ pub const Opaque = struct {
     pub const initialize = Super.initialize;
     pub const finalize = Super.finalize;
     pub const externalize = Super.externalize;
-    pub const checkArguments = Super.checkArguments;
     pub const getValue = Super.getValue;
     pub const setValue = Super.setValue;
     pub const getProperty = Super.getProperty;
