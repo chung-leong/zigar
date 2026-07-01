@@ -200,7 +200,12 @@ pub const CallDispatcher = struct {
     pub fn createJsThunk(self: *@This(), class: *ZigClassEntry, callable: *Value, buffer: *ByteBuffer) !void {
         const fn_id = try self.saveCallback(class, callable, buffer);
         errdefer self.removeCallback(fn_id);
-        const controller_address = try getControllerAddress(class);
+        const controller_address = getControllerAddress(class) catch {
+            // controller is only available when there's a pointer type targeting the function
+            return failure.report("no pointer type for '{s}'", .{
+                class.getName(),
+            });
+        };
         const exports = self.host.module.exports;
         var thunk_address: usize = 0;
         const result = exports.create_js_thunk(controller_address, fn_id, &thunk_address);

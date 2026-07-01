@@ -178,24 +178,85 @@ final class FunctionHandlingTest extends ZigarTestCase
     public function testHandleFunctionInOptional(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
+        $this->assertTrue(is_callable($m->optional));
+        $this->assertTrue(is_callable($m->optional->{'*'}));
+        $this->expectOutputString(<<<OUTPUT
+        hello
+        hello
+        world
+
+        OUTPUT);
+        $m->optional();
+        echo "\n";
+        $result1 = $m->getFunction(0);
+        $result1();
+        echo "\n";
+        $result2 = $m->getFunction(1);
+        $result2();
+        echo "\n";
+        $result3 = $m->getFunction(2);
+        $this->assertSame(null, $result3);
     }
 
     public function testHandleFunctionInErrorUnion(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
+        $this->assertTrue(is_callable($m->error_union));
+        $this->assertTrue(is_callable($m->error_union->{'*'}));
+        $this->expectOutputString(<<<OUTPUT
+        hello
+        hello
+        world
+
+        OUTPUT);
+        $m->error_union();
+        echo "\n";
+        $result1 = $m->getFunction(0);
+        $result1();
+        echo "\n";
+        $result2 = $m->getFunction(1);
+        $result2();
+        echo "\n";
+        try {
+            $m->getFunction(2);
+        } catch (Exception $e) {
+            $this->assertSame($m->Error->GoldfishDied, $e);
+        }
+        try {
+            $m->getFunction(4);
+        } catch (Exception $e) {
+            $this->assertSame($m->Error->NoMoney, $e);
+        }
     }
 
-    public function testFailWithFunctionInVector(): void
+    public function testHandleFunctionInVector(): void
     {
-        $this->assertExceptionMessage("unable to create module", function() {
-            $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
-        });
+        $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
+        $m->vector_const[0]();
+        $this->expectOutputString(<<<OUTPUT
+        hello
+        hello
+        world
+
+        OUTPUT);
+        $m->vector[2]();
+        $m->change(2);
+        $m->vector[3]();
     }
 
     public function testConstructFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/constructor.zig');
-        $this->assertFalse(isset($m->Function));
+        $f = new $m->FunctionA(function() {
+            return false; 
+        });
+        $this->assertTrue($f instanceof $m->FunctionA);
+        $this->assertExceptionMessage("no pointer type", function() use($m) {
+            $f = new $m->FunctionB(function() {
+                return false; 
+            });
+        });
+        $clone = clone $m->hello;
     }
 }
 
