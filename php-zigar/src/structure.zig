@@ -267,17 +267,24 @@ pub fn Parent(comptime S: type) type {
             if (failure.match(err, error.FailureReported)) {
                 return error.FailureReported;
             } else if (failure.match(err, error.Missing)) {
-                return switch (scope) {
-                    .instance => failure.report("no field named '{s}' in {s} '{s}'", .{
-                        php.getStringContent(name),
-                        class.getStructureName(),
-                        class.getName(),
-                    }),
-                    .static => failure.report("{s} '{s}' has no member named '{s}'", .{
+                return switch (access) {
+                    .call => failure.report("{s} '{s}' has no function named '{s}'", .{
                         class.getStructureName(),
                         class.getName(),
                         php.getStringContent(name),
                     }),
+                    .read, .write => switch (scope) {
+                        .instance => failure.report("no field named '{s}' in {s} '{s}'", .{
+                            php.getStringContent(name),
+                            class.getStructureName(),
+                            class.getName(),
+                        }),
+                        .static => failure.report("{s} '{s}' has no member named '{s}'", .{
+                            class.getStructureName(),
+                            class.getName(),
+                            php.getStringContent(name),
+                        }),
+                    },
                 };
             } else if (failure.match(err, error.ExceptionThrown)) {
                 return error.ExceptionThrown;
@@ -419,7 +426,9 @@ pub fn Parent(comptime S: type) type {
         pub fn getMethod(obj_ptr: *[*c]Object, name: *String, _: ?*const Value) !?*php.Function {
             const obj = obj_ptr.*;
             const self = fromObject(obj);
-            return try self.findMethod(name);
+            return self.findMethod(name) catch |err| {
+                return reportFieldError(self, name, .call, err);
+            };
         }
 
         pub fn compare(a: *Value, b: *Value) !c_int {
@@ -509,7 +518,7 @@ pub fn StructLike(comptime S: type) type {
             return Super.findMethod(self, name) catch |err| {
                 if (err != error.Missing) return err;
                 // maybe we're invoking a function pointer
-                const value = try getProperty(self, name, null);
+                const value = try self.getProperty(name, null);
                 defer php.release(&value);
                 const obj = php.getValueObject(&value) catch return error.NotFunction;
                 const func = invokeMethod(obj, "getCallable", .{}) catch |prop_err| {

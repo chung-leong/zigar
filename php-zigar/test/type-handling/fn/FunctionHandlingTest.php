@@ -140,18 +140,39 @@ final class FunctionHandlingTest extends ZigarTestCase
     public function testHandleFunctionAsComptimeField(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-comptime-field.zig');
+        $this->assertTrue(is_callable($m->struct_a->function));
+        $this->assertTrue(is_callable($m->struct_a->function->{'*'}));
+        $b = new $m->StructA(number: 500);
+        $this->assertTrue(is_callable($b->function));
+        $this->assertTrue(is_callable($b->function->{'*'}));
+        $this->expectOutputRegex('/\.{ \.number = 500, \.function = fn\s*\(\) void@/');
+        $m->print($b);
+        // these call should produce nothing
+        $m->struct_a->function();
+        $b->function();
     }
 
-    public function testFailWithFunctionInBareUnion(): void
+    public function testHandleFunctionInBareUnion(): void
     {
-        $this->assertExceptionMessage("unable to create module", function() {
-            $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
+        $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
+        $this->assertSame(123, $m->union_b->number);
+        $this->assertExceptionMessage("pointer is inaccessible", function() use($m) {
+            $m->union_a->function();
         });
+        $this->assertFalse(is_callable($m->union_a->function));
     }
 
     public function testHandleFunctionInTaggedUnion(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-tagged-union.zig');
+        $this->assertSame(123, $m->union_b->number);
+        $this->assertTrue(is_callable($m->union_a->function));
+        $this->assertTrue(is_callable($m->union_a->function->{'*'}));
+        $this->assertExceptionMessage("unable to call field 'function'", function() use($m) {
+            $m->union_b->function();
+        });
+        // not expecting output
+        $m->union_a->function();
     }
 
     public function testHandleFunctionInOptional(): void

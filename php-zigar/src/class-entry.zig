@@ -317,6 +317,7 @@ pub const ZigClassEntry = struct {
                     const expected_arg_count: usize = switch (access) {
                         .read => if (member.flags.is_method) 1 else 0,
                         .write => if (member.flags.is_method) 2 else 1,
+                        .call => unreachable,
                     };
                     if (member.class.length != expected_arg_count) continue;
                     const scope = switch (member.flags.is_method) {
@@ -355,6 +356,7 @@ pub const ZigClassEntry = struct {
                     switch (access) {
                         .read => prop_acc.getter = name,
                         .write => prop_acc.setter = name,
+                        .call => unreachable,
                     }
                 }
             },
