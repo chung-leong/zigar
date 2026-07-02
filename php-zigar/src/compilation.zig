@@ -181,6 +181,10 @@ pub const ZigCompiler = struct {
         try self.acquireConfig(src_path, mod_path, options);
         try self.writeProject();
         try self.runCompiler();
+        if (self.options.clean) {
+            try self.deleteModuleBuildDirectory();
+        }
+        self.cleanBuildDirectory() catch {};
     }
 
     pub fn reset(self: *@This()) void {
@@ -210,11 +214,7 @@ pub const ZigCompiler = struct {
             if (self.module_name.len > 8) self.module_name[0..8] else self.module_name,
             mod_sig[0..8],
         });
-        const build_dir_parent = if (self.options.build_dir.len > 0)
-            self.options.build_dir
-        else
-            try std.fs.path.resolve(al, &.{ try getTempDir(al), "zigar-build" });
-        self.module_build_dir = try std.fs.path.resolve(al, &.{ build_dir_parent, build_dir_name });
+        self.module_build_dir = try std.fs.path.resolve(al, &.{ self.options.build_dir, build_dir_name });
         self.zigar_src_path_wo_sep = try std.fs.path.resolve(al, &.{ self.module_build_dir, "zigar" });
         self.zigar_src_path = try std.fmt.allocPrint(al, "{s}{c}", .{
             self.zigar_src_path_wo_sep,
@@ -394,6 +394,55 @@ pub const ZigCompiler = struct {
         };
     }
 
+    fn deleteModuleBuildDirectory(self: *@This()) !void {
+        try std.fs.deleteTreeAbsolute(self.module_build_dir);
+    }
+
+    fn cleanBuildDirectory(self: *@This()) !void {
+        // get the size and mtime of all sub-directories
+        const al = self.allocator();
+        const SubDir = struct {
+            name: []const u8,
+            mtime: i128,
+            size: u64,
+
+            fn isOlder(_: void, a: @This(), b: @This()) bool {
+                return a.mtime < b.mtime;
+            }
+        };
+        var sub_dir_list: std.ArrayList(SubDir) = .empty;
+        var build_dir = try std.fs.openDirAbsolute(self.options.build_dir, .{ .iterate = true });
+        defer build_dir.close();
+        var build_dir_size: u64 = 0;
+        var build_dir_iter = build_dir.iterateAssumeFirstIteration();
+        while (try build_dir_iter.next()) |entry| {
+            if (entry.kind != .directory) continue;
+            var sub_dir = try build_dir.openDir(entry.name, .{ .iterate = true });
+            var sub_dir_size: u64 = 0;
+            var walker = try sub_dir.walk(al);
+            defer walker.deinit();
+            while (try walker.next()) |sub_entry| {
+                if (sub_entry.kind != .file) continue;
+                const sub_entry_info = try sub_entry.dir.statFile(sub_entry.basename);
+                sub_dir_size += sub_entry_info.size;
+            }
+            const sub_dir_info = try sub_dir.stat();
+            try sub_dir_list.append(al, .{
+                .name = try al.dupe(u8, entry.name),
+                .size = sub_dir_size,
+                .mtime = sub_dir_info.mtime,
+            });
+            build_dir_size += sub_dir_size;
+        }
+        if (build_dir_size < self.options.build_dir_size) return;
+        // remove sub-directories until we lower the size to below the specified number
+        std.mem.sort(SubDir, sub_dir_list.items, {}, SubDir.isOlder);
+        for (sub_dir_list.items) |item| {
+            build_dir.deleteTree(item.name) catch continue;
+            if (build_dir_size < self.options.build_dir_size) break;
+        }
+    }
+
     fn showProgress(self: *@This(), finished: *std.atomic.Value(u32)) !void {
         // don't print anything if stderr isn't a tty or doesn't support ANSI sequences
         if (!std.fs.File.stderr().getOrEnableAnsiEscapeSupport()) return;
@@ -434,7 +483,7 @@ pub const Options = struct {
     zig_path: []const u8,
     zig_args: []const u8,
     build_dir: []const u8,
-    build_dir_size: usize,
+    build_dir_size: u64,
     clean: bool,
     arch: Arch = .default,
     platform: Platform = .default,
@@ -457,7 +506,7 @@ pub const Options = struct {
             .zig_path = std.mem.sliceTo(extension.options.zig_path, 0),
             .zig_args = std.mem.sliceTo(extension.options.zig_args, 0),
             .build_dir = std.mem.sliceTo(extension.options.build_dir, 0),
-            .build_dir_size = @intCast(@max(1048576, extension.options.build_dir_size)),
+            .build_dir_size = @intCast(@max(0, extension.options.build_dir_size)),
             .clean = extension.options.clean,
             .optimize = init: {
                 const name = std.mem.sliceTo(extension.options.optimize, 0);
@@ -527,30 +576,6 @@ fn comptimeImplode(comptime delim: []const u8, items: anytype, stringify: anytyp
         }
         break :join list;
     };
-}
-
-fn getTempDir(allocator: std.mem.Allocator) ![]const u8 {
-    switch (builtin.target.os.tag) {
-        .windows => {
-            const win32 = struct {
-                const DWORD = std.os.windows.DWORD;
-                const LPSTR = std.os.windows.LPSTR;
-                extern fn GetTempPathA(DWORD, LPSTR) callconv(.winapi) DWORD;
-            };
-            var buffer: [std.os.windows.MAX_PATH + 1]u8 = undefined;
-            const len = win32.GetTempPathA(buffer.len, @ptrCast(&buffer));
-            if (len == 0) return error.CannotGetTempDirectory;
-            return try allocator.dupe(u8, buffer[0..len]);
-        },
-        else => {
-            const names: []const [:0]const u8 = &.{ "TMPDIR", "TMP", "TEMP", "TEMPDIR" };
-            const tmpdir = for (names) |name| {
-                // std.posix.getenv() crashes for some reason
-                if (std.posix.getenvZ(name)) |value| break value;
-            } else "/tmp";
-            return try allocator.dupe(u8, tmpdir);
-        },
-    }
 }
 
 fn makeDirectory(path: []const u8) !void {

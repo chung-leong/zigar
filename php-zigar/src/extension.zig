@@ -121,12 +121,30 @@ const Options = extern struct {
     event_loop: [*:0]const u8 = "temporary",
     zig_path: [*:0]const u8 = "zig",
     zig_args: [*:0]const u8 = "",
-    build_dir: [*:0]const u8 = "",
+    build_dir: [*:0]const u8, // default value can only be determined at runtime
     build_dir_size: php.Long = 4294967296,
     optimize: [*:0]const u8 = "Debug",
     clean: bool = false,
 
+    var default_build_dir: [:0]const u8 = undefined;
+
     const modifiable = .{ .compilation = php.INI_SYSTEM };
+    const on_init = struct {
+        fn build_dir() ![*:0]const u8 {
+            const al = std.heap.c_allocator;
+            const tmp = try getTempDir(al);
+            defer al.free(tmp);
+            const path = try std.fs.path.resolve(al, &.{ tmp, "zigar-build" });
+            defer al.free(path);
+            default_build_dir = try al.dupeZ(u8, path);
+            return default_build_dir.ptr;
+        }
+    };
+    const on_deinit = struct {
+        fn build_dir() void {
+            std.heap.c_allocator.free(default_build_dir);
+        }
+    };
     const on_modified = struct {
         fn event_loop(entry: *php.IniEntry, new_value: *String, arg1: ?*anyopaque, arg2: ?*anyopaque, arg3: ?*anyopaque, stage: c_int) c_int {
             const text = php.getStringContent(new_value);
@@ -332,7 +350,9 @@ comptime {
     @export(&const_entries, .{ .name = "php_zigar_functions" });
 }
 
-pub threadlocal var options: Options = .{};
+pub threadlocal var options: Options = .{
+    .build_dir = "",
+};
 pub var ini_entries: [std.meta.fields(Options).len]php.IniEntryDef = undefined;
 
 fn registerIniEntries(module_number: c_int) !void {
@@ -359,8 +379,10 @@ fn registerIniEntries(module_number: c_int) !void {
                     if (field.default_value_ptr) |ptr| {
                         const ptr_ptr: *const [*:0]const u8 = @ptrCast(@alignCast(ptr));
                         break :init ptr_ptr.*;
+                    } else {
+                        const init_fn = @field(Options.on_init, field.name);
+                        break :init try init_fn();
                     }
-                    break :init "";
                 },
                 else => unreachable,
             }
@@ -395,4 +417,35 @@ fn registerIniEntries(module_number: c_int) !void {
 
 fn unregisterIniEntries(module_number: c_int) void {
     php.unregisterIniEntries(module_number);
+    const fields = std.meta.fields(Options);
+    inline for (fields) |field| {
+        if (field.default_value_ptr == null) {
+            const deinit_fn = @field(Options.on_deinit, field.name);
+            deinit_fn();
+        }
+    }
+}
+
+fn getTempDir(allocator: std.mem.Allocator) ![]const u8 {
+    switch (builtin.target.os.tag) {
+        .windows => {
+            const win32 = struct {
+                const DWORD = std.os.windows.DWORD;
+                const LPSTR = std.os.windows.LPSTR;
+                extern fn GetTempPathA(DWORD, LPSTR) callconv(.winapi) DWORD;
+            };
+            var buffer: [std.os.windows.MAX_PATH + 1]u8 = undefined;
+            const len = win32.GetTempPathA(buffer.len, @ptrCast(&buffer));
+            if (len == 0) return error.CannotGetTempDirectory;
+            return try allocator.dupe(u8, buffer[0..len]);
+        },
+        else => {
+            const names: []const [:0]const u8 = &.{ "TMPDIR", "TMP", "TEMP", "TEMPDIR" };
+            const tmpdir = for (names) |name| {
+                // std.posix.getenv() crashes for some reason
+                if (std.posix.getenvZ(name)) |value| break value;
+            } else "/tmp";
+            return try allocator.dupe(u8, tmpdir);
+        },
+    }
 }
