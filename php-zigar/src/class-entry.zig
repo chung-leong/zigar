@@ -277,6 +277,7 @@ pub const ZigClassEntry = struct {
             .array, .slice => if (self.flags.common.has_slot) {
                 self.slot_usage = .multiple;
             },
+            .variadic_struct => self.slot_usage = .multiple,
             else => {},
         }
         self.status.defined = true;

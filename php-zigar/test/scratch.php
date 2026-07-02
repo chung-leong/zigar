@@ -3,11 +3,16 @@
 // require __DIR__ . '/../vendor/autoload.php';
 // use Revolt\EventLoop;
 
-class Test {
-    var $world = "Hello world";
-}
+$m = zigar_use(__DIR__ . '/scratch.zig');
 
-for ($i = 0; $i < 3; $i++) {   
-    $m = ($i === 0) ? new Test : zigar_use(__DIR__ . '/scratch.zig');
-    echo $m->world, "\n";
-}
+$m->call(3, 
+    new $m->Callback(function() {
+        echo "Agnieszka\n";
+    }),
+    new $m->Callback(function() {
+        echo "już dawno\n";
+    }),
+    new $m->Callback(function() {
+        echo "tutaj nie mieszka\n";
+    }),
+);

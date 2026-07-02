@@ -13,12 +13,13 @@ const MemberType = interface.MemberType;
 const ZigObject = @import("../object.zig").ZigObject;
 const getObjectBuffer = @import("../object.zig").getObjectBuffer;
 const php = @import("../php.zig");
-const FiberTransfer = php.FiberTransfer;
+const HashTableIterator = php.HashTableIterator;
 const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
 const Promise = @import("../promise.zig").Promise;
 const structure = @import("../structure.zig");
+const Pointer = structure.Pointer;
 
 pub const VariadicStruct = struct {
     attributes: []ArgAttributes = &.{},
@@ -29,6 +30,7 @@ pub const VariadicStruct = struct {
     pub const Static = struct {
         arg_members: []*ZigClassEntry.Member = undefined,
         last_arg_optional: bool = false,
+        first_variadic_slot: usize = 0,
         retval_accessors: *accessor.Any = undefined,
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
@@ -38,6 +40,7 @@ pub const VariadicStruct = struct {
             var arg_count: usize = 0;
             var last_arg_class: *ZigClassEntry = undefined;
             _ = iter.next(); // first member is retval
+            var variadic_slot: usize = 0;
             while (iter.next()) |member| {
                 switch (member.class.purpose) {
                     else => {
@@ -45,6 +48,7 @@ pub const VariadicStruct = struct {
                         last_arg_class = member.class;
                     },
                 }
+                if (member.slot) |slot| variadic_slot = slot + 1;
             }
             iter.reset();
             self.arg_members = try php.allocator.alloc(*ZigClassEntry.Member, arg_count);
@@ -62,6 +66,7 @@ pub const VariadicStruct = struct {
                     self.last_arg_optional = static.required_field_count == 0;
                 }
             }
+            self.first_variadic_slot = variadic_slot;
         }
 
         pub fn deinit(self: *@This()) void {
@@ -103,6 +108,7 @@ pub const VariadicStruct = struct {
             al.free(self.attributes);
             self.attributes = &.{};
         }
+        var variadic_slot = static.first_variadic_slot;
         while (arg_iter.next()) |arg| : (arg_index += 1) {
             if (arg_index < max_arg_count) {
                 const member = static.arg_members[arg_index];
@@ -146,6 +152,8 @@ pub const VariadicStruct = struct {
                             alignment,
                             .object,
                         );
+                        try php.setPropertyRef(&self.table, variadic_slot, arg);
+                        variadic_slot += 1;
                     },
                 }
             }
@@ -193,6 +201,10 @@ pub const VariadicStruct = struct {
         return try static.retval_accessors.get(self);
     }
 
+    pub fn detachFunctionThunks(self: *@This()) !void {
+        try self.visitPointers(Pointer.detachFunctionThunk, .{}, .{ .ignore_arguments = false });
+    }
+
     pub fn visitPointers(self: *@This(), cb: anytype, args: anytype, comptime options: structure.VisitOptions) Error!void {
         const class = ZigClassEntry.fromStructure(self);
         if (class.flags.common.has_pointer) {
@@ -208,7 +220,16 @@ pub const VariadicStruct = struct {
                 }
             }
         }
-        // TODO: scan table for variadic arguments
+        const static = class.getStaticData(@This());
+        const ht = try php.getValueHashTable(&self.table);
+        var iter: HashTableIterator = .init(ht, .{});
+        while (iter.next()) |entry| {
+            const slot = iter.currentIndex().?;
+            if (slot >= static.first_variadic_slot) {
+                const obj = try php.getValueObject(entry);
+                try structure.invokeMethod(obj, "visitPointers", .{ cb, args, options });
+            }
+        }
     }
 
     pub fn freeObject(obj: *Object) void {

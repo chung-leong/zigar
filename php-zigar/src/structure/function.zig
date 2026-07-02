@@ -238,10 +238,6 @@ pub const Function = struct {
         const closure: *Closure = @fieldParentPtr("php_portion", func);
         const self: *@This() = closure.self;
         const fn_addr = @intFromPtr(self.buffer.bytes.ptr);
-        if (fn_addr == 0) {
-            // why would the address be zero?
-            @panic("TODO");
-        }
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         var arg_iter: ArgumentIterator = .init(ed);
@@ -306,6 +302,7 @@ pub const Function = struct {
                 const attr_addr = @intFromPtr(arg_struct.attributes.ptr);
                 const arg_count = arg_struct.attributes.len;
                 try class.host.runVariadicThunk(static.thunk_address, fn_addr, arg_addr, attr_addr, arg_count);
+                try arg_struct.detachFunctionThunks();
                 var retval = try arg_struct.getReturnValue();
                 if (self.transform) |tm| try tm.apply(&retval);
                 return_value.* = retval;
