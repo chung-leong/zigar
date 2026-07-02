@@ -532,7 +532,7 @@ pub fn StructLike(comptime S: type) type {
         pub fn findMember(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) ?*const ZigClassEntry.Member {
             const class = ZigClassEntry.fromStructure(self);
             const member_cache = class.getMemberCache();
-            if (member_cache.find(cache_slot, class) catch return null) |m| return m;
+            if (member_cache.find(cache_slot, class)) |m| return m;
             const member = class.getMember(scope, name) catch return null;
             member_cache.set(cache_slot, class, member);
             return member;

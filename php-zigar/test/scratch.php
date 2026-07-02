@@ -3,8 +3,11 @@
 // require __DIR__ . '/../vendor/autoload.php';
 // use Revolt\EventLoop;
 
-$m = zigar_use(__DIR__ . '/type-handling/fn/as-static-variables.zig');
+class Test {
+    var $world = "Hello world";
+}
 
-$m->func();
-$m->func = $m->world;
-$m->func();
+for ($i = 0; $i < 3; $i++) {   
+    $m = ($i === 0) ? new Test : zigar_use(__DIR__ . '/scratch.zig');
+    echo $m->world, "\n";
+}

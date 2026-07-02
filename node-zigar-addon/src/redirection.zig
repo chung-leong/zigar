@@ -339,15 +339,16 @@ pub fn Controller(comptime Host: type) type {
             start_address: usize,
             end_address: usize,
             vtable: *const Host.HandlerVTable,
+            host: *Host,
         };
 
         const empty_list: [*]const HandlerEntry = &.{
-            .{ .start_address = 0, .end_address = 0, .vtable = undefined },
+            .{ .start_address = 0, .end_address = 0, .vtable = undefined, .host = undefined },
         };
         var syscall_vtables: [*]const HandlerEntry = empty_list;
         var syscall_vtables_mutex: std.Thread.Mutex = .{};
 
-        pub fn addSyscallVtable(pos: LibExtent, vtable: *const Host.HandlerVTable) !void {
+        pub fn addSyscallVtable(host: *Host, pos: LibExtent, vtable: *const Host.HandlerVTable) !void {
             if (syscall_user_dispatch) {
                 // the list is a many pointer that we can update atomically
                 // in order to expand it we need to determine the new length first
@@ -372,6 +373,7 @@ pub fn Controller(comptime Host: type) type {
                     .start_address = pos.address,
                     .end_address = pos.address + pos.len,
                     .vtable = vtable,
+                    .host = host,
                 };
                 // add terminator
                 new_list[new_len] = empty_list[0];
@@ -382,7 +384,7 @@ pub fn Controller(comptime Host: type) type {
             }
         }
 
-        pub fn removeSyscallVtable(vtable: *const Host.HandlerVTable) !void {
+        pub fn removeSyscallVtable(host: *Host, vtable: *const Host.HandlerVTable) !void {
             if (syscall_user_dispatch) {
                 syscall_vtables_mutex.lock();
                 defer syscall_vtables_mutex.unlock();
@@ -400,7 +402,9 @@ pub fn Controller(comptime Host: type) type {
                     var index: usize = 0;
                     while (true) : (index += 1) {
                         const entry = list[index];
-                        if (entry.vtable == vtable) len -= 1;
+                        if (entry.vtable == vtable and entry.host == host) {
+                            len -= 1;
+                        }
                         if (entry.start_address == 0) break;
                     }
                     break :count len;
@@ -409,7 +413,7 @@ pub fn Controller(comptime Host: type) type {
                     const new_list = try c_allocator.alloc(HandlerEntry, new_len + 1);
                     var remaining: usize = 0;
                     for (list[0..old_len]) |entry| {
-                        if (entry.vtable != vtable) {
+                        if (entry.vtable != vtable or entry.host != host) {
                             new_list[remaining] = entry;
                             remaining += 1;
                         }
@@ -419,7 +423,7 @@ pub fn Controller(comptime Host: type) type {
                 } else {
                     syscall_vtables = empty_list;
                 }
-                c_allocator.free(list[0 .. old_len + 1]);
+                if (list != empty_list) c_allocator.free(list[0 .. old_len + 1]);
             }
         }
 

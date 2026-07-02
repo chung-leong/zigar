@@ -238,7 +238,7 @@ const ModuleHost = struct {
             if (self.syscall_trap_installed) {
                 if (self.getSyscallHook("__sc_vtable")) |hook| {
                     const vtable: *const HandlerVTable = @ptrCast(@alignCast(hook.handler));
-                    redirection_controller.removeSyscallVtable(vtable) catch {};
+                    redirection_controller.removeSyscallVtable(self, vtable) catch {};
                 }
             }
             if (self.library) |*lib| lib.close();
@@ -339,8 +339,8 @@ const ModuleHost = struct {
             if (module.attributes.io_redirection) {
                 if (self.getSyscallHook("__sc_vtable")) |hook| {
                     const vtable: *const HandlerVTable = @ptrCast(@alignCast(hook.handler));
-                    try redirection_controller.addSyscallVtable(pos, vtable);
-                    errdefer redirection_controller.removeSyscallVtable(vtable) catch {};
+                    try redirection_controller.addSyscallVtable(self, pos, vtable);
+                    errdefer redirection_controller.removeSyscallVtable(self, vtable) catch {};
                     if (redirection_controller.installSyscallTrap(&trapping_syscalls)) {
                         self.syscall_trap_installed = true;
                     } else |_| {}

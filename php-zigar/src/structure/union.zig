@@ -294,14 +294,10 @@ pub const Union = struct {
                 const member_cache = class.getMemberCache();
                 // look for cache entry left by findMember()
                 const entry = member_cache.findData(cache_slot, class);
-                if (entry) |e| {
-                    // the selector value is stored in the extra pointer
-                    if (e.extra) |ptr| break :get @ptrCast(@alignCast(ptr));
-                }
+                // the selector value is stored in the extra pointer
+                if (entry) |e| if (e.extra) |ptr| break :get @ptrCast(@alignCast(ptr));
                 const value = try php.getHashEntry(&selector.possible_values, name);
-                if (entry) |e| {
-                    e.extra = value;
-                }
+                if (entry) |e| e.extra = value;
                 break :get value;
             };
             const active_sel_value = try selector.accessors.get(self);

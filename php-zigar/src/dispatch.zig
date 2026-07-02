@@ -171,7 +171,7 @@ pub const CallDispatcher = struct {
         if (self.syscall_trap_installed) {
             if (self.getSyscallHook("__sc_vtable")) |hook| {
                 const vtable: *const HandlerVTable = @ptrCast(@alignCast(hook.handler));
-                redirection_controller.removeSyscallVtable(vtable) catch {};
+                redirection_controller.removeSyscallVtable(self, vtable) catch {};
             }
             redirection_controller.uninstallSyscallTrap();
         }
@@ -405,8 +405,8 @@ pub const CallDispatcher = struct {
         if (redirect_syscalls) {
             if (self.getSyscallHook("__sc_vtable")) |hook| {
                 const vtable: *const HandlerVTable = @ptrCast(@alignCast(hook.handler));
-                try redirection_controller.addSyscallVtable(pos, vtable);
-                errdefer redirection_controller.removeSyscallVtable(vtable) catch {};
+                try redirection_controller.addSyscallVtable(self, pos, vtable);
+                errdefer redirection_controller.removeSyscallVtable(self, vtable) catch {};
                 if (redirection_controller.installSyscallTrap(&trapping_syscalls)) {
                     self.syscall_trap_installed = true;
                 } else |_| {}
@@ -446,7 +446,7 @@ pub const CallDispatcher = struct {
         if (self.syscall_trap_installed) {
             if (self.getSyscallHook("__sc_vtable")) |hook| {
                 const vtable: *const HandlerVTable = @ptrCast(@alignCast(hook.handler));
-                return redirection_controller.addSyscallVtable(pos, vtable);
+                return redirection_controller.addSyscallVtable(self, pos, vtable);
             }
         }
     }

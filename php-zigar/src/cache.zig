@@ -35,14 +35,10 @@ pub fn IdCache(comptime tags: anytype, comptime prefix: []const u8, comptime ali
         };
         const id = std.fmt.comptimePrint("{}", .{tags});
 
-        pub inline fn find(self: @This(), cache_slot: ?[*]?*anyopaque) !?Id {
+        pub inline fn find(self: @This(), cache_slot: ?[*]?*anyopaque) ?Id {
             const data: *Data = if (cache_slot) |ptr| @ptrCast(ptr) else return null;
-            return if (data.id_address == @intFromPtr(id) ^ self.mask)
-                data.value
-            else if (data.id_address != 0)
-                error.ForAnotherCache
-            else
-                null;
+            const expected = @intFromPtr(id) ^ self.mask;
+            return if (data.id_address == expected) data.value else null;
         }
 
         pub inline fn set(self: @This(), cache_slot: ?[*]?*anyopaque, value: Id) void {
@@ -51,7 +47,7 @@ pub fn IdCache(comptime tags: anytype, comptime prefix: []const u8, comptime ali
         }
 
         pub fn idFromString(self: @This(), name: *String, cache_slot: ?[*]?*anyopaque) ?Id {
-            if (self.find(cache_slot) catch return null) |value| return value;
+            if (self.find(cache_slot)) |value| return value;
             return inline for (tags) |tag| {
                 if (php.matchString(name, prefix ++ @tagName(tag))) {
                     self.set(cache_slot, tag);
@@ -77,14 +73,10 @@ pub const TransformCache = struct {
     };
     const id = "Transform";
 
-    pub inline fn find(self: @This(), cache_slot: ?[*]?*anyopaque) !?accessor.Transform {
+    pub inline fn find(self: @This(), cache_slot: ?[*]?*anyopaque) ?accessor.Transform {
         const data: *Data = if (cache_slot) |ptr| @ptrCast(ptr) else return null;
-        return if (data.id_address == @intFromPtr(id) ^ self.mask)
-            data.value
-        else if (data.id_address != 0)
-            error.ForAnotherCache
-        else
-            null;
+        const expected = @intFromPtr(id) ^ self.mask;
+        return if (data.id_address == expected) data.value else null;
     }
 
     pub inline fn set(self: @This(), cache_slot: ?[*]?*anyopaque, value: accessor.Transform) void {
@@ -93,7 +85,7 @@ pub const TransformCache = struct {
     }
 
     pub fn idFromString(self: @This(), name: *String, cache_slot: ?[*]?*anyopaque) ?accessor.Transform {
-        if (self.find(cache_slot) catch return null) |value| return value;
+        if (self.find(cache_slot)) |value| return value;
         const transforms = .{
             .__value = .none,
             .__plain = .plain,
@@ -124,22 +116,18 @@ pub const MemberCache = struct {
         extra: ?*anyopaque = null,
     };
 
-    pub inline fn find(self: @This(), cache_slot: ?[*]?*anyopaque, class: *ZigClassEntry) !?*const ZigClassEntry.Member {
+    pub inline fn find(self: @This(), cache_slot: ?[*]?*anyopaque, class: *ZigClassEntry) ?*const ZigClassEntry.Member {
         const data: *Data = if (cache_slot) |ptr| @ptrCast(ptr) else return null;
         return if (data.class_address == @intFromPtr(class) ^ self.mask)
             data.member
-        else if (data.class_address != 0)
-            error.ForAnotherCache
         else
             null;
     }
 
     pub inline fn findData(self: @This(), cache_slot: ?[*]?*anyopaque, class: *ZigClassEntry) ?*Data {
         const data: *Data = if (cache_slot) |ptr| @ptrCast(ptr) else return null;
-        return if (data.class_address == @intFromPtr(class) ^ self.mask)
-            data
-        else
-            null;
+        const expected = @intFromPtr(class) ^ self.mask;
+        return if (data.class_address == expected) data else null;
     }
 
     pub inline fn set(self: @This(), cache_slot: ?[*]?*anyopaque, class: *ZigClassEntry, member: *const ZigClassEntry.Member) void {
