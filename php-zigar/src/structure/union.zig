@@ -3,7 +3,6 @@ const std = @import("std");
 const accessor = @import("../accessor.zig");
 const Transform = accessor.Transform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
-const cache = @import("../cache.zig");
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const failure = @import("../failure.zig");
 const Error = failure.Error;
@@ -34,7 +33,9 @@ pub const Union = struct {
             possible_values: HashTable,
         } = null,
 
-        pub const StaticPropCache = cache.IdCache(.{.tag}, "__", .{});
+        pub const props = .{.tag};
+        pub const prefix = "__";
+        pub const aliases = .{};
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
@@ -93,10 +94,11 @@ pub const Union = struct {
         }
 
         pub fn getStaticProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) !Value {
-            if (StaticPropCache.idFromString(name, cache_slot)) |id| {
+            const class = ZigClassEntry.fromStatic(self);
+            const id_cache = class.getIdCache(props, prefix, aliases);
+            if (id_cache.idFromString(name, cache_slot)) |id| {
                 switch (id) {
                     .tag => {
-                        const class = ZigClassEntry.fromStatic(self);
                         if (class.flags.@"union".has_tag) {
                             const sel = self.selector orelse return error.Unexpected;
                             return php.createValueObject(php.reuse(sel.class.object));
@@ -107,12 +109,12 @@ pub const Union = struct {
             return error.Missing;
         }
 
-        pub fn staticPropertyExists(_: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) bool {
-            return StaticPropCache.idFromString(name, cache_slot) != null;
+        pub fn staticPropertyExists(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) bool {
+            const class = ZigClassEntry.fromStatic(self);
+            const id_cache = class.getIdCache(props, prefix, aliases);
+            return id_cache.idFromString(name, cache_slot) != null;
         }
     };
-    pub const MemberCache = cache.MemberCache;
-    pub const TransformCache = cache.TransformCache;
 
     pub fn initialize(self: *@This(), allocator: ?*std.mem.Allocator, initializer: ?*const Value, read_only: bool) !void {
         const class = ZigClassEntry.fromStructure(self);
@@ -284,12 +286,14 @@ pub const Union = struct {
         const static = class.getStaticData(@This());
         const selector = static.selector orelse return;
         // don't check if the name is a special property
-        if (TransformCache.idFromString(name, cache_slot)) |_| return;
+        const transform_cache = class.getTransformCache();
+        if (transform_cache.idFromString(name, cache_slot)) |_| return;
         if (self.findMember(name, cache_slot)) |member| {
             if (member.accessors == .property) return;
             const sel_value: *Value = get: {
+                const member_cache = class.getMemberCache();
                 // look for cache entry left by findMember()
-                const entry = MemberCache.findSelf(cache_slot, class);
+                const entry = member_cache.findData(cache_slot, class);
                 if (entry) |e| {
                     // the selector value is stored in the extra pointer
                     if (e.extra) |ptr| break :get @ptrCast(@alignCast(ptr));

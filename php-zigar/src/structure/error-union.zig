@@ -2,7 +2,6 @@ const std = @import("std");
 
 const accessor = @import("../accessor.zig");
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
-const cache = @import("../cache.zig");
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const ZigException = @import("../exception.zig").ZigException;
 const failure = @import("../failure.zig");
@@ -27,7 +26,9 @@ pub const ErrorUnion = struct {
         error_acc: *accessor.Constant = undefined,
         error_class: *ZigClassEntry = undefined,
 
-        pub const StaticPropCache = cache.IdCache(.{ .payload, .error_set }, "__", .{});
+        pub const props = .{ .payload, .error_set };
+        pub const prefix = "__";
+        pub const aliases = .{};
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
@@ -41,7 +42,9 @@ pub const ErrorUnion = struct {
         }
 
         pub fn getStaticProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) !Value {
-            if (StaticPropCache.idFromString(name, cache_slot)) |id| {
+            const class = ZigClassEntry.fromStatic(self);
+            const id_cache = class.getIdCache(props, prefix, aliases);
+            if (id_cache.idFromString(name, cache_slot)) |id| {
                 const prop_obj = switch (id) {
                     .payload => self.payload_class.object,
                     .error_set => self.error_class.object,
@@ -52,8 +55,10 @@ pub const ErrorUnion = struct {
             }
         }
 
-        pub fn staticPropertyExists(_: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) bool {
-            return StaticPropCache.idFromString(name, cache_slot) != null;
+        pub fn staticPropertyExists(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) bool {
+            const class = ZigClassEntry.fromStatic(self);
+            const id_cache = class.getIdCache(props, prefix, aliases);
+            return id_cache.idFromString(name, cache_slot) != null;
         }
     };
 

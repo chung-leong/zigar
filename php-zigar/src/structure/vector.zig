@@ -3,7 +3,6 @@ const std = @import("std");
 const accessor = @import("../accessor.zig");
 const Transform = accessor.Transform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
-const cache = @import("../cache.zig");
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const php = @import("../php.zig");
 const ClassEntry = php.ClassEntry;
@@ -24,7 +23,9 @@ pub const Vector = struct {
         element_class: *ZigClassEntry = undefined,
         is_bool_element: bool = undefined,
 
-        pub const StaticPropCache = cache.IdCache(.{ .child, .length }, "__", .{});
+        pub const props = .{ .child, .length };
+        pub const prefix = "__";
+        pub const aliases = .{};
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
@@ -37,8 +38,9 @@ pub const Vector = struct {
         }
 
         pub fn getStaticProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) !Value {
-            if (StaticPropCache.idFromString(name, cache_slot)) |id| {
-                const class = ZigClassEntry.fromStatic(self);
+            const class = ZigClassEntry.fromStatic(self);
+            const id_cache = class.getIdCache(props, prefix, aliases);
+            if (id_cache.idFromString(name, cache_slot)) |id| {
                 return switch (id) {
                     .child => php.createValueObject(php.reuse(self.element_class.object)),
                     .length => php.createValueAnyInt(class.length.?),
@@ -48,8 +50,10 @@ pub const Vector = struct {
             }
         }
 
-        pub fn staticPropertyExists(_: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) bool {
-            return StaticPropCache.idFromString(name, cache_slot) != null;
+        pub fn staticPropertyExists(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) bool {
+            const class = ZigClassEntry.fromStatic(self);
+            const id_cache = class.getIdCache(props, prefix, aliases);
+            return id_cache.idFromString(name, cache_slot) != null;
         }
     };
 

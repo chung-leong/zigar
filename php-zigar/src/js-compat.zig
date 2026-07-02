@@ -90,7 +90,8 @@ pub const ArrayBuffer = struct {
     }
 
     pub fn readProperty(obj: *Object, name: *String, _: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
-        if (PropCache.idFromString(name, cache_slot)) |id| {
+        const id_cache: PropCache = .{};
+        if (id_cache.idFromString(name, cache_slot)) |id| {
             const self = fromObject(obj);
             if (self.getProperty(id)) |value| {
                 retval.* = value;
@@ -115,7 +116,8 @@ pub const ArrayBuffer = struct {
     pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
         _ = obj;
         _ = value;
-        if (PropCache.idFromString(name, cache_slot)) |id| {
+        const id_cache: PropCache = .{};
+        if (id_cache.idFromString(name, cache_slot)) |id| {
             return switch (id) {
                 .byteLength,
                 .detached,
@@ -130,7 +132,8 @@ pub const ArrayBuffer = struct {
     pub fn hasProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque) c_int {
         _ = prop_type;
         _ = obj;
-        return if (PropCache.idFromString(name, cache_slot)) |_| 1 else 0;
+        const id_cache: PropCache = .{};
+        return if (id_cache.idFromString(name, cache_slot)) |_| 1 else 0;
     }
 
     pub fn getProperties(obj: *Object) !*HashTable {
@@ -414,7 +417,8 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
         }
 
         pub fn readProperty(obj: *Object, name: *String, _: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
-            if (PropCache.idFromString(name, cache_slot)) |id| {
+            const id_cache: PropCache = .{};
+            if (id_cache.idFromString(name, cache_slot)) |id| {
                 const self = fromObject(obj);
                 if (self.getProperty(id)) |value| {
                     retval.* = value;
@@ -431,7 +435,8 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
         pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
             _ = obj;
             _ = value;
-            if (PropCache.idFromString(name, cache_slot)) |id| {
+            const id_cache: PropCache = .{};
+            if (id_cache.idFromString(name, cache_slot)) |id| {
                 return switch (id) {
                     else => reportFieldError(name, .write, error.WriteProtected),
                 };
@@ -443,7 +448,8 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
         pub fn hasProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque) c_int {
             _ = prop_type;
             _ = obj;
-            return if (PropCache.idFromString(name, cache_slot)) |_| 1 else 0;
+            const id_cache: PropCache = .{};
+            return if (id_cache.idFromString(name, cache_slot)) |_| 1 else 0;
         }
 
         pub fn getProperties(obj: *Object) !*HashTable {

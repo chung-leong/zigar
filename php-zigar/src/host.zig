@@ -27,6 +27,7 @@ const fn_transform = @import("zigft/fn-transform.zig");
 
 pub const ModuleHost = struct {
     ref_count: isize = 0,
+    cache_mask: usize,
     module: *Module,
     module_path: *String,
     library: ?DynLib = null,
@@ -43,6 +44,8 @@ pub const ModuleHost = struct {
     const Module = ModuleGeneric(StructureImporter.Handle);
     const AllocatorMethodId = enum(usize) { alloc = 1, resize, remap, free };
 
+    threadlocal var prev_cache_mask: usize = 0;
+
     pub fn load(path: []const u8) !Value {
         var lib: DynLib = try DynLib.open(path);
         errdefer lib.close();
@@ -50,12 +53,15 @@ pub const ModuleHost = struct {
         if (module.version != Module.current_version) return error.IncorrectVersion;
         var self: *@This() = try php.allocator.create(@This());
         errdefer php.allocator.destroy(self);
+        const cache_mask = std.hash.CityHash64.hash(std.mem.asBytes(&prev_cache_mask));
         self.* = .{
+            .cache_mask = cache_mask,
             .module = module,
             .module_path = php.createString(std.mem.sliceTo(module.module_path, 0)),
             .plain_object_table = php.createHashTable(null),
             .exception_table = php.createHashTable(php.getDestructor(.value)),
         };
+        prev_cache_mask = cache_mask;
         // install hooks
         self.dispatcher = try .init(self);
         errdefer self.dispatcher.deinit();

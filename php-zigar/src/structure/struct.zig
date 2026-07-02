@@ -6,7 +6,6 @@ const AbortSignalStatic = @import("../abort-signal.zig").AbortSignalStatic;
 const accessor = @import("../accessor.zig");
 const AllocatorStatic = @import("../allocator.zig").AllocatorStatic;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
-const cache = @import("../cache.zig");
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const extension = @import("../extension.zig");
 const failure = @import("../failure.zig");
@@ -65,7 +64,9 @@ pub const Struct = struct {
         } = undefined,
         root: ?*Root = null,
 
-        pub const StaticPropCache = cache.IdCache(.{ .length, .zigar }, "__", .{});
+        pub const props = .{ .length, .zigar };
+        pub const prefix = "__";
+        pub const aliases = .{};
         pub const Root = struct {
             symbol_names: ?*HashTable = null,
             symbol_types: ?*HashTable = null,
@@ -134,8 +135,9 @@ pub const Struct = struct {
         }
 
         pub fn getStaticProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) !Value {
-            if (StaticPropCache.idFromString(name, cache_slot)) |id| {
-                const class = ZigClassEntry.fromStatic(self);
+            const class = ZigClassEntry.fromStatic(self);
+            const id_cache = class.getIdCache(props, prefix, aliases);
+            if (id_cache.idFromString(name, cache_slot)) |id| {
                 switch (id) {
                     .length => {
                         if (class.flags.@"struct".is_tuple) {

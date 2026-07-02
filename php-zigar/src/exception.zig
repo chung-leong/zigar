@@ -126,7 +126,8 @@ pub const ZigException = struct {
 
     pub fn readProperty(obj: *Object, name: *String, _: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
         const self = fromObject(obj);
-        if (PropCache.idFromString(name, cache_slot)) |id| {
+        const id_cache: PropCache = .{};
+        if (id_cache.idFromString(name, cache_slot)) |id| {
             return switch (id) {
                 inline else => |t| &@field(self, @tagName(t)),
             };
@@ -142,7 +143,8 @@ pub const ZigException = struct {
 
     pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
         const self = fromObject(obj);
-        if (PropCache.idFromString(name, cache_slot)) |id| {
+        const id_cache: PropCache = .{};
+        if (id_cache.idFromString(name, cache_slot)) |id| {
             switch (id) {
                 inline else => |t| {
                     const ptr = &@field(self, @tagName(t));
@@ -160,7 +162,8 @@ pub const ZigException = struct {
     }
 
     pub fn hasProperty(_: *Object, name: *String, _: c_int, cache_slot: ?[*]?*anyopaque) c_int {
-        return if (PropCache.idFromString(name, cache_slot) != null) 1 else 0;
+        const id_cache: PropCache = .{};
+        return if (id_cache.idFromString(name, cache_slot) != null) 1 else 0;
     }
 
     pub fn getProperties(obj: *Object) !*HashTable {

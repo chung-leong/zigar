@@ -2,7 +2,6 @@ const std = @import("std");
 
 const accessor = @import("../accessor.zig");
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
-const cache = @import("../cache.zig");
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const ZigException = @import("../exception.zig").ZigException;
 const failure = @import("../failure.zig");

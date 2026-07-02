@@ -3,7 +3,6 @@ const std = @import("std");
 const accessor = @import("../accessor.zig");
 const Transform = accessor.Transform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
-const cache = @import("../cache.zig");
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const Error = @import("../failure.zig").Error;
 const ZigObject = @import("../object.zig").ZigObject;
@@ -29,7 +28,9 @@ pub const Slice = struct {
             accessors: *accessor.Any,
         } = undefined,
 
-        pub const StaticPropCache = cache.IdCache(.{.child}, "__", .{});
+        pub const props = .{.child};
+        pub const prefix = "__";
+        pub const aliases = .{};
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
@@ -52,7 +53,9 @@ pub const Slice = struct {
         }
 
         pub fn getStaticProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) !Value {
-            if (StaticPropCache.idFromString(name, cache_slot)) |id| {
+            const class = ZigClassEntry.fromStatic(self);
+            const id_cache = class.getIdCache(props, prefix, aliases);
+            if (id_cache.idFromString(name, cache_slot)) |id| {
                 return switch (id) {
                     .child => php.createValueObject(php.reuse(self.element_class.object)),
                 };
@@ -61,8 +64,10 @@ pub const Slice = struct {
             }
         }
 
-        pub fn staticPropertyExists(_: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) bool {
-            return StaticPropCache.idFromString(name, cache_slot) != null;
+        pub fn staticPropertyExists(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) bool {
+            const class = ZigClassEntry.fromStatic(self);
+            const id_cache = class.getIdCache(props, prefix, aliases);
+            return id_cache.idFromString(name, cache_slot) != null;
         }
 
         pub fn findSentinelIndex(self: *@This(), ptr: [*]const u8) usize {

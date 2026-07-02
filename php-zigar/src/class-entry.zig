@@ -10,6 +10,7 @@ const AbortSignal = @import("abort-signal.zig").AbortSignal;
 const accessor = @import("accessor.zig");
 const ArrayBuffer = @import("js-compat.zig").ArrayBuffer;
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
+const cache = @import("cache.zig");
 const failure = @import("failure.zig");
 const getObjectBuffer = @import("object.zig").getObjectBuffer;
 const Host = @import("host.zig").ModuleHost;
@@ -34,6 +35,7 @@ const ZigObject = @import("object.zig").ZigObject;
 pub const ZigClassEntry = struct {
     object: *Object,
     host: *Host,
+    cache_mask: usize,
     type: StructureType,
     purpose: StructurePurpose,
     flags: StructureFlags,
@@ -189,6 +191,7 @@ pub const ZigClassEntry = struct {
         errdefer php.allocator.destroy(self);
         self.* = .{
             .host = host,
+            .cache_mask = host.cache_mask,
             .type = structure_type,
             .purpose = purpose,
             .flags = flags,
@@ -434,6 +437,18 @@ pub const ZigClassEntry = struct {
             self.php_portion.name = self.inferName() catch N("Unknown");
         }
         return php.getStringContent(self.php_portion.name);
+    }
+
+    pub fn getIdCache(self: *@This(), comptime tags: anytype, comptime prefix: []const u8, comptime aliases: anytype) cache.IdCache(tags, prefix, aliases) {
+        return .{ .mask = self.cache_mask };
+    }
+
+    pub fn getMemberCache(self: *@This()) cache.MemberCache {
+        return .{ .mask = self.cache_mask };
+    }
+
+    pub fn getTransformCache(self: *@This()) cache.TransformCache {
+        return .{ .mask = self.cache_mask };
     }
 
     pub fn getMember(self: *@This(), comptime scope: ScopeType, key: anytype) !*Member {

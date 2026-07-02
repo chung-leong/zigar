@@ -4,7 +4,6 @@ const interface = @import("./module/native/interface.zig");
 const StructureType = interface.StructureType;
 const accessor = @import("accessor.zig");
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
-const cache = @import("cache.zig");
 const failure = @import("failure.zig");
 const Error = failure.Error;
 const iterator = @import("iterator.zig");
@@ -77,8 +76,6 @@ pub fn enumName(comptime S: type) []const u8 {
 pub fn Parent(comptime S: type) type {
     return struct {
         pub const scope: ZigClassEntry.ScopeType = if (@hasDecl(S, "scope")) S.scope else .instance;
-
-        const TransformCache = cache.TransformCache;
 
         pub fn object(self: *S) *Object {
             return &ZigObject(S).fromStructure(self).php_portion;
@@ -232,17 +229,23 @@ pub fn Parent(comptime S: type) type {
         }
 
         pub fn getProperty(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) Error!Value {
-            const transform = TransformCache.idFromString(name, cache_slot) orelse return error.Missing;
+            const class = ZigClassEntry.fromStructure(self);
+            const transform_cache = class.getTransformCache();
+            const transform = transform_cache.idFromString(name, cache_slot) orelse return error.Missing;
             return try self.getValue(transform);
         }
 
         pub fn setProperty(self: *S, name: *String, value: *const Value, cache_slot: ?[*]?*anyopaque) Error!void {
-            const transform = TransformCache.idFromString(name, cache_slot) orelse return error.Missing;
+            const class = ZigClassEntry.fromStructure(self);
+            const transform_cache = class.getTransformCache();
+            const transform = transform_cache.idFromString(name, cache_slot) orelse return error.Missing;
             return try self.setValue(value, transform);
         }
 
-        pub fn propertyExists(_: *S, name: *String, cache_slot: ?[*]?*anyopaque) bool {
-            return TransformCache.idFromString(name, cache_slot) != null;
+        pub fn propertyExists(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) bool {
+            const class = ZigClassEntry.fromStructure(self);
+            const transform_cache = class.getTransformCache();
+            return transform_cache.idFromString(name, cache_slot) != null;
         }
 
         pub fn findMethod(self: *S, name: *String) !?*php.Function {
@@ -466,8 +469,6 @@ pub fn StructLike(comptime S: type) type {
         pub const Super = Parent(S);
         pub const scope = Super.scope;
 
-        const MemberCache = cache.MemberCache;
-
         pub fn getValue(self: *S, transform: accessor.Transform) !Value {
             switch (transform) {
                 .string, .integer => return error.Unsupported,
@@ -530,9 +531,10 @@ pub fn StructLike(comptime S: type) type {
 
         pub fn findMember(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) ?*const ZigClassEntry.Member {
             const class = ZigClassEntry.fromStructure(self);
-            if (MemberCache.find(cache_slot, class) catch return null) |m| return m;
+            const member_cache = class.getMemberCache();
+            if (member_cache.find(cache_slot, class) catch return null) |m| return m;
             const member = class.getMember(scope, name) catch return null;
-            MemberCache.set(cache_slot, class, member);
+            member_cache.set(cache_slot, class, member);
             return member;
         }
 

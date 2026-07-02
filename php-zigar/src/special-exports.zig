@@ -98,7 +98,8 @@ pub const SpecialExports = struct {
     }
 
     pub fn findMethod(self: *@This(), name: *String) !?*php.Function {
-        const id = Methods.Cache.idFromString(name, null) orelse return null;
+        const id_cache: Methods.Cache = .{ .mask = self.host.cache_mask };
+        const id = id_cache.idFromString(name, null) orelse return null;
         return switch (id) {
             inline else => |t| &@field(self.methods, @tagName(t)),
         };
@@ -182,7 +183,8 @@ pub const SpecialExports = struct {
         const arg0 = arg_iter.next() orelse return error.NotString;
         const name = try php.getValueString(arg0);
         const arg1 = arg_iter.next() orelse return error.NotString;
-        const stream_id = StreamNameCache.idFromString(name, null) orelse {
+        const name_cache: StreamNameCache = .{ .mask = self.host.cache_mask };
+        const stream_id = name_cache.idFromString(name, null) orelse {
             return failure.report("expecting 'stdin', 'stdout', 'stderr', or 'root', received: {s}", .{
                 php.getStringContent(name),
             });

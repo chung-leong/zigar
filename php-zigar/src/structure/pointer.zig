@@ -2,7 +2,6 @@ const std = @import("std");
 
 const accessor = @import("../accessor.zig");
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
-const cache = @import("../cache.zig");
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const failure = @import("../failure.zig");
 const Error = failure.Error;
@@ -32,7 +31,9 @@ pub const Pointer = struct {
         address_acc: *accessor.Int(.{ .bit_size = @bitSizeOf(usize), .signedness = .unsigned }) = undefined,
         length_acc: ?*accessor.Int(.{ .bit_size = @bitSizeOf(usize), .signedness = .unsigned }) = null,
 
-        pub const StaticPropCache = cache.IdCache(.{.child}, "__", .{});
+        pub const props = .{.child};
+        pub const prefix = "__";
+        pub const aliases = .{};
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
@@ -119,7 +120,9 @@ pub const Pointer = struct {
         }
 
         pub fn getStaticProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) !Value {
-            if (StaticPropCache.idFromString(name, cache_slot)) |id| {
+            const class = ZigClassEntry.fromStatic(self);
+            const id_cache = class.getIdCache(Static.props, Static.prefix, Static.aliases);
+            if (id_cache.idFromString(name, cache_slot)) |id| {
                 const prop_obj = switch (id) {
                     .child => self.target_class.object,
                 };
@@ -129,11 +132,15 @@ pub const Pointer = struct {
             }
         }
 
-        pub fn staticPropertyExists(_: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) bool {
-            return StaticPropCache.idFromString(name, cache_slot) != null;
+        pub fn staticPropertyExists(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) bool {
+            const class = ZigClassEntry.fromStatic(self);
+            const id_cache = class.getIdCache(Static.props, Static.prefix, Static.aliases);
+            return id_cache.idFromString(name, cache_slot) != null;
         }
     };
-    pub const PropCache = cache.IdCache(.{ .target, .length }, "__", .{ .@"*" = .target });
+    pub const props = .{ .target, .length };
+    pub const prefix = "__";
+    pub const aliases = .{ .@"*" = .target };
 
     pub fn getValue(self: *@This(), transform: accessor.Transform) Error!Value {
         const target_obj = try self.getTarget();
@@ -240,8 +247,9 @@ pub const Pointer = struct {
 
     pub fn getProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) Error!Value {
         const target_obj = try self.getTarget();
-        if (PropCache.idFromString(name, cache_slot)) |id| {
-            const class = ZigClassEntry.fromStructure(self);
+        const class = ZigClassEntry.fromStructure(self);
+        const id_cache = class.getIdCache(props, prefix, aliases);
+        if (id_cache.idFromString(name, cache_slot)) |id| {
             const static = class.getStaticData(@This());
             switch (id) {
                 .target => {
@@ -263,8 +271,9 @@ pub const Pointer = struct {
 
     pub fn setProperty(self: *@This(), name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) Error!void {
         const target_obj = try self.getTarget();
-        if (PropCache.idFromString(name, cache_slot)) |id| {
-            const class = ZigClassEntry.fromStructure(self);
+        const class = ZigClassEntry.fromStructure(self);
+        const id_cache = class.getIdCache(props, prefix, aliases);
+        if (id_cache.idFromString(name, cache_slot)) |id| {
             const static = class.getStaticData(@This());
             switch (id) {
                 .target => {
@@ -297,7 +306,9 @@ pub const Pointer = struct {
     }
 
     pub fn propertyExists(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) bool {
-        return PropCache.idFromString(name, cache_slot) != null or check: {
+        const class = ZigClassEntry.fromStructure(self);
+        const id_cache = class.getIdCache(props, prefix, aliases);
+        return id_cache.idFromString(name, cache_slot) != null or check: {
             const target_obj = self.getTarget() catch return false;
             if (self.isPointerToPointer()) return false;
             break :check invokeMethod(target_obj, "propertyExists", .{ name, cache_slot }) catch unreachable;
