@@ -16,3 +16,6 @@ $m->call(3,
         echo "tutaj nie mieszka\n";
     }),
 );
+
+debug_zval_dump($m->hello);
+debug_zval_dump($m->world);

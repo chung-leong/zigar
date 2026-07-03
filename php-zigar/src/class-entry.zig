@@ -1254,17 +1254,27 @@ pub const ZigClassEntry = struct {
             .pointer => get: {
                 const member_value = try php.getHashEntry(&self.instance.members, 0);
                 const member = try php.getValuePointer(*Member, member_value);
+                const sentinel = if (member.class.type == .slice and member.class.flags.slice.has_sentinel) init: {
+                    const slice_static = member.class.getStaticData(structure.Slice);
+                    var sentinel_value = try slice_static.sentinel.accessors.getElement(&slice_static.sentinel, 0);
+                    defer php.release(&sentinel_value);
+                    try php.convertValue(&sentinel_value, .string);
+                    const sentinel_sc = try php.getValueStringContent(&sentinel_value);
+                    break :init try std.fmt.allocPrint(allocator, ":{s}", .{sentinel_sc});
+                } else null;
+                defer if (sentinel) |s| allocator.free(s);
                 var prefix: []const u8 = switch (self.flags.pointer.is_multiple) {
-                    false => "*",
+                    false => try allocator.dupe(u8, "*"),
                     true => if (self.flags.pointer.has_length)
-                        "[]"
+                        try std.fmt.allocPrint(allocator, "[{s}]", .{sentinel orelse ""})
                     else if (self.flags.pointer.is_single)
-                        "[*c]"
+                        try allocator.dupe(u8, "[*c]")
                     else
-                        "[*]",
+                        try std.fmt.allocPrint(allocator, "[*{s}]", .{sentinel orelse ""}),
                 };
-                // TODO: deal with sentinel
                 if (self.flags.pointer.is_const) {
+                    const nonconst_prefix = prefix;
+                    defer allocator.free(nonconst_prefix);
                     prefix = try std.fmt.allocPrint(allocator, "{s}const ", .{prefix});
                 }
                 var element_name = member.class.getName();
