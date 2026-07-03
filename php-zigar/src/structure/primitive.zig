@@ -35,6 +35,7 @@ pub const Primitive = struct {
     }
 
     pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) !void {
+        if (try self.copySelf(value)) return;
         if (transform == .none) {
             const class = ZigClassEntry.fromStructure(self);
             const static = class.getStaticData(@This());
@@ -105,4 +106,5 @@ pub const Primitive = struct {
     pub const getGarbageCollection = Super.getGarbageCollection;
     pub const fromObject = Super.fromObject;
     pub const fromValue = Super.fromValue;
+    const copySelf = Super.copySelf;
 };

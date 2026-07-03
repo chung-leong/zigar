@@ -6,6 +6,7 @@ const accessor = @import("accessor.zig");
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const failure = @import("failure.zig");
 const Error = failure.Error;
+const getObjectBuffer = @import("object.zig").getObjectBuffer;
 const iterator = @import("iterator.zig");
 const js_compat = @import("js-compat.zig");
 const php = @import("php.zig");
@@ -311,10 +312,14 @@ pub fn Parent(comptime S: type) type {
             return &class_struct.constructor;
         }
 
-        pub fn cloneObject(obj: *Object) !*Object {
+        pub fn cloneObject(obj: *Object) *Object {
             const class = ZigClassEntry.fromObject(obj);
             const initializer = php.createValueObject(obj);
-            return try class.createObject(null, &initializer, false);
+            const buf = getObjectBuffer(obj);
+            const new_obj = class.createObject(null, &initializer, buf.flags.read_only) catch |err| {
+                @panic(@errorName(err));
+            };
+            return new_obj;
         }
 
         pub fn freeObject(obj: *Object) void {
@@ -370,7 +375,12 @@ pub fn Parent(comptime S: type) type {
                 else => return php.FAILURE,
             };
             retval.* = try self.getValue(transform);
-            if (php.getValueType(retval) != desired_type) {
+            var retval_type = php.getValueType(retval);
+            // boolean is not a real type
+            if (retval_type == .true or retval_type == .false) {
+                retval_type = .boolean;
+            }
+            if (retval_type != desired_type) {
                 php.release(retval);
                 return php.FAILURE;
             }
