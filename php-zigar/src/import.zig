@@ -51,6 +51,7 @@ pub const StructureImporter = struct {
     }
 
     pub fn deinit(self: *@This()) void {
+        // we don't need to worry about buffers stored in value_list, since the buffer map owns them
         for (self.value_list.items) |*item| php.release(item);
         for (self.class_list.items) |class_obj| php.release(class_obj);
         self.value_list.deinit(php.allocator);
@@ -74,16 +75,21 @@ pub const StructureImporter = struct {
         return php.reuse(root_obj);
     }
 
-    fn allocateHandle(self: *@This(), value: Value) Handle {
-        const handle_value = for (self.value_list.items, 0..) |*item, i| {
-            if (item.u1.v.type == value.u1.v.type and item.value.ptr == value.value.ptr)
-                break i + 1;
-        } else insert: {
-            self.value_list.append(php.allocator, value) catch
-                @panic("Unable to allocate value");
-            break :insert self.value_list.items.len;
-        };
-        return @ptrFromInt(handle_value);
+    fn obtainHandle(self: *@This(), value: Value) Handle {
+        return self.findHandle(value) orelse self.addHandle(value);
+    }
+
+    fn addHandle(self: *@This(), value: Value) Handle {
+        self.value_list.append(php.allocator, value) catch @panic("Unable to allocate value");
+        return @ptrFromInt(self.value_list.items.len);
+    }
+
+    fn findHandle(self: *@This(), value: Value) ?Handle {
+        return for (self.value_list.items, 0..) |*item, i| {
+            if (item.u1.v.type == value.u1.v.type and item.value.ptr == value.value.ptr) {
+                break @ptrFromInt(i + 1);
+            }
+        } else null;
     }
 
     fn dereference(self: *@This(), handle: Handle) *Value {
@@ -93,7 +99,7 @@ pub const StructureImporter = struct {
 
     pub fn createBool(self: *@This(), initializer: bool) !Handle {
         const value = php.createValueBool(initializer);
-        return self.allocateHandle(value);
+        return self.obtainHandle(value);
     }
 
     pub fn createInteger(self: *@This(), initializer: i32, unsigned: bool) !Handle {
@@ -101,7 +107,7 @@ pub const StructureImporter = struct {
             php.createValueAnyInt(@as(u32, @bitCast(initializer)))
         else
             php.createValueAnyInt(initializer);
-        return self.allocateHandle(value);
+        return self.obtainHandle(value);
     }
 
     pub fn createBigInteger(self: *@This(), initializer: i64, unsigned: bool) !Handle {
@@ -109,19 +115,19 @@ pub const StructureImporter = struct {
             php.createValueAnyInt(@as(u64, @bitCast(initializer)))
         else
             php.createValueAnyInt(initializer);
-        return self.allocateHandle(value);
+        return self.obtainHandle(value);
     }
 
     pub fn createString(self: *@This(), byte_ptr: [*]const u8, len: usize) !Handle {
         const value = php.createValueStringContent(byte_ptr[0..len]);
-        return self.allocateHandle(value);
+        return self.addHandle(value);
     }
 
     pub fn createView(self: *@This(), byte_ptr: ?[*]const u8, len: usize, copying: bool, read_only: bool, _: usize, byte_align: usize) !Handle {
         if (!std.math.isPowerOfTwo(byte_align)) return error.InvalidAlignment;
         const alignment = std.mem.Alignment.fromByteUnits(byte_align);
         const bytes = if (byte_ptr) |ptr| ptr[0..len] else &.{};
-        const buffer, const insertion_pos = get: {
+        const buffer, const insertion_pos = init: {
             if (copying) {
                 const buf = try ByteBuffer.create(alignment);
                 errdefer buf.release();
@@ -132,7 +138,7 @@ pub const StructureImporter = struct {
                     .read_only = read_only,
                     .alignment = alignment,
                 });
-                break :get .{ buf, result };
+                break :init .{ buf, result };
             } else {
                 const result = self.buffer_map.find(.{
                     .bytes = bytes,
@@ -140,23 +146,20 @@ pub const StructureImporter = struct {
                     .alignment = alignment,
                 });
                 if (self.buffer_map.get(result)) |buf| {
-                    // omit search result, since the buffer exists already
-                    break :get .{ buf, null };
+                    const value = php.createValuePointer(buf);
+                    return self.findHandle(value) orelse error.Unexpected;
                 }
                 const possible_parent = self.buffer_map.getNearest(result);
                 const buf = try ByteBuffer.create(alignment);
                 buf.referenceBytes(bytes, possible_parent);
-                errdefer buf.release();
-                // the map does not own the buffer
-                break :get .{ buf, result };
+                break :init .{ buf, result };
             }
         };
-        if (insertion_pos) |pos| {
-            try self.buffer_map.insert(pos, buffer);
-            if (read_only) buffer.protect();
-        }
+        errdefer buffer.release();
+        try self.buffer_map.insert(insertion_pos, buffer);
+        if (read_only) buffer.protect();
         const value = php.createValuePointer(buffer);
-        return self.allocateHandle(value);
+        return self.addHandle(value);
     }
 
     pub fn createInstance(self: *@This(), structure_h: Handle, dv_h: Handle, prefilled_table_h: ?Handle) !Handle {
@@ -169,7 +172,14 @@ pub const StructureImporter = struct {
         const prefilled_table = if (prefilled_table_h) |vh| self.dereference(vh) else null;
         const instance = try class.obtainObjectFromBuffer(buf, prefilled_table);
         const value = php.createValueObject(instance);
-        return self.allocateHandle(value);
+        if (instance.gc.refcount > 1) {
+            if (self.findHandle(value)) |handle| {
+                // existing object--decrement ref count
+                php.delRef(instance);
+                return handle;
+            }
+        }
+        return self.addHandle(value);
     }
 
     pub fn createTemplate(self: *@This(), dv_h: ?Handle, slots_h: ?Handle) !Handle {
@@ -183,7 +193,7 @@ pub const StructureImporter = struct {
             php.setHashEntry(ht, N("table"), slots);
         }
         const value: Value = php.createValueArray(ht);
-        return self.allocateHandle(value);
+        return self.addHandle(value);
     }
 
     pub fn createList(self: *@This()) !Handle {
@@ -193,7 +203,7 @@ pub const StructureImporter = struct {
     pub fn createObject(self: *@This()) !Handle {
         const ht = php.createNonDestructiveArray();
         const value = php.createValueArray(ht);
-        return self.allocateHandle(value);
+        return self.addHandle(value);
     }
 
     pub fn appendList(self: *@This(), list_h: Handle, element_h: Handle) !void {
@@ -207,7 +217,7 @@ pub const StructureImporter = struct {
         const key_str = php.createInternedString(key);
         const object = self.dereference(object_h);
         const value = try php.getProperty(object, key_str);
-        return self.allocateHandle(value.*);
+        return self.findHandle(value.*) orelse error.Unexpected;
     }
 
     pub fn setProperty(self: *@This(), object_h: Handle, key_bytes: [*]const u8, key_len: usize, value_h: ?Handle) !void {
@@ -227,7 +237,7 @@ pub const StructureImporter = struct {
     pub fn getSlotValue(self: *@This(), object_h: Handle, slot: usize) !Handle {
         const object = self.dereference(object_h);
         const value = try php.getProperty(object, slot);
-        return self.allocateHandle(value.*);
+        return self.findHandle(value.*) orelse error.Unexpected;
     }
 
     pub fn setSlotValue(self: *@This(), object_h: Handle, slot: usize, value_h: ?Handle) !void {
@@ -245,7 +255,7 @@ pub const StructureImporter = struct {
         const key = key_bytes[0..key_len];
         const key_str = php.createInternedString(key);
         const structure_v = try php.getHashEntry(&self.structure_map, key_str);
-        return self.allocateHandle(structure_v.*);
+        return self.findHandle(structure_v.*) orelse error.Unexpected;
     }
 
     pub fn setStructure(self: *@This(), key_bytes: [*]const u8, key_len: usize, handle: ?Handle) !void {
