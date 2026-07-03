@@ -4,13 +4,13 @@ const zigar = @import("zigar");
 
 pub const Callback = fn () void;
 
-var callback: ?*Callback = null;
+var callback: ?*const Callback = null;
 
 pub fn foo() void {
     std.debug.print("foo\n", .{});
 }
 
-pub fn set(cb: *Callback) void {
+pub fn set(cb: *const Callback) void {
     callback = cb;
 }
 

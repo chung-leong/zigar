@@ -418,6 +418,7 @@ pub const ZigCompiler = struct {
         while (try build_dir_iter.next()) |entry| {
             if (entry.kind != .directory) continue;
             var sub_dir = try build_dir.openDir(entry.name, .{ .iterate = true });
+            defer sub_dir.close();
             var sub_dir_size: u64 = 0;
             var walker = try sub_dir.walk(al);
             defer walker.deinit();
