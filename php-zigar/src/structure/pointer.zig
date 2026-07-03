@@ -170,10 +170,21 @@ pub const Pointer = struct {
                             obj = try ptr_struct.getTarget();
                         }
                         if (php.instanceOf(obj, target_class.entry())) {
-                            // point to existing object
-                            // TODO: check read-only flag
+                            // pointing to existing object
                             const buf = getObjectBuffer(obj);
                             if (buf.flags.uninitialized) return error.AccessingDeallocatedMemory;
+                            // make sure it's writable when the pointer is non-const
+                            if (!read_only and buf.flags.read_only) {
+                                return failure.report("'{s}' cannot point to a read-only object", .{
+                                    class.getName(),
+                                });
+                            } else if (read_only and !buf.flags.read_only) {
+                                // create a read-only version of the object unless the pointer is transient
+                                // (i.e. in an argument struct)
+                                if (!self.buffer.flags.transient) {
+                                    obj = try target_class.obtainReadOnlyObject(buf);
+                                }
+                            }
                             break :init php.reuse(obj);
                         }
                         // only extract buffer from a TypedArray if it's compatible with the class

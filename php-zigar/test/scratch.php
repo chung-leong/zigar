@@ -5,17 +5,5 @@
 
 $m = zigar_use(__DIR__ . '/scratch.zig');
 
-$m->call(3, 
-    new $m->Callback(function() {
-        echo "Agnieszka\n";
-    }),
-    new $m->Callback(function() {
-        echo "już dawno\n";
-    }),
-    new $m->Callback(function() {
-        echo "tutaj nie mieszka\n";
-    }),
-);
-
-debug_zval_dump($m->hello);
-debug_zval_dump($m->world);
+$s = new $m->Struct(number1: 1234, number2: 4567);
+$m->print($s);

@@ -894,6 +894,23 @@ pub const ZigClassEntry = struct {
         }
     }
 
+    pub fn obtainReadOnlyObject(self: *@This(), buf: *ByteBuffer) !*Object {
+        const result = self.host.object_map.find(.{
+            .bytes = buf.bytes,
+            .ce = self.entry(),
+            .flags = .{ .read_only = true },
+        });
+        if (self.host.object_map.get(result)) |obj| {
+            return php.reuse(obj);
+        } else {
+            const possible_parent = self.host.object_map.getNearestBuffer(result);
+            const new_buf = try ByteBuffer.create(self.alignment);
+            new_buf.referenceBytes(buf.bytes, possible_parent);
+            new_buf.protect();
+            return try self.createObjectFromBuffer(new_buf, null);
+        }
+    }
+
     pub fn createObjectFromBuffer(self: *@This(), buf: *ByteBuffer, prefilled: ?*const Value) !*Object {
         // the byte buffer may or may not be initialized at this point
         return self.createObjectFromParameters(.{ .buffer = buf, .prefilled = prefilled });
