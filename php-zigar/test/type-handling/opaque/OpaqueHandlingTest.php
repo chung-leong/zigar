@@ -213,7 +213,7 @@ final class OpaqueHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/constructor.zig');
         $this->assertTrue(is_callable($m->Opaque));
-        $this->assertExceptionMessage("something", function() {
+        $this->assertExceptionMessage("invalid operation", function() use($m) {
             $x = new $m->Opaque(null);
         });
     }

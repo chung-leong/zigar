@@ -73,7 +73,7 @@ pub const Pointer = struct {
             if (pointer.last_address != address or pointer.last_length != length) {
                 const previous = pointer.table;
                 defer php.release(&previous);
-                if (address >= 0) {
+                if (address != 0) {
                     const class = ZigClassEntry.fromStatic(self);
                     const flags = class.getFlags(Pointer);
                     const byte_size = length * (self.target_class.byte_size orelse 1);

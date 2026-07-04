@@ -29,6 +29,7 @@ pub const Error = error{
     NotArray,
     NotArrayOrObject,
     NotBoolean,
+    NotByteAligned,
     NotCallable,
     NotDouble,
     NotFound,

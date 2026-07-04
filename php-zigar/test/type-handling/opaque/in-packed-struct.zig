@@ -5,10 +5,10 @@ var number: i32 = 1234;
 pub const Opaque = opaque {};
 
 pub const StructA = packed struct {
-    opaque1: *Opaque = @ptrCast(&number),
-    opaque2: *Opaque = @ptrCast(&number),
+    opaque1: Opaque = {},
+    opaque2: Opaque = {},
     number: u10 = 100,
-    opaque3: *Opaque = @ptrCast(&number),
+    opaque3: Opaque = {},
 };
 
 pub var struct_a: StructA = .{};

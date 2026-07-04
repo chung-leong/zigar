@@ -141,8 +141,13 @@ export function addTests(importModule, options) {
       expect(JSON.stringify(struct_b)).to.equal('{"text1":"apple","text2":"orange"}');
       expect(StructC.valueOf()).to.eql({ text1: 'apple', text2: 'orange' });
     })
-    it('should not compile code with pointer in packed struct', async function() {
-      await expect(importTest('in-packed-struct')).to.eventually.be.rejected;
+    it('should handle pointer in packed struct', async function() {
+      const { default: module, init } = await importTest('in-packed-struct');
+      init();
+      expect(module.struct_a.ptr1['*']).to.equal(1234);
+      expect(module.struct_a.ptr2['*']).to.equal(1234);
+      expect(() => module.struct_a.ptr3['*']).to.throw(Error)
+        .with.property('message').that.contains('byte boundary');
     })
     it('should handle pointer as comptime field', async function() {
       const { default: module, StructA, print } = await importTest('as-comptime-field');

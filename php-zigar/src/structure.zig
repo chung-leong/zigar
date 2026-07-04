@@ -102,12 +102,19 @@ pub fn Parent(comptime S: type) type {
 
         pub fn setStorage(self: *S, buffer: *ByteBuffer, table: *const Value) !void {
             if (@hasField(S, "buffer")) {
+                // the buffer need to be set even if the function fails in order for clean-up purpose
                 self.buffer = buffer;
                 buffer.addRef();
             }
             if (@hasField(S, "table")) {
                 self.table = table.*;
                 php.addRef(table);
+            }
+            if (@hasField(S, "buffer")) {
+                const class = ZigClassEntry.fromStructure(self);
+                if (S != Struct or !class.flags.@"struct".is_packed) {
+                    if (buffer.bit_offset != 0) return error.NotByteAligned;
+                }
             }
         }
 
