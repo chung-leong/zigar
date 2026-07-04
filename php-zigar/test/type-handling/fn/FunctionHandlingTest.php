@@ -256,7 +256,9 @@ final class FunctionHandlingTest extends ZigarTestCase
                 return false; 
             });
         });
-        $clone = clone $m->hello;
+        $this->assertExceptionMessage("cannot clone object", function () use($m) {
+            $clone = clone $m->hello;
+        });
     }
 }
 

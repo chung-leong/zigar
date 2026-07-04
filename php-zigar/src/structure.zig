@@ -312,12 +312,14 @@ pub fn Parent(comptime S: type) type {
             return &class_struct.constructor;
         }
 
-        pub fn cloneObject(obj: *Object) *Object {
+        pub fn cloneObject(obj: *Object) !*Object {
             const class = ZigClassEntry.fromObject(obj);
             const initializer = php.createValueObject(obj);
             const buf = getObjectBuffer(obj);
             const new_obj = class.createObject(null, &initializer, buf.flags.read_only) catch |err| {
-                @panic(@errorName(err));
+                // an object must be returned to keep clean-up code from segfaulting
+                _ = &php.throwError(err);
+                return php.createStandardObject();
             };
             return new_obj;
         }
