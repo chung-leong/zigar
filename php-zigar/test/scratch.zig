@@ -1,7 +1,5 @@
 const std = @import("std");
 
-pub fn hello() void {
-    std.debug.print("Hello world\n", .{});
+pub fn returnString(s: []const u8) []const u8 {
+    return s;
 }
-
-pub const hello1 = hello;

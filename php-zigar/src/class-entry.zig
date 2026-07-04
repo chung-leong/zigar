@@ -163,10 +163,6 @@ pub const ZigClassEntry = struct {
         };
     }
 
-    // pub fn get(obj: *Object) ?*@This() {
-    //     return if (php.instanceOf(obj, root_class)) fromObject(obj) else null;
-    // }
-
     pub fn create(host: *Host, info: *Value) !*Object {
         errdefer |err| std.debug.print("create => {}\n", .{err});
         const structure_type = try php.getPropertyWithType(StructureType, info, "type");
@@ -842,7 +838,7 @@ pub const ZigClassEntry = struct {
         // look for an existing object at that memory location
         const result = self.host.object_map.find(.{
             .bytes = bytes,
-            .ce = self,
+            .ce = self.entry(),
             .flags = .{ .read_only = is_const },
         });
         if (self.host.object_map.get(result)) |obj| {
@@ -868,9 +864,9 @@ pub const ZigClassEntry = struct {
                         break :get buf;
                     } else {
                         // need to create a new buffer, possibly sub-section of an existing one
-                        const possible_parent = self.host.object_map.getNearestBuffer(existing_result);
+                        const parent = self.host.object_map.getParentBuffer(.{ .bytes = bytes }, existing_result);
                         const buf = try ByteBuffer.create(self.alignment);
-                        buf.referenceBytes(bytes, possible_parent);
+                        buf.referenceBytes(bytes, parent);
                         if (is_const) buf.protect();
                         break :get buf;
                     }
@@ -903,9 +899,8 @@ pub const ZigClassEntry = struct {
         if (self.host.object_map.get(result)) |obj| {
             return php.reuse(obj);
         } else {
-            const possible_parent = self.host.object_map.getNearestBuffer(result);
             const new_buf = try ByteBuffer.create(self.alignment);
-            new_buf.referenceBytes(buf.bytes, possible_parent);
+            new_buf.referenceBytes(buf.bytes, buf);
             new_buf.protect();
             return try self.createObjectFromBuffer(new_buf, null);
         }

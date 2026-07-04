@@ -5,5 +5,5 @@
 
 $m = zigar_use(__DIR__ . '/scratch.zig');
 
-$m->hello();
-$m->hello1();
+$result = $m->returnString("Hello world");
+echo $result, "\n";

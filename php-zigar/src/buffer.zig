@@ -130,23 +130,17 @@ pub const ByteBuffer = struct {
         if (read_only) self.flags.read_only = true;
     }
 
-    pub fn referenceBytes(self: *@This(), bytes: []const u8, possible_parent: ?*@This()) void {
+    pub fn referenceBytes(self: *@This(), bytes: []const u8, parent: ?*@This()) void {
         std.debug.assert(self.flags.uninitialized);
         defer self.flags.uninitialized = false;
         self.bytes = @constCast(bytes);
-        if (possible_parent) |pp| {
-            const base = pp.getBase();
-            const base_start_addr = @intFromPtr(base.bytes.ptr);
-            const base_end_addr = base_start_addr + base.bytes.len;
-            const start_addr = @intFromPtr(bytes.ptr);
-            const end_addr = start_addr + bytes.len;
-            if (base_start_addr <= start_addr and end_addr <= base_end_addr) {
-                self.flags = base.flags.assign(.{ .has_allocator = false, .read_only = false });
-                if (pp.source_type != .none) {
-                    self.source_type = .buffer;
-                    self.source = .{ .buffer = base };
-                    base.addRef();
-                }
+        if (parent) |p_buf| {
+            const base = p_buf.getBase();
+            self.flags = base.flags.assign(.{ .has_allocator = false, .read_only = false });
+            if (base.source_type != .none) {
+                self.source_type = .buffer;
+                self.source = .{ .buffer = base };
+                base.addRef();
             }
         }
     }
@@ -348,12 +342,14 @@ pub const ByteBuffer = struct {
     }
 
     pub fn compareAddress(a: *const @This(), b: anytype) ?RelativePosition {
+        // smaller address comes first
         if (@intFromPtr(a.bytes.ptr) < @intFromPtr(b.bytes.ptr)) return .ab;
         if (@intFromPtr(a.bytes.ptr) > @intFromPtr(b.bytes.ptr)) return .ba;
         return null;
     }
 
     pub fn compareLength(a: *const @This(), b: anytype) ?RelativePosition {
+        // short length comes first--this means a
         if (a.bytes.len < b.bytes.len) return .ab;
         if (a.bytes.len > b.bytes.len) return .ba;
         return null;
@@ -382,6 +378,14 @@ pub const ByteBuffer = struct {
             compareAlignment(a, b);
     }
 
+    pub fn contains(a: *const @This(), b: anytype) bool {
+        const a_start = @intFromPtr(a.bytes.ptr);
+        const a_end = a_start + a.bytes.len;
+        const b_start = @intFromPtr(b.bytes.ptr);
+        const b_end = b_start + b.bytes.len;
+        return a_start <= b_start and b_end <= a_end;
+    }
+
     fn hasField(comptime T: type, comptime name: []const u8) bool {
         return switch (@typeInfo(T)) {
             .pointer => |pt| hasField(pt.child, name),
@@ -393,7 +397,7 @@ pub const ByteBuffer = struct {
 pub const BufferMap = struct {
     map: Map = .{},
 
-    const Map = memory_map.MemoryMap(*ByteBuffer, php.allocator, ByteBuffer.compare);
+    const Map = memory_map.MemoryMap(*ByteBuffer, php.allocator);
     const SearchResult = memory_map.SearchResult;
 
     pub fn deinit(self: *@This()) void {
@@ -402,15 +406,15 @@ pub const BufferMap = struct {
     }
 
     pub fn find(self: *@This(), b: anytype) SearchResult {
-        return self.map.find(b);
+        return self.map.find(b, ByteBuffer.compare);
     }
 
     pub fn get(self: *@This(), result: SearchResult) ?*ByteBuffer {
         return self.map.get(result);
     }
 
-    pub fn getNearest(self: *@This(), result: SearchResult) ?*ByteBuffer {
-        return self.map.getNearest(result);
+    pub fn getParentBuffer(self: *@This(), b: anytype, result: SearchResult) ?*ByteBuffer {
+        return self.map.getMatching(b, result, ByteBuffer.contains);
     }
 
     pub fn insert(self: *@This(), result: SearchResult, buffer: *ByteBuffer) !void {

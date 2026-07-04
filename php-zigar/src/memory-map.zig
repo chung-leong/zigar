@@ -4,7 +4,7 @@ const expectEqual = std.testing.expectEqual;
 pub const RelativePosition = enum { ab, ba };
 pub const SearchResult = struct { found: bool, index: usize };
 
-pub fn MemoryMap(comptime T: type, comptime allocator: std.mem.Allocator, comptime compare: fn (T, anytype) ?RelativePosition) type {
+pub fn MemoryMap(comptime T: type, comptime allocator: std.mem.Allocator) type {
     return struct {
         list: std.ArrayList(T) = .empty,
 
@@ -32,13 +32,19 @@ pub fn MemoryMap(comptime T: type, comptime allocator: std.mem.Allocator, compti
             return &self.list.items[result.index];
         }
 
-        pub fn getNearest(self: *@This(), result: SearchResult) ?T {
-            if (!result.found) return null;
-            if (result.index + 1 >= self.list.items.len) return null;
-            return self.list.items[result.index + 1];
+        pub fn getMatching(self: *@This(), b: anytype, result: SearchResult, comptime match: anytype) ?T {
+            if (result.index > 0) {
+                const a = self.list.items[result.index - 1];
+                if (match(a, b)) return a;
+            }
+            if (result.index < self.list.items.len) {
+                const a = self.list.items[result.index];
+                if (match(a, b)) return a;
+            }
+            return null;
         }
 
-        pub fn find(self: *@This(), b: anytype) SearchResult {
+        pub fn find(self: *@This(), b: anytype, comptime compare: anytype) SearchResult {
             var low: usize = 0;
             var high = self.list.items.len;
             while (low != high) {
@@ -55,8 +61,8 @@ pub fn MemoryMap(comptime T: type, comptime allocator: std.mem.Allocator, compti
             return .{ .found = false, .index = high };
         }
 
-        pub fn findFirst(self: *@This(), b: anytype) SearchResult {
-            var result = self.find(b);
+        pub fn findFirst(self: *@This(), b: anytype, comptime compare: anytype) SearchResult {
+            var result = self.find(b, compare);
             if (result.found) {
                 while (result.index > 0) {
                     const prev = self.list.items[result.index - 1];
@@ -67,7 +73,7 @@ pub fn MemoryMap(comptime T: type, comptime allocator: std.mem.Allocator, compti
             return result;
         }
 
-        pub fn findAgain(self: *@This(), b: anytype, result: SearchResult) SearchResult {
+        pub fn findAgain(self: *@This(), b: anytype, result: SearchResult, comptime compare: anytype) SearchResult {
             if (result.index < self.list.items.len) {
                 const next = self.list.items[result.index];
                 if (compare(next, b) == null) {

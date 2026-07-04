@@ -149,9 +149,9 @@ pub const StructureImporter = struct {
                     const value = php.createValuePointer(buf);
                     return self.findHandle(value) orelse error.Unexpected;
                 }
-                const possible_parent = self.buffer_map.getNearest(result);
+                const parent = self.buffer_map.getParentBuffer(.{ .bytes = bytes }, result);
                 const buf = try ByteBuffer.create(alignment);
-                buf.referenceBytes(bytes, possible_parent);
+                buf.referenceBytes(bytes, parent);
                 break :init .{ buf, result };
             }
         };

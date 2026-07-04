@@ -76,7 +76,7 @@ pub fn ZigObject(comptime S: type) type {
 pub const ObjectMap = struct {
     map: Map = .{},
 
-    const Map = memory_map.MemoryMap(*Object, php.allocator, compare);
+    const Map = memory_map.MemoryMap(*Object, php.allocator);
     const SearchResult = memory_map.SearchResult;
     const RelativePosition = memory_map.RelativePosition;
 
@@ -101,22 +101,22 @@ pub const ObjectMap = struct {
         return getObjectBuffer(obj);
     }
 
-    pub fn getNearestBuffer(self: *@This(), result: SearchResult) ?*ByteBuffer {
-        const nearest = self.map.getNearest(result) orelse return null;
-        return getObjectBuffer(nearest);
+    pub fn getParentBuffer(self: *@This(), b: anytype, result: SearchResult) ?*ByteBuffer {
+        const matching = self.map.getMatching(b, result, contains) orelse return null;
+        return getObjectBuffer(matching);
     }
 
     pub fn find(self: *@This(), b: anytype) SearchResult {
-        return self.map.find(b);
+        return self.map.find(b, compare);
     }
 
     pub fn free(self: *@This(), b: anytype) void {
-        var result = self.map.findFirst(b);
+        var result = self.map.findFirst(b, compare);
         while (self.map.get(result)) |obj| {
             const buf = getObjectBuffer(obj);
             buf.free();
             self.remove(result);
-            result = self.map.findAgain(b, result);
+            result = self.map.findAgain(b, result, compare);
         }
     }
 
@@ -142,6 +142,15 @@ pub const ObjectMap = struct {
 
     pub fn compare(a: *const Object, b: anytype) ?RelativePosition {
         return compareBuffer(a, b) orelse compareClass(a, b);
+    }
+
+    pub fn contains(a: *const Object, b: anytype) bool {
+        const a_buf = getObjectBuffer(a);
+        const b_buf = switch (@TypeOf(b)) {
+            *Object, *const Object => getObjectBuffer(b),
+            else => b,
+        };
+        return a_buf.contains(b_buf);
     }
 
     fn hasField(comptime T: type, comptime name: []const u8) bool {

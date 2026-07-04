@@ -414,6 +414,14 @@ pub const ArgStruct = struct {
         return try structure.Struct.fromValue(&value);
     }
 
+    pub fn vivicatePointerTargets(self: *@This()) !void {
+        try self.visitPointers(Pointer.vivificateTarget, .{}, .{
+            .ignore_uncreated = false,
+            .ignore_arguments = false,
+            .ignore_return_value = false,
+        });
+    }
+
     pub fn detachFunctionThunks(self: *@This()) !void {
         try self.visitPointers(Pointer.detachFunctionThunk, .{}, .{ .ignore_arguments = false });
     }

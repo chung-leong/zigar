@@ -253,9 +253,6 @@ pub const Function = struct {
                 try arg_struct.copyArguments(null, &arg_iter);
                 const arg_addr = @intFromPtr(arg_struct.buffer.bytes.ptr);
                 try class.host.runThunk(static.thunk_address, fn_addr, arg_addr);
-                // if the argument struct has a function pointer, assume that the Zig code is retaining a copy of it
-                // or has released it already; mark it as detached in the PHP object so it doesn't get freed
-                try arg_struct.detachFunctionThunks();
                 const result = get: {
                     var retval = try arg_struct.getReturnValue();
                     if (arg_struct.flags.has_promise) {
@@ -293,6 +290,15 @@ pub const Function = struct {
                         break :get retval;
                     }
                 };
+                if (static.argument_class.flags.arg_struct.has_pointer) {
+                    // vivicate all point targets now, since they can potentially be objects that got auto-vivicated
+                    // during argument copying and would get destroyed when the arg struct object is freed (by a
+                    // defer statement further up)
+                    try arg_struct.vivicatePointerTargets();
+                    // if the argument struct has a function pointer, assume that the Zig code is retaining a copy of it
+                    // or has released it already; mark it as detached in the PHP object so it doesn't get freed
+                    try arg_struct.detachFunctionThunks();
+                }
                 return_value.* = result;
             },
             .variadic_struct => {
@@ -302,9 +308,12 @@ pub const Function = struct {
                 const attr_addr = @intFromPtr(arg_struct.attributes.ptr);
                 const arg_count = arg_struct.attributes.len;
                 try class.host.runVariadicThunk(static.thunk_address, fn_addr, arg_addr, attr_addr, arg_count);
-                try arg_struct.detachFunctionThunks();
                 var retval = try arg_struct.getReturnValue();
                 if (self.transform) |tm| try tm.apply(&retval);
+                if (static.argument_class.flags.variadic_struct.has_pointer) {
+                    try arg_struct.vivicatePointerTargets();
+                    try arg_struct.detachFunctionThunks();
+                }
                 return_value.* = retval;
             },
             else => unreachable,

@@ -326,9 +326,29 @@ pub const Pointer = struct {
         };
     }
 
+    pub fn vivificateTarget(self: *@This()) Error!void {
+        const prev = self.table;
+        const target_obj = self.getTarget() catch return;
+        if (prev.value.obj != self.table.value.obj) {
+            const class = ZigClassEntry.fromStructure(self);
+            const static = class.getStaticData(@This());
+            if (static.target_class.flags.common.has_pointer) {
+                try invokeMethod(target_obj, "visitPointers", .{
+                    vivificateTarget,
+                    .{},
+                    structure.VisitOptions{
+                        .ignore_uncreated = false,
+                        .ignore_arguments = false,
+                        .ignore_return_value = false,
+                    },
+                });
+            }
+        }
+    }
+
     pub fn externalizeTarget(self: *@This()) Error!void {
-        const obj = php.getValueObject(&self.table) catch return;
-        try invokeMethod(obj, "externalize", .{});
+        const target_obj = php.getValueObject(&self.table) catch return;
+        try invokeMethod(target_obj, "externalize", .{});
     }
 
     pub fn detachFunctionThunk(self: *@This()) Error!void {
