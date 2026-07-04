@@ -118,7 +118,7 @@ pub fn Parent(comptime S: type) type {
             try self.buffer.allocate(allocator, len);
             const initialized = attempt: {
                 if (initializer) |value| {
-                    if (!php.isValueNull(value)) {
+                    if (S == Optional or !php.isValueNull(value)) {
                         try self.setValue(value, .none);
                         break :attempt true;
                     }
@@ -889,7 +889,7 @@ pub fn OptionalLike(comptime S: type) type {
                     return f(child_obj);
                 }
             }
-            return php.createArray();
+            return Super.getProperties(obj);
         }
 
         pub fn getIterator(obj: *Object) !?*ObjectIterator {

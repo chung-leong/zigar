@@ -25,9 +25,9 @@ final class JsCompatTest extends ZigarTestCase
         debug_zval_dump($str);
         $text = ob_get_clean();
         $this->assertStringContainsString("refcount(3)", $text);
-        $this->assertFalse($b == $c);
+        $this->assertTrue($b == $c);
         $d = new ArrayBuffer("Hello world", true);
-        $this->assertFalse($b == $d);
+        $this->assertTrue($b == $d);
         $this->assertTrue($c == $d);
         $e = new stdClass();
         $this->assertFalse($b == $e);

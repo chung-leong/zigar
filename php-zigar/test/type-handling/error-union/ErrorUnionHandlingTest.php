@@ -256,12 +256,14 @@ final class ErrorUnionHandlingTest extends ZigarTestCase
             $x = $b->__value;
         });
         $this->assertSame(1, $a <=> $b);
-        // $c = new $m->ErrorUnion(1235);
-        // $this->assertSame(-1, $a <=> $c);
-        // $d = new $m->ErrorUnion(new Exception('no money'));
-        // $this->assertSame(0, $b <=> $d);
-        $clone = clone $b;
-        $this->assertEquals($b, $clone);
+        $c = new $m->ErrorUnion(1235);
+        $this->assertSame(-1, $a <=> $c);
+        $d = new $m->ErrorUnion(new Exception('no money'));
+        $this->assertSame(0, $b <=> $d);
+        $this->assertExceptionMessage("no money", function() use($b) {
+            $clone = clone $b;
+            $clone->__value;
+        });
     }
 }
 

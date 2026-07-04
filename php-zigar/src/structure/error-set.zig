@@ -190,8 +190,8 @@ pub const ErrorSet = struct {
     }
 
     pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) !void {
-        if (try self.copySelf(value)) return;
         if (transform == .none) {
+            if (try self.copySelf(value)) return;
             const class = ZigClassEntry.fromStructure(self);
             const static = class.getStaticData(@This());
             try static.constant_acc.set(self.buffer, value);

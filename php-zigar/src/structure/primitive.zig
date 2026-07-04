@@ -35,8 +35,8 @@ pub const Primitive = struct {
     }
 
     pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) !void {
-        if (try self.copySelf(value)) return;
         if (transform == .none) {
+            if (try self.copySelf(value)) return;
             const class = ZigClassEntry.fromStructure(self);
             const static = class.getStaticData(@This());
             try static.value_acc.set(self, value);
