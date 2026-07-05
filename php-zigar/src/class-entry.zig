@@ -269,13 +269,6 @@ pub const ZigClassEntry = struct {
         const self = fromObject(class_obj);
         try self.extractScope(info, .instance);
         errdefer self.instance.deinit(self);
-        switch (self.type) {
-            .array, .slice => if (self.flags.common.has_slot) {
-                self.slot_usage = .multiple;
-            },
-            .variadic_struct => self.slot_usage = .multiple,
-            else => {},
-        }
         self.status.defined = true;
     }
 
@@ -690,13 +683,14 @@ pub const ZigClassEntry = struct {
         }
         const slot_usage: SlotUsage = switch (scope_type) {
             .static => .multiple,
-            .instance => switch (slot_count) {
-                0 => .none,
-                1 => switch (self.type) {
-                    .array, .slice => .multiple,
-                    else => .single,
+            .instance => switch (self.type) {
+                .array, .slice => if (self.flags.common.has_slot) .multiple else .none,
+                .variadic_struct => .multiple,
+                else => switch (slot_count) {
+                    0 => .none,
+                    1 => .single,
+                    else => .multiple,
                 },
-                else => .multiple,
             },
         };
         var iter: MemberIterator = .init(&members, .{});
