@@ -86,18 +86,18 @@ pub const AbortSignal = struct {
         try CallDispatcher.event_loop.addTimeout(seconds, self);
     }
 
-    pub fn handleCreateObject(_: *ClassEntry) !*Object {
-        const self = try create(null);
-        return self.object();
-    }
-
-    pub fn handleGetMethod(_: *[*c]Object, name: *String, _: ?*const Value) !?*Function {
+    pub fn getMethod(_: *[*c]Object, name: *String, _: ?*const Value) !?*Function {
         inline for (std.meta.fields(Methods)) |field| {
             if (std.mem.eql(u8, php.getStringContent(name), field.name)) {
                 return &@field(methods, field.name);
             }
         }
         return null;
+    }
+
+    pub fn handleCreateObject(_: *ClassEntry) !*Object {
+        const self = try create(null);
+        return self.object();
     }
 
     pub fn handleAbort(ed: *ExecuteData, _: *Value) !void {
