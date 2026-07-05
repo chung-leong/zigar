@@ -541,6 +541,7 @@ pub const CallDispatcher = struct {
             if (item.fd == fd) {
                 item.deinit();
                 _ = self.stream_list.swapRemove(i);
+                break;
             }
         } else return error.Unexpected;
     }
