@@ -123,6 +123,6 @@ pub const AllocatorStatic = struct {
     fn getAllocatorFromThis(arg_iter: *ArgumentIterator) !*std.mem.Allocator {
         const this_obj = try php.getValueObject(arg_iter.this);
         const this_struct = structure.Struct.fromObject(this_obj);
-        return try this_struct.getAllocator();
+        return try this_struct.toAllocator();
     }
 };

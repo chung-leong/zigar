@@ -513,7 +513,7 @@ pub const Struct = struct {
         }
     }
 
-    pub fn getAllocator(self: *@This()) !*std.mem.Allocator {
+    pub fn toAllocator(self: *@This()) !*std.mem.Allocator {
         const bytes = try self.buffer.data(0, false);
         return @ptrCast(@alignCast(@constCast(bytes.ptr)));
     }

@@ -396,7 +396,7 @@ pub const ArgStruct = struct {
         const allocator_value = try allocator_member.accessors.get(self);
         defer php.release(&allocator_value);
         const allocator_struct = try structure.Struct.fromValue(&allocator_value);
-        return try allocator_struct.getAllocator();
+        return try allocator_struct.toAllocator();
     }
 
     pub fn getSpecialArgument(self: *@This(), comptime T: type) !*structure.Struct {

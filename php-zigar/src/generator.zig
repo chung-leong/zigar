@@ -154,7 +154,7 @@ pub const GeneratorStatic = struct {
                 if (generator_struct.getProperty(N("allocator"), null)) |av| {
                     defer php.release(&av);
                     const allocator_struct = try structure.Struct.fromValue(&av);
-                    break :get try allocator_struct.getAllocator();
+                    break :get try allocator_struct.toAllocator();
                 } else |_| break :get null;
             };
             const callback_value = try generator_struct.getProperty(N("callback"), null);
@@ -244,7 +244,7 @@ pub const GeneratorStatic = struct {
         try arg_iter.verifyCount(1, 1, "yield");
         const value = arg_iter.next().?;
         const generator_struct = try structure.Struct.fromValue(arg_iter.this);
-        const allocator = try generator_struct.getAllocator();
+        const allocator = generator_struct.buffer.getAllocator();
         return_value.* = try yield(arg_iter.this, value, allocator);
     }
 
