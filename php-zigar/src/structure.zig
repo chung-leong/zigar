@@ -599,7 +599,11 @@ pub fn StructLike(comptime S: type) type {
         }
 
         pub fn getIterator(obj: *Object) !?*ObjectIterator {
-            return try iterator.PropertyIterator(S).create(obj);
+            const class = ZigClassEntry.fromObject(obj);
+            return switch (class.purpose) {
+                .iterator => try iterator.IteratorIterator.create(obj),
+                else => try iterator.PropertyIterator(S).create(obj),
+            };
         }
 
         pub const object = Super.object;
