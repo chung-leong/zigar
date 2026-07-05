@@ -12,6 +12,7 @@
         "debug": "lldb php -- ./vendor/bin/phpunit test"
     },
     "require": {
-        "revolt/event-loop": "^1.0"
+        "revolt/event-loop": "^1.0",
+        "php-school/cli-menu": "^4.3"
     }
 }
