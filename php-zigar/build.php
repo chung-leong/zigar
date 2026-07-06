@@ -4,6 +4,7 @@ use PhpSchool\CliMenu\CliMenu;
 use PhpSchool\CliMenu\Builder\CliMenuBuilder;
 use PhpSchool\CliMenu\MenuItem\CheckboxItem;
 use PhpSchool\CliMenu\MenuItem\RadioItem;
+use PhpZip\ZipFile;
 
 require_once(__DIR__ . '/vendor/autoload.php');
 
@@ -35,22 +36,8 @@ class Settings {
     }
 }
 
-$settings = new Settings;
 $build = false;
-
-$links = [
-    '8.1' => "https://downloads.php.net/~windows/releases/php-devel-pack-8.1.34-Win32-vs16-x64.zip",
-    '8.2' => "https://downloads.php.net/~windows/releases/php-devel-pack-8.2.32-Win32-vs16-x64.zip",
-    '8.3' => "https://downloads.php.net/~windows/releases/php-devel-pack-8.3.32-Win32-vs16-x64.zip",
-    '8.4' => "https://downloads.php.net/~windows/releases/php-devel-pack-8.4.23-Win32-vs17-x64.zip",
-    '8.5' => "https://downloads.php.net/~windows/releases/php-devel-pack-8.5.8-Win32-vs17-x64.zip",
-];
-
-$itemCallable = function (CliMenu $menu) {
-    $item = $menu->getSelectedItem();
-    echo $item->getText(), "\n";
-};
-
+$settings = new Settings;
 $menu = (new CliMenuBuilder)
     ->setTitle('PHP-Zigar Extension Build Script')
     ->addSubMenu('PHP version', function ($b) use($settings) {
@@ -147,7 +134,192 @@ $menu = (new CliMenuBuilder)
     ->build();
 $menu->open();
 
-if ($build) {
-    echo "Building...\n";
-    print_r($settings);
+if (!$build) exit(0);
+
+$results = [];
+foreach ($settings->versions as $version) {
+    foreach ($settings->targets as $target) {
+        if (str_ends_with($target, '-ts')) {
+            $target = substr($target, 0, -3);
+            $ts = '/ts';
+        } else {
+            $ts = '';
+        }
+        [ $arch, $platform ] = explode('-', $target);
+        $debug = ($settings->debug) ? 'with debug enabled ' : '';
+        echo "Building extension at optimization level \"$settings->optimize\" for PHP $version $debug($platform/$arch$ts)\n";
+        $devel_path = join(DIRECTORY_SEPARATOR, [ __DIR__, 'php-devel', $version ]);
+        if (!file_exists($devel_path)) {
+            $links = [
+                '8.1' => "https://downloads.php.net/~windows/releases/php-devel-pack-8.1.34-Win32-vs16-x64.zip",
+                '8.2' => "https://downloads.php.net/~windows/releases/php-devel-pack-8.2.32-Win32-vs16-x64.zip",
+                '8.3' => "https://downloads.php.net/~windows/releases/php-devel-pack-8.3.32-Win32-vs16-x64.zip",
+                '8.4' => "https://downloads.php.net/~windows/releases/php-devel-pack-8.4.23-Win32-vs17-x64.zip",
+                '8.5' => "https://downloads.php.net/~windows/releases/php-devel-pack-8.5.8-Win32-vs17-x64.zip",
+            ];
+            $link = $links[$version];
+            echo "Downloading $link\n";
+            $zip_contents = file_get_contents($link);
+            if (!in_array("var", stream_get_wrappers())) {
+                stream_wrapper_register("var", "VariableStream");
+            }
+            $zip_path = "var://zip_contents";
+            $zip_file = new ZipFile();
+            $zip_file->openFile($zip_path);
+            foreach($zip_file as $name => $contents) {
+                if (str_ends_with($name, '/')) continue;
+                $parts = explode('/', $name);
+                $parts[0] = $devel_path;
+                $dest_path = join(DIRECTORY_SEPARATOR, $parts);
+                $dest_dir = dirname($dest_path);
+                if (!file_exists($dest_dir)) {
+                    mkdir($dest_dir, 0777, true);
+                }
+                file_put_contents($dest_path, $contents);
+            }
+        }
+        $include_path = join(DIRECTORY_SEPARATOR, [ $devel_path, 'include' ]);
+        $so_rel_parts = [ 'extensions', $version ];
+        if ($arch != 'x86_64')  {
+            $so_rel_parts[] = $arch;
+        }
+        if ($ts) {
+            $so_rel_parts[] = 'TS';
+        }
+        $so_rel_path = join(DIRECTORY_SEPARATOR, $so_rel_parts);
+        $so_path = join(DIRECTORY_SEPARATOR, [ $so_rel_path ]);
+        $cmd = [ 
+            'zig',
+            'build', 
+            "-Dtarget=$target",
+            "-Doptimize=$settings->optimize",
+            "-Dphp-include=$include_path",
+            "-Dphp-extension=$so_path",
+        ];
+        if ($settings->debug) {
+            $cmd[] = "-Dphp-debug";
+        }
+        if ($ts) {
+            $cmd[] = "-Dphp-ts";
+        }
+        $zig = proc_open($cmd, [ STDIN, STDOUT, STDERR ], $pipes, null, null, [
+            'bypass_shell' => true,
+        ]);
+        if (proc_close($zig) == 0) {
+            switch ($platform) {
+                case 'windows': $so_ext = 'dll'; break;
+                case 'macos': $so_ext = 'dylib'; break;
+                default: $so_ext = 'so'; break;
+            }
+            $results[] = join(DIRECTORY_SEPARATOR, [ $so_rel_path, "php_zigar.$so_ext" ]);
+        }
+    }
+}
+$count = count($results);
+$libraries = ($count === 1) ? 'library' : 'libraries';
+echo "Created $count dynamic-linked $libraries:\n\n";
+foreach ($results as $path) {
+    echo "$path\n";
+}
+
+class VariableStream {
+    var $position;
+    var $varname;
+    var $context;
+
+    function stream_open($path, $mode, $options, &$opened_path)
+    {
+        $url = parse_url($path);
+        $this->varname = $url["host"];
+        $this->position = 0;
+
+        return true;
+    }
+
+    function stream_read($count)
+    {
+        $ret = substr($GLOBALS[$this->varname], $this->position, $count);
+        $this->position += strlen($ret);
+        return $ret;
+    }
+
+    function stream_write($data)
+    {
+        $left = substr($GLOBALS[$this->varname], 0, $this->position);
+        $right = substr($GLOBALS[$this->varname], $this->position + strlen($data));
+        $GLOBALS[$this->varname] = $left . $data . $right;
+        $this->position += strlen($data);
+        return strlen($data);
+    }
+
+    function stream_tell()
+    {
+        return $this->position;
+    }
+
+    function stream_eof()
+    {
+        return $this->position >= strlen($GLOBALS[$this->varname]);
+    }
+
+    function stream_seek($offset, $whence)
+    {
+        switch ($whence) {
+            case SEEK_SET:
+                if ($offset < strlen($GLOBALS[$this->varname]) && $offset >= 0) {
+                     $this->position = $offset;
+                     return true;
+                } else {
+                     return false;
+                }
+                break;
+
+            case SEEK_CUR:
+                if ($offset >= 0) {
+                     $this->position += $offset;
+                     return true;
+                } else {
+                     return false;
+                }
+                break;
+
+            case SEEK_END:
+                if (strlen($GLOBALS[$this->varname]) + $offset >= 0) {
+                     $this->position = strlen($GLOBALS[$this->varname]) + $offset;
+                     return true;
+                } else {
+                     return false;
+                }
+                break;
+
+            default:
+                return false;
+        }
+    }
+
+    function stream_stat()
+    {
+        return [ 'size' => strlen($GLOBALS[$this->varname]) ];
+    }
+
+    function stream_metadata($path, $option, $var) 
+    {
+        if($option == STREAM_META_TOUCH) {
+            $url = parse_url($path);
+            $varname = $url["host"];
+            if(!isset($GLOBALS[$varname])) {
+                $GLOBALS[$varname] = '';
+            }
+            return true;
+        }
+        return false;
+    }
+
+    function url_stat($path, $flags)
+    {
+        $url = parse_url($path);
+        $varname = $url["host"];
+        if (!isset($GLOBALS[$varname])) return false;
+        return [ 'size' => strlen($GLOBALS[$varname]) ];
+    }
 }
