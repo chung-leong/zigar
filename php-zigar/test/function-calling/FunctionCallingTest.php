@@ -299,11 +299,11 @@ final class FunctionCallingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/return-multi-pointer.zig');
         $pointer = $m->getPointer();
-        $this->assertSame(1, $pointer->__len);
+        $this->assertSame(1, $pointer->__length);
         $this->assertEquals([
             (object) [ 'a' => 0, 'b' => 1 ]
         ], $pointer->__plain);
-        $pointer->__len = 5;
+        $pointer->__length = 5;
         $this->assertEquals([
             (object) [ 'a' => 0, 'b' => 1 ],
             (object) [ 'a' => 2, 'b' => 3 ],
@@ -312,9 +312,9 @@ final class FunctionCallingTest extends ZigarTestCase
             (object) [ 'a' => 8, 'b' => 9 ],
         ], $pointer->__plain);
         $this->assertExceptionMessage("out of bound", function() use ($pointer) {
-            $pointer->__len = 6;
+            $pointer->__length = 6;
         });
-        $pointer->__len = 3;
+        $pointer->__length = 3;
         $this->assertEquals([
             (object) [ 'a' => 0, 'b' => 1 ],
             (object) [ 'a' => 2, 'b' => 3 ],
@@ -326,11 +326,11 @@ final class FunctionCallingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/return-c-pointer.zig');
         $pointer = $m->getPointer();
-        $this->assertSame(1, $pointer->__len);
+        $this->assertSame(1, $pointer->__length);
         $this->assertEquals([
             (object) [ 'a' => 0, 'b' => 1 ]
         ], $pointer->__plain);
-        $pointer->__len = 5;
+        $pointer->__length = 5;
         $this->assertEquals([
             (object) [ 'a' => 0, 'b' => 1 ],
             (object) [ 'a' => 2, 'b' => 3 ],
@@ -339,9 +339,9 @@ final class FunctionCallingTest extends ZigarTestCase
             (object) [ 'a' => 8, 'b' => 9 ],
         ], $pointer->__plain);
         $this->assertExceptionMessage("out of bound", function() use ($pointer) {
-            $pointer->__len = 6;
+            $pointer->__length = 6;
         });
-        $pointer->__len = 3;
+        $pointer->__length = 3;
         $this->assertEquals([
             (object) [ 'a' => 0, 'b' => 1 ],
             (object) [ 'a' => 2, 'b' => 3 ],
