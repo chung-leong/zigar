@@ -175,6 +175,16 @@ foreach ($settings->versions as $version) {
                 if (!file_exists($dest_dir)) {
                     mkdir($dest_dir, 0777, true);
                 }
+                if ($version <= '8.4') {
+                    $src_path = join('/', array_slice($parts, 1)); 
+                    switch ($src_path) {
+                        case 'include/win32/ioutil.h':
+                        case 'include/win32/codepage.h':
+                            // correct syntax considered legal only by Microsoft Visual C
+                            $contents = str_replace('__forceinline', 'zend_always_inline', $contents);
+                            break;
+                    }
+                }
                 file_put_contents($dest_path, $contents);
             }
         }

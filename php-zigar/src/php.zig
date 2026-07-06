@@ -1265,7 +1265,7 @@ pub fn isObjectFreed(obj: *Object) bool {
 }
 
 pub fn isCallable(callable: *const Value) bool {
-    return c.zend_is_callable(@constCast(callable), 0, null);
+    return pc.zend_is_callable(@constCast(callable), 0, null);
 }
 
 pub fn invokeMethod(container: ?*const Value, fn_name: *const Value, arguments: []const Value) !Value {
@@ -1734,9 +1734,9 @@ pub fn estrdup(s: [*:0]const u8, comptime src: std.builtin.SourceLocation) [*:0]
 
 pub fn malloc(size: usize) ?*anyopaque {
     const src = @src();
-    return switch (comptime argCount(@TypeOf(c.__zend_malloc))) {
-        5 => c.__zend_malloc(size, src.file, src.line + 1, null, 0),
-        1 => c.__zend_malloc(size),
+    return switch (comptime argCount(@TypeOf(pc.__zend_malloc))) {
+        5 => pc.__zend_malloc(size, src.file, src.line + 1, null, 0),
+        1 => pc.__zend_malloc(size),
         else => @compileError("Unexpected __zend_malloc argument count"),
     };
 }
