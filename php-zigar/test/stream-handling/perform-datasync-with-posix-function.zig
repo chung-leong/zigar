@@ -1,8 +1,6 @@
 const std = @import("std");
 
-const c = @cImport({
-    @cInclude("unistd.h");
-});
+const c = @import("c");
 
 pub fn save(path: [*:0]const u8, data: []const u8) !usize {
     const oflags: std.c.O = if (@hasField(std.c.O, "ACCMODE"))

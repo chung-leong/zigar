@@ -1,9 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const stdio = @cImport({
-    @cInclude("stdio.h");
-});
+const c = @import("c");
 
 const os = switch (builtin.target.os.tag) {
     .linux => .linux,

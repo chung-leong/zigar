@@ -1,7 +1,4 @@
-const c = @cImport({
-    @cInclude("sys/stat.h");
-    @cInclude("unistd.h");
-});
+const c = @import("c");
 
 pub fn create(path: [*:0]const u8) !void {
     const param_count = @typeInfo(@TypeOf(c.mkdir)).@"fn".params.len;

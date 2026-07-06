@@ -834,9 +834,7 @@ test "parameter passing ([*:0]const u8, f32, f32, f32, f32, f32, f32, f32, f32, 
 }
 
 fn createSprintfTest(fmt: []const u8, tuple: anytype) type {
-    const c = @cImport({
-        @cInclude("stdio.h");
-    });
+    const c = @import("c");
     const FT = @TypeOf(c.sprintf);
     const f = @typeInfo(FT).@"fn";
     const Args = ArgStruct(FT);

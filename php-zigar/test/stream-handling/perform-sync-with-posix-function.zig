@@ -1,9 +1,6 @@
 const std = @import("std");
 
-const c = @cImport({
-    @cInclude("fcntl.h");
-    @cInclude("unistd.h");
-});
+const c = @import("c");
 
 pub fn save(path: [*:0]const u8, data: []const u8) !usize {
     const fd = c.open(path, c.O_WRONLY | c.O_CREAT | c.O_TRUNC, @as(c_uint, 0o666));

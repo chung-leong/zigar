@@ -1518,9 +1518,9 @@ class MissingModule extends Error {
 function formatProjectConfig(config) {
   const lines = [];
   const fields = [
-    'moduleName', 'modulePath', 'moduleDir', 'outputPath', 'pdbPath', 'zigarSrcPath', 'useLibc', 
-    'useLLVM', 'usePthreadEmulation', 'useRedirection', 'isWASM', 'multithreaded', 'stackSize', 
-    'maxMemory', 'evalBranchQuota', 'omitFunctions', 'omitVariables',
+    'moduleName', 'modulePath', 'moduleDir', 'outputPath', 'pdbPath', 'zigarSrcPath',
+    'cHeaderPath', 'useLibc', 'useLLVM', 'usePthreadEmulation', 'useRedirection', 'isWASM',
+    'multithreaded', 'stackSize', 'maxMemory', 'evalBranchQuota', 'omitFunctions', 'omitVariables',
   ];
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
@@ -1683,6 +1683,8 @@ async function createConfig(srcPath, modPath, options = {}) {
   }
   // add path to build.extra.zig if it exists
   const extraFilePath = await findModuleFile(moduleDir, 'build.extra.zig');
+  // add path to build.extra.h if it exists
+  const cHeaderPath = await findModuleFile(moduleDir, 'build.extra.h');
   // add package manager manifest
   const packageConfigPath = await findModuleFile(moduleDir, 'build.zig.zon');
   return {
@@ -1699,6 +1701,7 @@ async function createConfig(srcPath, modPath, options = {}) {
     buildFilePath,
     packageConfigPath,
     outputPath,
+    cHeaderPath,
     pdbPath,
     clean,
     zigPath,
@@ -10430,11 +10433,12 @@ var struct = mixin({
     const backingIntMember = members.find(m => m.flags & MemberFlag.IsBackingInt);
     const backingInt = backingIntMember && this.defineMember(backingIntMember);
     const propApplier = this.createApplier(structure);
+    const thisEnv = this;
     const initializer = this.createInitializer(function(arg, allocator) {
       if (purpose === StructurePurpose.File) {
-        arg = this.createFile(arg);
+        arg = thisEnv.createFile(arg);
       } else if (purpose == StructurePurpose.Directory) {
-        arg = this.createDirectory(arg);
+        arg = thisEnv.createDirectory(arg);
       }
       if (isCompatibleInstanceOf(arg, constructor)) {
         copyObject(this, arg);

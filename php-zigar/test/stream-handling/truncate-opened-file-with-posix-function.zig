@@ -1,10 +1,6 @@
 const std = @import("std");
 
-const c = @cImport({
-    @cInclude("sys/stat.h");
-    @cInclude("unistd.h");
-    @cInclude("fcntl.h");
-});
+const c = @import("c");
 
 pub fn truncate(file: std.fs.File, len: c_long) !void {
     const fd = file.handle;

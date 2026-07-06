@@ -1,8 +1,6 @@
 const std = @import("std");
 
-const c = @cImport({
-    @cInclude("stdio.h");
-});
+const c = @import("c");
 
 pub fn getStartingPos(path: [:0]const u8) !isize {
     const file = c.fopen(path, "r") orelse return error.UnableToOpenFile;

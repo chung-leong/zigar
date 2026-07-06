@@ -1,15 +1,12 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const zigar = @import("zigar");
-
-const c = @cImport({
-    @cInclude("pthread.h");
-    @cInclude("time.h");
-});
+const c = @import("c");
 const pthread_t = c.pthread_t;
 const pthread_mutex_t = c.pthread_mutex_t;
 const pthread_mutex_attr_t = c.pthread_mutex_attr_t;
+const zigar = @import("zigar");
+
 const clock_id = switch (builtin.target.os.tag) {
     .windows => c.CLOCK_REALTIME_COARSE,
     else => c.CLOCK_REALTIME,

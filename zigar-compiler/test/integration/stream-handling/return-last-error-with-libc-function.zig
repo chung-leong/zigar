@@ -1,8 +1,6 @@
 const std = @import("std");
 
-const c = @cImport({
-    @cInclude("stdio.h");
-});
+const c = @import("c");
 
 pub fn triggerError(path: [:0]const u8) !std.c.E {
     const file = c.fopen(path, "r") orelse return error.UnableToOpenFile;

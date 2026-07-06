@@ -1,7 +1,4 @@
-const c = @cImport({
-    @cInclude("stdio.h");
-});
-
+const c = @import("c");
 pub const sprintf = c.sprintf;
 
 pub const Int = i32;

@@ -1,8 +1,6 @@
 const std = @import("std");
 
-const c = @cImport({
-    @cInclude("unistd.h");
-});
+const c = @import("c");
 
 pub fn get1(allocator: std.mem.Allocator, file: std.fs.File) !?[]const u8 {
     const fd = file.handle;

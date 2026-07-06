@@ -1,10 +1,6 @@
 const std = @import("std");
 
-const c = @cImport({
-    @cInclude("fcntl.h");
-    @cInclude("unistd.h");
-    @cInclude("sys/stat.h");
-});
+const c = @import("c");
 
 pub fn setTimes(path: [*:0]const u8, sec: i64, nsec: i64) !void {
     const times: [2]c.struct_timespec = .{

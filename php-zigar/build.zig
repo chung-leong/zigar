@@ -25,10 +25,7 @@ pub fn build(b: *std.Build) !void {
         .single_threaded = false,
         .link_libc = true,
         .imports = &.{
-            .{
-                .name = "c",
-                .module = translate_c.createModule(),
-            },
+            .{ .name = "c", .module = translate_c.createModule() },
         },
     });
     mod.stack_check = false;

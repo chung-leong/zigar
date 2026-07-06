@@ -1,12 +1,9 @@
 const std = @import("std");
 
-const zigar = @import("zigar");
-
-const c = @cImport({
-    @cInclude("pthread.h");
-});
+const c = @import("c");
 const pthread_t = c.pthread_t;
 const pthread_key_t = c.pthread_key_t;
+const zigar = @import("zigar");
 
 var key: pthread_key_t = undefined;
 var thread_id: pthread_t = undefined;

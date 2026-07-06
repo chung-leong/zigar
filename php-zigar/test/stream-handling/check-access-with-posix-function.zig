@@ -1,6 +1,4 @@
-const c = @cImport({
-    @cInclude("unistd.h");
-});
+const c = @import("c");
 
 const Flags = struct {
     read: bool = false,

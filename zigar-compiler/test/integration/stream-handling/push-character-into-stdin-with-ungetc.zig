@@ -1,9 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const stdio = @cImport({
-    @cInclude("stdio.h");
-});
+const c = @import("c");
 
 const os = switch (builtin.target.os.tag) {
     .linux => .linux,
@@ -14,13 +12,13 @@ const os = switch (builtin.target.os.tag) {
 
 pub fn push(c: c_int) void {
     const stdin = switch (os) {
-        .darwin => stdio.stdin(),
-        .windows => stdio.__acrt_iob_func(0),
-        else => stdio.stdin,
+        .darwin => c.stdin(),
+        .windows => c.__acrt_iob_func(0),
+        else => c.stdin,
     };
-    _ = stdio.ungetc(c, stdin);
+    _ = c.ungetc(c, stdin);
 }
 
 pub fn get() c_int {
-    return stdio.getchar();
+    return c.getchar();
 }

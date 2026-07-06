@@ -1,10 +1,6 @@
 const std = @import("std");
 
-const c = @cImport({
-    @cInclude("sys/stat.h");
-    @cInclude("unistd.h");
-    @cInclude("fcntl.h");
-});
+const c = @import("c");
 
 pub fn print(path: [*:0]const u8) !void {
     const fd = c.open(path, c.O_RDONLY);

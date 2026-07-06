@@ -11,6 +11,8 @@ const page_size_min = std.heap.page_size_min;
 const builtin = @import("builtin");
 const native_os = builtin.os.tag;
 
+const c = @import("c");
+
 const fn_transform = @import("fn-transform.zig");
 
 /// Create a binding using an user-provided allocator instead of the default.
@@ -128,18 +130,12 @@ pub fn closeWithCallConv(
 /// Enable or disable write protection on executable memory on platforms that has the feature.
 pub fn protect(state: bool) void {
     if (builtin.target.os.tag.isDarwin()) {
-        const c = @cImport({
-            @cInclude("pthread.h");
-        });
         c.pthread_jit_write_protect_np(if (state) 1 else 0);
     }
 }
 
 fn invalidate(slice: []u8) void {
     if (builtin.target.os.tag.isDarwin()) {
-        const c = @cImport({
-            @cInclude("libkern/OSCacheControl.h");
-        });
         c.sys_icache_invalidate(slice.ptr, slice.len);
     }
 }
@@ -1046,7 +1042,7 @@ fn Binding(comptime T: type, comptime CT: type, comptime cc: ?std.builtin.Callin
 }
 
 /// Return type of bindWithCallConv(), createWithCallConv(), etc.
-pub fn BoundFnWithCallConv(comptime T: type, comptime CT: type, cc: ?std.builtin.CallingConvention) type {
+pub fn BoundFnWithCallConv(comptime T: type, comptime CT: type, call_conv: ?std.builtin.CallingConvention) type {
     @setEvalBranchQuota(1000000);
     const FT = FnType(T);
     const f = @typeInfo(FT).@"fn";
@@ -1068,7 +1064,7 @@ pub fn BoundFnWithCallConv(comptime T: type, comptime CT: type, cc: ?std.builtin
     var new_f = f;
     new_f.params = &new_params;
     new_f.is_generic = false;
-    if (cc) |c| new_f.calling_convention = c;
+    if (call_conv) |cc| new_f.calling_convention = cc;
     return @Type(.{ .@"fn" = new_f });
 }
 

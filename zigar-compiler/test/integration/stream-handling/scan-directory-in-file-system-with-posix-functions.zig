@@ -2,10 +2,8 @@ const std = @import("std");
 const allocator = std.heap.c_allocator;
 const builtin = @import("builtin");
 
-const c = @cImport({
-    @cInclude("dirent.h");
-    @cInclude("sys/stat.h");
-});
+const c = @import("c");
+const closedir = c.closedir;
 
 const darwin = struct {
     // translate-c currently doesn't handle the __DARWIN_INODE64 macro
@@ -16,7 +14,6 @@ const darwin = struct {
 
 const opendir = if (builtin.target.os.tag.isDarwin()) darwin.@"opendir$INODE64" else c.opendir;
 const readdir = if (builtin.target.os.tag.isDarwin()) darwin.@"readdir$INODE64" else c.readdir;
-const closedir = c.closedir;
 const stat = if (builtin.target.os.tag.isDarwin()) darwin.@"stat$INODE64" else c.stat;
 
 pub fn print(path: [*:0]const u8) !void {

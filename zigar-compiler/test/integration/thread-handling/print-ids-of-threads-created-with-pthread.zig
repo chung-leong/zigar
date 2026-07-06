@@ -1,11 +1,8 @@
 const std = @import("std");
 
-const zigar = @import("zigar");
-
-const c = @cImport({
-    @cInclude("pthread.h");
-});
+const c = @import("c");
 const pthread_t = c.pthread_t;
+const zigar = @import("zigar");
 
 pub fn spawn(count: usize) !void {
     var thread_id: pthread_t = undefined;

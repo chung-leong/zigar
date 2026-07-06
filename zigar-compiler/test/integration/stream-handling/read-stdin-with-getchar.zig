@@ -1,14 +1,12 @@
 const std = @import("std");
 
-const stdio = @cImport({
-    @cInclude("stdio.h");
-});
+const c = @import("c");
 
 pub fn print() !void {
     while (true) {
-        const result = stdio.getchar();
+        const result = c.getchar();
         if (result < 0) break;
-        const c: u8 = @intCast(result);
-        std.debug.print("{c}", .{c});
+        const char: u8 = @intCast(result);
+        std.debug.print("{c}", .{char});
     }
 }

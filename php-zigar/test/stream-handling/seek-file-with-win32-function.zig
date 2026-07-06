@@ -1,11 +1,9 @@
 const std = @import("std");
 
-const windows_h = @cImport({
-    @cInclude("windows.h");
-});
+const c = @import("c");
 
 pub fn read(allocator: std.mem.Allocator, file: std.fs.File, offset: usize, len: usize) ![]u8 {
-    if (windows_h.SetFilePointer(file.handle, @intCast(offset), null, windows_h.FILE_BEGIN) == 0) {
+    if (c.SetFilePointer(file.handle, @intCast(offset), null, c.FILE_BEGIN) == 0) {
         return error.UnableToSeekFile;
     }
     const buffer: []u8 = try allocator.alloc(u8, len);

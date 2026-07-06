@@ -1,14 +1,10 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const zigar = @import("zigar");
-
-const c = @cImport({
-    @cInclude("pthread.h");
-    @cInclude("time.h");
-});
+const c = @import("c");
 const pthread_t = c.pthread_t;
 const pthread_rwlock_t = c.pthread_rwlock_t;
+const zigar = @import("zigar");
 
 var rwlock: pthread_rwlock_t = undefined;
 

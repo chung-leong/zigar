@@ -16,21 +16,41 @@ pub fn build(b: *std.Build) !void {
         if (builtin.target.cpu.arch == .x86_64 and cfg.multithreaded) break :default true;
         break :default null;
     };
+    const root_translate_c = b.addTranslateC(.{
+        .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "include/c.h" },
+        .target = target,
+        .optimize = optimize,
+    });
+    const root = b.addModule("root", .{
+        .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "stub.zig" },
+        .target = target,
+        .optimize = optimize,
+        .single_threaded = !cfg.multithreaded,
+        .imports = &.{.{ .name = "c", .module = root_translate_c.createModule() }},
+    });
     const lib = b.addLibrary(.{
         .linkage = .dynamic,
         .name = cfg.module_name,
-        .root_module = b.addModule("root", .{
-            .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "stub.zig" },
-            .target = target,
-            .optimize = optimize,
-            .single_threaded = !cfg.multithreaded,
-        }),
+        .root_module = root,
         .use_llvm = use_llvm,
     });
     const zigar = b.createModule(.{
         .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "zigar.zig" },
     });
-    const zigar_imports: []const Import = &.{.{ .name = "zigar", .module = zigar }};
+    const zigar_import: []const Import = &.{.{ .name = "zigar", .module = zigar }};
+    const use_c_header = @TypeOf(cfg.c_header_path) != @TypeOf(null);
+    const translate_c = switch (use_c_header) {
+        true => b.addTranslateC(.{
+            .root_source_file = .{ .cwd_relative = cfg.c_header_path },
+            .target = target,
+            .optimize = optimize,
+        }),
+        false => {},
+    };
+    const c_import: []const Import = switch (use_c_header) {
+        true => &.{.{ .name = "c", .module = translate_c.createModule() }},
+        false => &.{},
+    };
     const extra_imports: []const Import = switch (@hasDecl(extra, "getImports")) {
         true => @call(.always_inline, extra.getImports, .{ b, .{
             .library = lib,
@@ -39,7 +59,7 @@ pub fn build(b: *std.Build) !void {
         } }),
         false => &.{},
     };
-    const imports = try std.mem.concat(b.allocator, Import, &.{ zigar_imports, extra_imports });
+    const imports = try std.mem.concat(b.allocator, Import, &.{ zigar_import, c_import, extra_imports });
     const mod = b.createModule(.{
         .root_source_file = .{ .cwd_relative = cfg.module_path },
         .target = target,

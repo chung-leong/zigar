@@ -1,11 +1,8 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
+const c = @import("c");
 const zigar = @import("zigar");
-
-const stdio = @cImport({
-    @cInclude("stdio.h");
-});
 
 const os = switch (builtin.target.os.tag) {
     .linux => .linux,
@@ -25,13 +22,13 @@ pub fn print(promise: zigar.function.Promise(void)) !void {
 
 fn run(promise: zigar.function.Promise(void)) !void {
     const stdin = switch (os) {
-        .darwin => stdio.stdin(),
-        .windows => stdio.__acrt_iob_func(0),
-        else => stdio.stdin,
+        .darwin => c.stdin(),
+        .windows => c.__acrt_iob_func(0),
+        else => c.stdin,
     };
     var buffer: [128]u8 = undefined;
     while (true) {
-        const result = stdio.fgets(&buffer, @intCast(buffer.len), stdin);
+        const result = c.fgets(&buffer, @intCast(buffer.len), stdin);
         if (result == null) break;
         const line: [*:0]const u8 = @ptrCast(result);
         std.debug.print("> {s}", .{line});

@@ -1,7 +1,5 @@
-const string = @cImport(
-    @cInclude("string.h"),
-);
+const c = @import("c");
 
 pub fn getLength(s: []const u8) usize {
-    return string.strlen(s.ptr);
+    return c.strlen(s.ptr);
 }

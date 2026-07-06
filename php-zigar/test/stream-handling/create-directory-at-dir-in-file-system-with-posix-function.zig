@@ -1,10 +1,6 @@
 const std = @import("std");
 
-const c = @cImport({
-    @cInclude("fcntl.h");
-    @cInclude("unistd.h");
-    @cInclude("sys/stat.h");
-});
+const c = @import("c");
 
 pub fn makeDirectory(path: [*:0]const u8, name: [*:0]const u8) !void {
     const dirfd = c.open(path, c.O_DIRECTORY | c.O_RDONLY);

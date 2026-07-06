@@ -1,15 +1,11 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const zigar = @import("zigar");
-
-const c = @cImport({
-    @cInclude("pthread.h");
-    @cInclude("semaphore.h");
-    @cInclude("fcntl.h");
-});
+const c = @import("c");
 const pthread_t = c.pthread_t;
 const sem_t = c.sem_t;
+const zigar = @import("zigar");
+
 const SEM_FAILED: [*c]align(1) sem_t = if (builtin.target.os.tag.isDarwin())
     @ptrFromInt(std.math.maxInt(usize)) // translate-c couldn't deal with macro
 else

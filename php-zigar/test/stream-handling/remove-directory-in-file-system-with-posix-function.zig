@@ -1,9 +1,6 @@
 const std = @import("std");
 
-const c = @cImport({
-    @cInclude("unistd.h");
-    @cInclude("sys/stat.h");
-});
+const c = @import("c");
 
 pub fn removeDirectory(path: [*:0]const u8) !void {
     const result = c.rmdir(path);

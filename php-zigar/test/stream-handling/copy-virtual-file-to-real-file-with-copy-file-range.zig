@@ -1,10 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const c = @cImport({
-    @cDefine("_GNU_SOURCE", {});
-    @cInclude("unistd.h");
-});
+const c = @import("c");
 
 pub fn copy(src: std.fs.File, dest: std.fs.File, src_offset: isize, dest_offset: isize, len: usize) !usize {
     var src_off: isize = src_offset;

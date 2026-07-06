@@ -1,9 +1,6 @@
 const std = @import("std");
 
-const c = @cImport({
-    @cInclude("fcntl.h");
-    @cInclude("unistd.h");
-});
+const c = @import("c");
 
 pub fn write(dir: std.fs.Dir, path: [*:0]const u8, text: []const u8) !isize {
     const fd = c.openat(dir.fd, path, c.O_WRONLY);

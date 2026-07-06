@@ -1,6 +1,8 @@
 const std = @import("std");
+const allocator = std.heap.c_allocator;
+
+const c = @import("c");
 const zigar = @import("zigar");
-const r = @cImport(@cInclude("raylib.h"));
 
 pub fn launch(promise: zigar.function.Promise(void)) !void {
     try zigar.thread.use();
@@ -19,10 +21,9 @@ const Settings = struct {
     x: c_int = 190,
     y: c_int = 200,
     font_size: c_int = 20,
-    text_color: r.Color = r.LIGHTGRAY,
-    background_color: r.Color = r.RAYWHITE,
+    text_color: c.Color = c.LIGHTGRAY,
+    background_color: c.Color = c.RAYWHITE,
 };
-const allocator = std.heap.c_allocator;
 const default_text: [:0]const u8 = "Congrats! You created your first window!";
 var text: [:0]const u8 = default_text;
 var settings: Settings = .{};
@@ -51,16 +52,16 @@ pub fn setKeyReporter(fn_ptr: ?KeyReporter) void {
 }
 
 pub fn main() void {
-    r.InitWindow(800, 450, "raylib [core] example - basic window");
-    defer r.CloseWindow();
+    c.InitWindow(800, 450, "raylib [core] example - basic window");
+    defer c.CloseWindow();
 
-    while (!r.WindowShouldClose()) {
-        const key_code = r.GetKeyPressed();
+    while (!c.WindowShouldClose()) {
+        const key_code = c.GetKeyPressed();
         if (key_code != 0) if (key_reporter) |f| f(key_code);
 
-        r.BeginDrawing();
-        r.ClearBackground(settings.background_color);
-        r.DrawText(text, settings.x, settings.y, settings.font_size, settings.text_color);
-        r.EndDrawing();
+        c.BeginDrawing();
+        c.ClearBackground(settings.background_color);
+        c.DrawText(text, settings.x, settings.y, settings.font_size, settings.text_color);
+        c.EndDrawing();
     }
 }

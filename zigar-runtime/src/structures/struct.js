@@ -15,11 +15,12 @@ export default mixin({
     const backingIntMember = members.find(m => m.flags & MemberFlag.IsBackingInt);
     const backingInt = backingIntMember && this.defineMember(backingIntMember);
     const propApplier = this.createApplier(structure);
+    const thisEnv = this;
     const initializer = this.createInitializer(function(arg, allocator) {
       if (purpose === StructurePurpose.File) {
-        arg = this.createFile(arg);
+        arg = thisEnv.createFile(arg);
       } else if (purpose == StructurePurpose.Directory) {
-        arg = this.createDirectory(arg);
+        arg = thisEnv.createDirectory(arg);
       }
       if (isCompatibleInstanceOf(arg, constructor)) {
         copyObject(this, arg);

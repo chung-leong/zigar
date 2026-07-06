@@ -1,8 +1,6 @@
 const std = @import("std");
 
-const c = @cImport({
-    @cInclude("stdio.h");
-});
+const c = @import("c");
 
 pub fn read(allocator: std.mem.Allocator, path: [*:0]const u8, offset: isize, len: usize) ![]u8 {
     const file = c.fopen(path, "r") orelse return error.UnableToOpenFile;

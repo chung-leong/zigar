@@ -1,12 +1,9 @@
 const std = @import("std");
 
-const zigar = @import("zigar");
-
-const c = @cImport({
-    @cInclude("pthread.h");
-});
+const c = @import("c");
 const pthread_t = c.pthread_t;
 const pthread_spinlock_t = c.pthread_spinlock_t;
+const zigar = @import("zigar");
 
 var spinlock: pthread_spinlock_t = undefined;
 

@@ -1,7 +1,4 @@
-const c = @cImport({
-    @cInclude("print-thru-c.c");
-});
-
+const c = @import("c");
 pub const test_printf = c.test_printf;
 pub const test_fprintf = c.test_fprintf;
 pub const test_putc = c.test_putc;

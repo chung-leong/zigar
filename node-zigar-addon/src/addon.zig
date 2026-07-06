@@ -1590,7 +1590,7 @@ const ModuleHost = struct {
             }
             if (self.getSyscallHook("__sc_vtable")) |hook| {
                 const vtable: *const HandlerVTable = @ptrCast(@alignCast(hook.handler));
-                return redirection_controller.addSyscallVtable(pos, vtable);
+                return redirection_controller.addSyscallVtable(self, pos, vtable);
             }
         }
     }

@@ -1,9 +1,6 @@
 const std = @import("std");
 
-const c = @cImport({
-    @cInclude("fcntl.h");
-    @cInclude("unistd.h");
-});
+const c = @import("c");
 
 pub fn seek(path: [*:0]const u8, offset: isize) !isize {
     const fd = c.open(path, c.O_RDONLY);

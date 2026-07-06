@@ -1,6 +1,4 @@
-const c = @cImport({
-    @cInclude("stdio.h");
-});
+const c = @import("c");
 
 pub fn get(path: [*:0]const u8) !c_int {
     const f = c.fopen(path, "r");

@@ -1,8 +1,4 @@
-const c = @cImport({
-    @cInclude("stdio.h");
-    @cInclude("fcntl.h");
-    @cInclude("unistd.h");
-});
+const c = @import("c");
 
 pub fn symlinkat(
     target: [*:0]const u8,

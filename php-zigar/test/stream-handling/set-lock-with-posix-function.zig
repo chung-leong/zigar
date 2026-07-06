@@ -1,8 +1,6 @@
 const std = @import("std");
 
-const c = @cImport({
-    @cInclude("sys/file.h");
-});
+const c = @import("c");
 
 pub fn lock(file: std.fs.File) bool {
     return c.flock(file.handle, std.c.LOCK.EX) == 0;

@@ -5,22 +5,9 @@ const pollfd = std.c.pollfd;
 const nfds_t = std.c.nfds_t;
 const builtin = @import("builtin");
 
-const fn_transform = @import("../../zigft/fn-transform.zig");
+const c = @import("c");
 
-const dirent_h = @cImport({
-    @cInclude("dirent.h");
-});
-const errno_h = @cImport({
-    @cInclude("errno.h");
-});
-const stdio_h = @cImport({
-    @cInclude("stdio.h");
-    @cInclude("string.h");
-});
-const windows_h = @cImport({
-    @cInclude("windows.h");
-    @cInclude("winternl.h");
-});
+const fn_transform = @import("../../zigft/fn-transform.zig");
 
 const os = switch (builtin.target.os.tag) {
     .linux => .linux,
@@ -1537,7 +1524,6 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                 const err = Host.redirectSyscall(&call);
                 if (err == .SUCCESS) {
                     if (offset) |ptr| ptr.* = @intCast(offset64);
-                    std.debug.print("copied = {d}\n", .{call.u.copyfilerange.copied});
                     result.* = @intCast(call.u.copyfilerange.copied);
                     return true;
                 } else if (err != .OPNOTSUPP) {
@@ -1888,8 +1874,8 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             pub fn _init(self: *@This(), dirfd: c_int, path: [:0]const u8) !void {
                 const absolute = std.fs.path.isAbsolute(path);
                 const relative = dirfd == fd_cwd and !absolute;
-                const backslashes = if (os != .windows) false else for (path) |c| {
-                    if (c == '\\') break true;
+                const backslashes = if (os != .windows) false else for (path) |ch| {
+                    if (ch == '\\') break true;
                 } else false;
                 if (relative) {
                     self.dirfd = fd_root;
@@ -1917,8 +1903,8 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                 if (os == .windows) {
                     if (self.buffer) |buf| {
                         // convert back-slashes to forward-slashes
-                        for (buf, 0..) |c, i| {
-                            if (c == '\\') buf[i] = '/';
+                        for (buf, 0..) |ch, i| {
+                            if (ch == '\\') buf[i] = '/';
                         }
                     }
                     if (std.ascii.isAlphabetic(self.path[0]) and self.path[1] == ':') {
@@ -2420,8 +2406,8 @@ pub fn PosixSubstitute(comptime redirector: type) type {
 
         fn getErrnoPtr() *c_int {
             return errno_ptr orelse inline for (.{ "__errno_location", "__error", "_errno" }) |name| {
-                if (@hasDecl(errno_h, name)) {
-                    const func = @field(errno_h, name);
+                if (@hasDecl(c, name)) {
+                    const func = @field(c, name);
                     errno_ptr = func();
                     break errno_ptr.?;
                 }
@@ -2776,20 +2762,20 @@ const RedirectedFile = struct {
         self.buf_end = 0;
     }
 
-    pub fn unconsumeBuffer(self: *@This(), c: u8) !void {
+    pub fn unconsumeBuffer(self: *@This(), ch: u8) !void {
         const buf = self.buffer orelse try self.prepareBuffer();
         if (self.buf_start > 0) {
             self.buf_start -= 1;
-            buf[self.buf_start] = c;
+            buf[self.buf_start] = ch;
         } else if (self.buf_end == self.buf_start) {
-            buf[0] = c;
+            buf[0] = ch;
             self.buf_start = 0;
             self.buf_end = 1;
         } else {
             const len = self.buf_end - self.buf_start;
             std.mem.copyBackwards(u8, buf[1 .. 1 + len], buf[0..len]);
             self.buf_end += 1;
-            buf[0] = c;
+            buf[0] = ch;
         }
     }
 
@@ -2877,7 +2863,7 @@ pub fn LibcSubstitute(comptime redirector: type) type {
             }
         }
 
-        pub fn fgetpos(s: *std.c.FILE, pos: *stdio_h.fpos_t) callconv(.c) c_int {
+        pub fn fgetpos(s: *std.c.FILE, pos: *c.fpos_t) callconv(.c) c_int {
             if (getRedirectedFile(s)) |file| {
                 const result = posix.lseek64(file.fd, 0, std.c.SEEK.CUR);
                 if (result < 0) {
@@ -2938,16 +2924,16 @@ pub fn LibcSubstitute(comptime redirector: type) type {
             return Original.fopen(path, mode);
         }
 
-        pub fn fputc(c: c_int, s: *std.c.FILE) callconv(.c) c_int {
+        pub fn fputc(ch: c_int, s: *std.c.FILE) callconv(.c) c_int {
             if (getRedirectedFile(s)) |file| {
-                if (c < 0 or c > 255) {
+                if (ch < 0 or ch > 255) {
                     file.errno = @intFromEnum(std.c.E.INVAL);
                     return -1;
                 }
-                const b: [1]u8 = .{@intCast(c)};
+                const b: [1]u8 = .{@intCast(ch)};
                 return @intCast(write(file, &b, 1));
             }
-            return Original.fputc(c, s);
+            return Original.fputc(ch, s);
         }
 
         pub fn fputs(text: [*:0]const u8, s: *std.c.FILE) callconv(.c) c_int {
@@ -2979,7 +2965,7 @@ pub fn LibcSubstitute(comptime redirector: type) type {
             return Original.fseek(s, offset, whence);
         }
 
-        pub fn fsetpos(s: *std.c.FILE, pos: *const stdio_h.fpos_t) callconv(.c) c_int {
+        pub fn fsetpos(s: *std.c.FILE, pos: *const c.fpos_t) callconv(.c) c_int {
             if (getRedirectedFile(s)) |file| {
                 if (flush(file) < 0) return -1;
                 const offset_ptr: *const off64_t = @ptrCast(pos);
@@ -3023,7 +3009,7 @@ pub fn LibcSubstitute(comptime redirector: type) type {
         }
 
         pub fn perror(text: [*:0]const u8) callconv(.c) void {
-            const msg = stdio_h.strerror(posix.getError());
+            const msg = c.strerror(posix.getError());
             const stderr = getStdProxy(2);
             const strings: [4][*:0]const u8 = .{ text, ": ", msg, "\n" };
             for (strings) |s| {
@@ -3035,25 +3021,25 @@ pub fn LibcSubstitute(comptime redirector: type) type {
             }
         }
 
-        pub fn putc(c: c_int, s: *std.c.FILE) callconv(.c) c_int {
+        pub fn putc(ch: c_int, s: *std.c.FILE) callconv(.c) c_int {
             if (getRedirectedFile(s)) |file| {
-                if (c < 0 or c > 255) {
+                if (ch < 0 or ch > 255) {
                     file.errno = @intFromEnum(std.c.E.INVAL);
                     return -1;
                 }
-                const b: [1]u8 = .{@intCast(c)};
+                const b: [1]u8 = .{@intCast(ch)};
                 return @intCast(write(file, &b, 1));
             }
-            return Original.putc(c, s);
+            return Original.putc(ch, s);
         }
 
-        pub fn putchar(c: c_int) callconv(.c) c_int {
+        pub fn putchar(ch: c_int) callconv(.c) c_int {
             const stdout = getStdProxy(1);
-            if (c < 0 or c > 255) {
+            if (ch < 0 or ch > 255) {
                 stdout.errno = @intFromEnum(std.c.E.INVAL);
                 return -1;
             }
-            const b: [1]u8 = .{@intCast(c)};
+            const b: [1]u8 = .{@intCast(ch)};
             return @intCast(write(stdout, b[0..1].ptr, 1));
         }
 
@@ -3106,13 +3092,13 @@ pub fn LibcSubstitute(comptime redirector: type) type {
             return Original.setvbuf(s, buffer, mode, size);
         }
 
-        pub fn ungetc(c: c_int, s: *std.c.FILE) callconv(.c) c_int {
+        pub fn ungetc(ch: c_int, s: *std.c.FILE) callconv(.c) c_int {
             if (getRedirectedFile(s)) |file| {
-                if (c < 0 or c > 255) return -1;
-                file.unconsumeBuffer(@intCast(c)) catch return -1;
-                return c;
+                if (ch < 0 or ch > 255) return -1;
+                file.unconsumeBuffer(@intCast(ch)) catch return -1;
+                return ch;
             }
-            return Original.ungetc(c, s);
+            return Original.ungetc(ch, s);
         }
 
         // hooks implemented in C
@@ -3293,17 +3279,17 @@ pub fn LibcSubstitute(comptime redirector: type) type {
         }
 
         fn getRedirectedFile(s: *std.c.FILE) callconv(.c) ?*RedirectedFile {
-            const sc: *stdio_h.FILE = @ptrCast(@alignCast(s));
+            const sc: *c.FILE = @ptrCast(@alignCast(s));
             return RedirectedFile.cast(s) orelse find: {
                 if (os == .windows) {
                     // fileno doesn't always work on Windows
                     var fd: c_int = 0;
                     while (fd <= 2) : (fd += 1) {
-                        const std_s: *std.c.FILE = @ptrCast(stdio_h.__acrt_iob_func(@intCast(fd)));
+                        const std_s: *std.c.FILE = @ptrCast(c.__acrt_iob_func(@intCast(fd)));
                         if (s == std_s) break :find getStdProxy(fd);
                     }
                 } else {
-                    const fd = stdio_h.fileno(sc);
+                    const fd = c.fileno(sc);
                     if (fd >= 0 and fd <= 2) break :find getStdProxy(fd);
                 }
                 break :find null;
@@ -3886,9 +3872,9 @@ pub fn Win32Substitute(comptime redirector: type) type {
             if (redirector.fstatT(std.os.wasi.filestat_t, fd, &stat, &result)) {
                 if (result < 0) {
                     _ = saveError(result);
-                    return windows_h.INVALID_FILE_SIZE;
+                    return c.INVALID_FILE_SIZE;
                 }
-                _ = windows_h.SetLastError(0);
+                _ = c.SetLastError(0);
                 if (size_high) |ptr| ptr.* = @truncate(stat.size >> 32);
                 return @truncate(stat.size);
             }
@@ -3901,7 +3887,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
             var result: c_int = undefined;
             if (redirector.fstatT(std.os.wasi.filestat_t, fd, &stat, &result)) {
                 if (result < 0) return saveError(result);
-                _ = windows_h.SetLastError(0);
+                _ = c.SetLastError(0);
                 size.* = @intCast(stat.size);
                 return TRUE;
             }
@@ -3944,7 +3930,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
             if (isPrivateDescriptor(fd)) {
                 signalBeginning(overlapped);
                 defer signalCompletion(overlapped);
-                const lock = createLockStruct(.{ 0, 0 }, .{ len_low, len_high }, if ((flags & windows_h.LOCKFILE_EXCLUSIVE_LOCK) != 0) F.WRLCK else F.RDLCK);
+                const lock = createLockStruct(.{ 0, 0 }, .{ len_low, len_high }, if ((flags & c.LOCKFILE_EXCLUSIVE_LOCK) != 0) F.WRLCK else F.RDLCK);
                 var result: c_int = undefined;
                 _ = redirector.fcntl(fd, F.SETLK, @intFromPtr(&lock), &result);
                 return saveError(result);
@@ -4026,7 +4012,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
                     // a delete or rename operation--remember the path for NtSetInformationFile()
                     if (isPrivateDescriptor(dirfd)) {
                         handle.* = createTemporaryHandle(path_wtf8, dirfd, dir_op) catch return .NO_MEMORY;
-                        io_status_block.Information = windows_h.FILE_CREATED;
+                        io_status_block.Information = c.FILE_CREATED;
                         return .SUCCESS;
                     }
                 } else if (dir_op and create_disposition == std.os.windows.FILE_CREATE) {
@@ -4036,7 +4022,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
                         if (result < 0) return .ACCESS_DENIED;
                         result = int_result;
                         handle.* = createTemporaryHandle(path_wtf8, dirfd, dir_op) catch return .NO_MEMORY;
-                        io_status_block.Information = windows_h.FILE_CREATED;
+                        io_status_block.Information = c.FILE_CREATED;
                         return .SUCCESS;
                     }
                 } else if (create_options == std.os.windows.FILE_OPEN_REPARSE_POINT | std.os.windows.FILE_SYNCHRONOUS_IO_NONALERT) {
@@ -4047,7 +4033,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
                         const len: usize = @intCast(result);
                         buf[len] = 0;
                         handle.* = createTemporaryHandle(path_wtf8, dirfd, buf) catch return .NO_MEMORY;
-                        io_status_block.Information = windows_h.FILE_CREATED;
+                        io_status_block.Information = c.FILE_CREATED;
                     }
                     return .SUCCESS;
                 } else {
@@ -4074,11 +4060,11 @@ pub fn Win32Substitute(comptime redirector: type) type {
                         if (fd < 0) return .OBJECT_PATH_NOT_FOUND;
                         handle.* = fromDescriptor(fd);
                         io_status_block.Information = switch (create_disposition) {
-                            std.os.windows.FILE_SUPERSEDE => windows_h.FILE_SUPERSEDED,
-                            std.os.windows.FILE_CREATE => windows_h.FILE_CREATED,
-                            std.os.windows.FILE_OPEN, std.os.windows.FILE_OPEN_IF => windows_h.FILE_OPENED,
-                            std.os.windows.FILE_OVERWRITE, std.os.windows.FILE_OVERWRITE_IF => windows_h.FILE_OVERWRITTEN,
-                            else => windows_h.FILE_OPENED,
+                            std.os.windows.FILE_SUPERSEDE => c.FILE_SUPERSEDED,
+                            std.os.windows.FILE_CREATE => c.FILE_CREATED,
+                            std.os.windows.FILE_OPEN, std.os.windows.FILE_OPEN_IF => c.FILE_OPENED,
+                            std.os.windows.FILE_OVERWRITE, std.os.windows.FILE_OVERWRITE_IF => c.FILE_OVERWRITTEN,
+                            else => c.FILE_OPENED,
                         };
                         return .SUCCESS;
                     }
@@ -4203,7 +4189,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
                 const file_information_classes: [3]struct { id: FILE_INFORMATION_CLASS, T: type } = .{
                     .{ .id = .FileDirectoryInformation, .T = std.os.windows.FILE_DIRECTORY_INFORMATION },
                     .{ .id = .FileBothDirectoryInformation, .T = std.os.windows.FILE_BOTH_DIR_INFORMATION },
-                    .{ .id = .FileNamesInformation, .T = windows_h.FILE_NAMES_INFORMATION },
+                    .{ .id = .FileNamesInformation, .T = c.FILE_NAMES_INFORMATION },
                 };
                 inline for (file_information_classes) |cls| {
                     if (cls.id == file_information_class) break;
@@ -4559,9 +4545,9 @@ pub fn Win32Substitute(comptime redirector: type) type {
             if (redirector.lseek64(fd, offset_long, whence, &result)) {
                 if (result < 0) {
                     _ = saveError(result);
-                    return windows_h.INVALID_SET_FILE_POINTER;
+                    return c.INVALID_SET_FILE_POINTER;
                 }
-                _ = windows_h.SetLastError(0);
+                _ = c.SetLastError(0);
                 if (offset_high) |ptr| ptr.* = @truncate(result >> 32);
                 return @truncate(@as(u64, @bitCast(result)));
             }
@@ -4694,7 +4680,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
         fn cast(comptime T: type, value: anytype, comptime set_error: bool) !T {
             return std.math.cast(T, value) orelse fail: {
                 if (set_error) {
-                    _ = windows_h.SetLastError(windows_h.ERROR_INVALID_PARAMETER);
+                    _ = c.SetLastError(c.ERROR_INVALID_PARAMETER);
                 }
                 break :fail error.IntegerOverflow;
             };
@@ -4705,7 +4691,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
             if (code == 0) {
                 return TRUE;
             } else {
-                _ = windows_h.SetLastError(code);
+                _ = c.SetLastError(code);
                 return FALSE;
             }
         }
@@ -4722,25 +4708,25 @@ pub fn Win32Substitute(comptime redirector: type) type {
             };
             return switch (err) {
                 .SUCCESS => 0,
-                .PERM => windows_h.ERROR_ACCESS_DENIED,
-                .NOENT => windows_h.ERROR_FILE_NOT_FOUND,
-                .BADF => windows_h.ERROR_INVALID_HANDLE,
-                .NOMEM => windows_h.ERROR_NOT_ENOUGH_MEMORY,
-                .ACCES => windows_h.ERROR_INVALID_ACCESS,
-                .FAULT => windows_h.ERROR_INVALID_ADDRESS,
-                .BUSY => windows_h.ERROR_BUSY,
-                .NOTDIR => windows_h.ERROR_DIRECTORY,
-                .NODEV => windows_h.ERROR_DEV_NOT_EXIST,
-                .EXIST => windows_h.ERROR_FILE_EXISTS,
-                .INVAL => windows_h.ERROR_BAD_ARGUMENTS,
-                .NFILE, .MFILE => windows_h.ERROR_TOO_MANY_OPEN_FILES,
-                .FBIG => windows_h.ERROR_FILE_TOO_LARGE,
-                .NOSPC => windows_h.ERROR_DISK_FULL,
-                .SPIPE => windows_h.ERROR_SEEK_ON_DEVICE,
-                .NAMETOOLONG => windows_h.ERROR_INVALID_NAME,
-                .NOLCK => windows_h.ERROR_LOCK_FAILED,
-                .NOTEMPTY => windows_h.ERROR_DIR_NOT_EMPTY,
-                else => windows_h.ERROR_BAD_ARGUMENTS,
+                .PERM => c.ERROR_ACCESS_DENIED,
+                .NOENT => c.ERROR_FILE_NOT_FOUND,
+                .BADF => c.ERROR_INVALID_HANDLE,
+                .NOMEM => c.ERROR_NOT_ENOUGH_MEMORY,
+                .ACCES => c.ERROR_INVALID_ACCESS,
+                .FAULT => c.ERROR_INVALID_ADDRESS,
+                .BUSY => c.ERROR_BUSY,
+                .NOTDIR => c.ERROR_DIRECTORY,
+                .NODEV => c.ERROR_DEV_NOT_EXIST,
+                .EXIST => c.ERROR_FILE_EXISTS,
+                .INVAL => c.ERROR_BAD_ARGUMENTS,
+                .NFILE, .MFILE => c.ERROR_TOO_MANY_OPEN_FILES,
+                .FBIG => c.ERROR_FILE_TOO_LARGE,
+                .NOSPC => c.ERROR_DISK_FULL,
+                .SPIPE => c.ERROR_SEEK_ON_DEVICE,
+                .NAMETOOLONG => c.ERROR_INVALID_NAME,
+                .NOLCK => c.ERROR_LOCK_FAILED,
+                .NOTEMPTY => c.ERROR_DIR_NOT_EMPTY,
+                else => c.ERROR_BAD_ARGUMENTS,
             };
         }
 
@@ -4756,13 +4742,13 @@ pub fn Win32Substitute(comptime redirector: type) type {
 
         fn signalBeginning(overlapped: ?*OVERLAPPED) void {
             if (overlapped) |o| {
-                if (o.hEvent) |e| _ = windows_h.ResetEvent(e);
+                if (o.hEvent) |e| _ = c.ResetEvent(e);
             }
         }
 
         fn signalCompletion(overlapped: ?*OVERLAPPED) void {
             if (overlapped) |o| {
-                if (o.hEvent) |e| _ = windows_h.SetEvent(e);
+                if (o.hEvent) |e| _ = c.SetEvent(e);
             }
         }
 
@@ -5120,7 +5106,7 @@ pub fn Win32SubstituteNonIO(comptime redirector: type) type {
                         }
                     }
                 }
-                windows_h.SetLastError(windows_h.ERROR_ENVVAR_NOT_FOUND);
+                c.SetLastError(c.ERROR_ENVVAR_NOT_FOUND);
                 return 0;
             }
             return null;
@@ -5205,7 +5191,7 @@ const Wtf8Converter = struct {
         var slice: [:0]u8 = switch (CT) {
             u8 => @ptrCast(@constCast(original_slice)),
             u16 => std.unicode.wtf16LeToWtf8AllocZ(self.allocator, original_slice) catch |err| {
-                if (self.save_error) _ = windows_h.SetLastError(windows_h.ERROR_NOT_ENOUGH_MEMORY);
+                if (self.save_error) _ = c.SetLastError(c.ERROR_NOT_ENOUGH_MEMORY);
                 return err;
             },
             else => @compileError("Unsupported type: " ++ @typeName(T)),

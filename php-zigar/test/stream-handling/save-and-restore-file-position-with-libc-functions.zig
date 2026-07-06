@@ -1,9 +1,7 @@
 const std = @import("std");
 const allocator = std.heap.c_allocator;
 
-const c = @cImport({
-    @cInclude("stdio.h");
-});
+const c = @import("c");
 
 pub fn printTwice(path: [*:0]const u8, offset: isize, len: usize) !void {
     const file = c.fopen(path, "r") orelse return error.UnableToOpenFile;

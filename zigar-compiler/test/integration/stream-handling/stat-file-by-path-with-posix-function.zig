@@ -1,9 +1,6 @@
 const std = @import("std");
 
-const c = @cImport({
-    @cInclude("sys/stat.h");
-    @cInclude("unistd.h");
-});
+const c = @import("c");
 
 pub fn print(path: [*:0]const u8) !void {
     var info: c.struct_stat = undefined;

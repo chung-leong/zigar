@@ -1,11 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const c = @cImport({
-    @cInclude("sys/stat.h");
-    @cInclude("unistd.h");
-    @cInclude("fcntl.h");
-});
+const c = @import("c");
 
 const darwin = struct {
     // translate-c currently doesn't handle the __DARWIN_INODE64 macro

@@ -1,7 +1,6 @@
 const std = @import("std");
-const c = @cImport({
-    @cInclude("windows.h");
-});
+
+const c = @import("c");
 
 pub fn write() !void {
     const stdout = c.GetStdHandle(c.STD_OUTPUT_HANDLE);

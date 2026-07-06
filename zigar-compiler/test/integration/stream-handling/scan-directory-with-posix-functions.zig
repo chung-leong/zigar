@@ -1,8 +1,6 @@
 const std = @import("std");
 
-const c = @cImport({
-    @cInclude("dirent.h");
-});
+const c = @import("c");
 
 pub fn print(path: [*:0]const u8) !void {
     const dir = c.opendir(path) orelse return error.UnableToOpenDirectory;

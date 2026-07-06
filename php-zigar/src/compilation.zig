@@ -170,6 +170,7 @@ pub const ZigCompiler = struct {
     build_file_path: []const u8,
     package_config_path: ?[]const u8,
     extra_file_path: ?[]const u8,
+    c_header_path: ?[]const u8,
     output_path: []const u8,
     pdb_path: ?[]const u8,
     compiler_args: [][]const u8,
@@ -270,11 +271,11 @@ pub const ZigCompiler = struct {
             break :find try std.fs.path.resolve(al, &.{ self.zigar_src_path_wo_sep, "build.zig" });
         };
         self.extra_file_path = try findFile(al, self.module_dir_wo_sep, "build.extra.zig");
+        self.c_header_path = try findFile(al, self.module_dir_wo_sep, "build.extra.h");
         self.package_config_path = try findFile(al, self.module_dir_wo_sep, "build.zig.zon");
     }
 
     fn writeProject(self: *@This()) !void {
-        errdefer |err| std.debug.print("writeProject => {}\n", .{err});
         const al = self.allocator();
         // std.fs.deleteTreeAbsolute(self.module_build_dir) catch {};
         try makeDirectory(self.module_build_dir);
@@ -323,6 +324,7 @@ pub const ZigCompiler = struct {
             .output_path,
             .pdb_path,
             .zigar_src_path,
+            .c_header_path,
             .use_libc,
             .use_llvm,
             .use_pthread_emulation,

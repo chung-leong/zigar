@@ -104,6 +104,7 @@ pub const StructurePurpose = enum {
     directory,
     any_image,
     web_image,
+    web_hdr_image,
     gd_image,
 
     pub fn isOptional(self: @This()) bool {

@@ -1,9 +1,4 @@
-const c = @cImport({
-    @cInclude("sys/time.h");
-    @cInclude("sys/stat.h");
-    @cInclude("fcntl.h");
-    @cInclude("unistd.h");
-});
+const c = @import("c");
 
 pub fn setTimes(path: [*:0]const u8, atime: u32, mtime: u32) !void {
     const fd = c.open(path, c.O_RDONLY);

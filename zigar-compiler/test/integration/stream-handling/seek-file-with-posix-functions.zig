@@ -1,9 +1,6 @@
 const std = @import("std");
 
-const c = @cImport({
-    @cInclude("fcntl.h");
-    @cInclude("unistd.h");
-});
+const c = @import("c");
 
 pub fn read(allocator: std.mem.Allocator, path: [*:0]const u8, offset: usize, len: usize) ![]u8 {
     const fd = c.open(path, c.O_RDONLY);

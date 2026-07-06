@@ -386,8 +386,11 @@ export function addTests(importModule, options) {
       expect(line3).to.equal('odd = 777, even = 888');
     })
     it('should call inline function', async function() {
-      const { print } = await importTest('call-inline-function.zig');
-      throw Error('TODO');
+      const { print } = await importTest('call-inline-function');
+      const [ line ] = await capture(() => {
+          print();
+      });
+      expect(line).to.equal('Hello world!');
     })
     it('should handle pointer in struct', async function() {
       const { User } = await importTest('handle-pointer-in-struct');
