@@ -1,6 +1,10 @@
 #ifndef MSVC_INTRINSICS_H
 #define MSVC_INTRINSICS_H
 
+inline void* _AddressOfReturnAddress() {
+    return __builtin_frame_address(0);
+}
+
 long _InterlockedExchange(
    long volatile * Target,
    long Value

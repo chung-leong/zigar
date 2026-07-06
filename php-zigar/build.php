@@ -89,8 +89,6 @@ $menu = (new CliMenuBuilder)
             'aarch64-macos' => "MacOS ARM 64-bit",
             'x86_64-windows' => "Windows x86 64-bit",
             'x86_64-windows-ts' => "Windows x86 64-bit (thread-safe)",
-            'aarch64-windows' => "Windows ARM 64-bit",
-            'aarch64-windows-ts' => "Windows ARM 64-bit (thread-safe)",
         ];
         $cb = function($menu) use($targets, $settings) {
             $item = $menu->getSelectedItem();
