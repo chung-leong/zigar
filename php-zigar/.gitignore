@@ -25,7 +25,6 @@ lib
 *.o
 *.so
 *.node
-*.zstd
 *.bak
 
 vendor
