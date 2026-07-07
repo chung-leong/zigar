@@ -7,3 +7,4 @@ tar -h                 `# follow symlink`\
 -cf ./src/zig.tar.zstd `# create archive, specifying filename`\
 -C ./zig               `# change to directory first`\
 .
+sha1sum ./src/zig.tar.zstd | cut -d " " -f 1 -z > ./src/zig.tar.zstd.sha1

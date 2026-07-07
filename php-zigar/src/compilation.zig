@@ -351,7 +351,27 @@ pub const ZigCompiler = struct {
     }
 
     fn writeZigarLib(self: *@This()) !void {
-        if (dirExists(self.zigar_src_path)) return;
+        const signature: [:0]const u8 = @embedFile("./zig.tar.zstd.sha1");
+        const has_existing = check: {
+            var dir = std.fs.openDirAbsolute(self.zigar_src_path, .{}) catch break :check false;
+            const match = if (dir.openFile(".sha1", .{})) |file| compare: {
+                defer file.close();
+                var read_buffer: [64]u8 = undefined;
+                var reader = file.reader(&read_buffer);
+                const ri = &reader.interface;
+                var bytes: [41]u8 = undefined;
+                ri.readSliceAll(&bytes) catch break :compare false;
+                break :compare std.mem.eql(u8, signature, &bytes);
+            } else |_| false;
+            dir.close();
+            if (match) {
+                break :check true;
+            } else {
+                std.fs.deleteTreeAbsolute(self.zigar_src_path) catch {};
+            }
+            break :check false;
+        };
+        if (has_existing) return;
         try makeDirectory(self.zigar_src_path);
         var input: std.Io.Reader = .fixed(@embedFile("./zig.tar.zstd"));
         const buffer: []u8 = try php.allocator.alloc(u8, std.compress.zstd.default_window_len);
@@ -360,6 +380,13 @@ pub const ZigCompiler = struct {
         var dir = try std.fs.openDirAbsolute(self.zigar_src_path, .{});
         defer dir.close();
         try std.tar.pipeToFileSystem(dir, &decompressor.reader, .{});
+        const file = try dir.createFile(".sha1", .{});
+        defer file.close();
+        var write_buffer: [64]u8 = undefined;
+        var writer = file.writer(&write_buffer);
+        const wi = &writer.interface;
+        _ = try wi.write(signature);
+        try wi.flush();
     }
 
     fn runCompiler(self: *@This()) !void {
@@ -600,10 +627,4 @@ fn findFile(allocator: std.mem.Allocator, parent_path: []const u8, file_name: []
     const stat = dir.statFile(file_name) catch return null;
     if (stat.kind != .file) return null;
     return try std.fs.path.resolve(allocator, &.{ parent_path, file_name });
-}
-
-fn dirExists(dir_path: []const u8) bool {
-    var dir = std.fs.openDirAbsolute(dir_path, .{}) catch return false;
-    defer dir.close();
-    return true;
 }
