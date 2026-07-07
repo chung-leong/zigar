@@ -19,7 +19,7 @@ final class VoidHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
         $m->print(null);
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         void
 
         OUTPUT);
@@ -43,7 +43,7 @@ final class VoidHandlingTest extends ZigarTestCase
         $this->assertSame(null, $m->array_writable[3]);
         $m->array_writable[3] = null;
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         { void, void, void, void }
 
         OUTPUT);
@@ -65,7 +65,7 @@ final class VoidHandlingTest extends ZigarTestCase
         $b = new $m->StructA();
         $this->assertSame([ 'empty1' => null, 'empty2' => null ], (array) $b);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .empty1 = void, .empty2 = void }
         .{ .empty1 = void, .empty2 = void }
 
@@ -92,7 +92,7 @@ final class VoidHandlingTest extends ZigarTestCase
             'empty3' => null, 
         ], (array) $b);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .empty1 = void, .empty2 = void, .number = 200, .empty3 = void }
         .{ .empty1 = void, .empty2 = void, .number = 100, .empty3 = void }
 
@@ -109,7 +109,7 @@ final class VoidHandlingTest extends ZigarTestCase
         $b = new $m->StructA(number: 500);
         $this->assertSame(null, $b->empty);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .number = 500, .empty = void }
 
         OUTPUT);
@@ -169,7 +169,7 @@ final class VoidHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
         $this->assertSame(null, $m->optional);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         void
         null
 
@@ -188,7 +188,7 @@ final class VoidHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
         $this->assertSame(null, $m->error_union);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         void
         error.GoldfishDied
         error.NoMoney

@@ -14,7 +14,7 @@ final class StructHandlingTest extends ZigarTestCase
             $m->constant->number1 = 1;
         });
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .number1 = 1, .number2 = 2 }
         .{ .number1 = 777, .number2 = 2 }
         .{ .number1 = 888, .number2 = 999 }
@@ -42,7 +42,7 @@ final class StructHandlingTest extends ZigarTestCase
     public function testPrintStructArguments(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .number1 = 11, .number2 = 44 }
 
         OUTPUT);
@@ -69,7 +69,7 @@ final class StructHandlingTest extends ZigarTestCase
 
         // TODO: test to plain
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         { .{ .number1 = 1, .number2 = 2 }, .{ .number1 = 3, .number2 = 4 } }
         { .{ .number1 = 1, .number2 = 2 }, .{ .number1 = 123, .number2 = 456 } }
 
@@ -89,7 +89,7 @@ final class StructHandlingTest extends ZigarTestCase
         $this->assertSame([ 'number1' => 10, 'number2' => 20 ], (array) $b->struct1);
         $this->assertSame([ 'number1' => 11, 'number2' => 21 ], (array) $b->struct2);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .struct1 = .{ .number1 = 1, .number2 = 2 }, .struct2 = .{ .number1 = 3, .number2 = 4 } }
         .{ .struct1 = .{ .number1 = 10, .number2 = 20 }, .struct2 = .{ .number1 = 11, .number2 = 21 } }
 
@@ -109,7 +109,7 @@ final class StructHandlingTest extends ZigarTestCase
             'struct3' => (object) [ 'number1' => 5, 'number2' => 6 ],
         ], $m->struct_a->__plain);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .struct1 = .{ .number1 = 1, .number2 = 2 }, .struct2 = .{ .number1 = 3, .number2 = 4 }, .number = 200, .struct3 = .{ .number1 = 5, .number2 = 6 } }
         .{ .struct1 = .{ .number1 = 1, .number2 = 2 }, .struct2 = .{ .number1 = 3, .number2 = 4 }, .number = -3, .struct3 = .{ .number1 = 5, .number2 = -8 } }
 
@@ -128,7 +128,7 @@ final class StructHandlingTest extends ZigarTestCase
         $this->assertSame([ 'number1' => 100, 'number2' => 200 ], (array) $b->structure);
         $this->assertSame(500, $b->number);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .number = 500, .structure = .{ .number1 = 100, .number2 = 200 } }
 
         OUTPUT);
@@ -190,7 +190,7 @@ final class StructHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
         $this->assertSame([ 'number1' => 100, 'number2' => 200 ], (array) $m->optional);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .number1 = 100, .number2 = 200 }
         null
         .{ .number1 = 1, .number2 = 2 }
@@ -207,7 +207,7 @@ final class StructHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
         $this->assertSame([ 'number1' => 100, 'number2' => 200 ], (array) $m->error_union);
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .number1 = 100, .number2 = 200 }
         error.GoldfishDied
         .{ .number1 = 1, .number2 = 2 }

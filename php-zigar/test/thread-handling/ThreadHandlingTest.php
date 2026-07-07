@@ -16,7 +16,7 @@ final class ThreadHandlingTest extends ZigarTestCase
                 }
                 delay(200);
                 $this->assertSame(10, $count);
-                $this->expectOutputString(<<<OUTPUT
+                $this->expectOutput(<<<OUTPUT
                 Error: Unexpected
 
                 OUTPUT);
@@ -346,7 +346,7 @@ final class ThreadHandlingTest extends ZigarTestCase
         $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             try {
-                $this->expectOutputString(<<<OUTPUT
+                $this->expectOutput(<<<OUTPUT
                 Hello world!
 
                 OUTPUT);
@@ -364,7 +364,7 @@ final class ThreadHandlingTest extends ZigarTestCase
         $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             try {
-                $this->expectOutputString(<<<OUTPUT
+                $this->expectOutput(<<<OUTPUT
                 Hello world!
                 retval = 1234
 
@@ -383,7 +383,7 @@ final class ThreadHandlingTest extends ZigarTestCase
         $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             try {
-                $this->expectOutputString(<<<OUTPUT
+                $this->expectOutput(<<<OUTPUT
                 Hello world! 0
                 Hello world! 1
                 Hello world! 2
@@ -404,7 +404,7 @@ final class ThreadHandlingTest extends ZigarTestCase
         $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             try {
-                $this->expectOutputString(<<<OUTPUT
+                $this->expectOutput(<<<OUTPUT
                 Hello world! 0
                 Hello world! 1
                 Hello world! 2
@@ -441,7 +441,7 @@ final class ThreadHandlingTest extends ZigarTestCase
         $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             try {
-                $this->expectOutputString(<<<OUTPUT
+                $this->expectOutput(<<<OUTPUT
                 Thread 1 acquired mutex
                 Thread 2 acquired mutex
 
@@ -460,7 +460,7 @@ final class ThreadHandlingTest extends ZigarTestCase
         $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             try {
-                $this->expectOutputString(<<<OUTPUT
+                $this->expectOutput(<<<OUTPUT
                 retval == EDEADLK: true
 
                 OUTPUT);
@@ -478,7 +478,7 @@ final class ThreadHandlingTest extends ZigarTestCase
         $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             try {
-                $this->expectOutputString(<<<OUTPUT
+                $this->expectOutput(<<<OUTPUT
                 Thread 1 acquired mutex
                 Thread 2 acquired mutex
 
@@ -497,7 +497,7 @@ final class ThreadHandlingTest extends ZigarTestCase
         $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             try {
-                $this->expectOutputString(<<<OUTPUT
+                $this->expectOutput(<<<OUTPUT
                 Thread 1 acquired mutex
                 Thread 3 timed out: true
                 Thread 2 acquired mutex
@@ -515,7 +515,7 @@ final class ThreadHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/create-spinlock-with-pthread.zig');
         $this->inEventLoops([ 'revolt' ], function() use($m) {
-            $this->expectOutputString(<<<OUTPUT
+            $this->expectOutput(<<<OUTPUT
             Main thread acquired spinlock
             Thread 2 found busy lock: true
             Main thread released spinlock
@@ -695,7 +695,7 @@ final class ThreadHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/call-function-once-with-pthread.zig');
         $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
-            $this->expectOutputString(<<<OUTPUT
+            $this->expectOutput(<<<OUTPUT
             Once upon a time...
 
             OUTPUT);
@@ -713,7 +713,7 @@ final class ThreadHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/create-condition-with-pthread.zig');
         $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
-            $this->expectOutputString(<<<OUTPUT
+            $this->expectOutput(<<<OUTPUT
             Thread waiting for condition
             Thread waiting for condition
             Thread waiting for condition

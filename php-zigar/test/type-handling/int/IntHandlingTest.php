@@ -19,7 +19,7 @@ final class IntHandlingTest extends ZigarTestCase
         $this->assertSame(-1234, $m->size2);
         $this->assertFalse(isset($m->private));
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         44
         66
         88
@@ -39,7 +39,7 @@ final class IntHandlingTest extends ZigarTestCase
     public function testPrintIntArguments(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         123 456
         deadbeef badf00d
 
@@ -80,7 +80,7 @@ final class IntHandlingTest extends ZigarTestCase
         for ($i = 0; $i < count($m->array3); $i++) {
             $m->array3[$i] *= 100;
         }
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         { 1, 2, 3, 4 }
         { 10, 20, 30, 40 }
         { 100, 200, 300, 400 }
@@ -96,7 +96,7 @@ final class IntHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-struct.zig');
         $m->struct_a->number2 = -555;
         $m->print();
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .number1 = -5, .number2 = -555 }
 
         OUTPUT);
@@ -113,7 +113,7 @@ final class IntHandlingTest extends ZigarTestCase
         $this->assertFalse($m->struct_b->state);
 
         $m->print();
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .number1 = 15, .number2 = 777, .state = true, .number3 = -420 }
 
         OUTPUT);
@@ -182,7 +182,7 @@ final class IntHandlingTest extends ZigarTestCase
     public function testHandleIntInOptional(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         3000
         null
         12345
@@ -203,7 +203,7 @@ final class IntHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
         $this->assertSame(3000, $m->error_union);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         3000
         error.GoldfishDied
         4000
@@ -232,7 +232,7 @@ final class IntHandlingTest extends ZigarTestCase
             $m->vector3[$i] *= 100;
         }
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         { 1, 2, 3, 4 }
         { 10, 20, 30, 40 }
         { 100, 200, 300, 400 }

@@ -40,7 +40,7 @@ final class NullHandlingTest extends ZigarTestCase
         $b = new $m->StructA(hello: 234);
         $this->assertSame([ 'empty1' => null, 'empty2' => null, 'hello' => 234 ], (array) $b);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .empty1 = null, .empty2 = null, .hello = 1234 }
 
         OUTPUT);
@@ -97,7 +97,7 @@ final class NullHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
         $this->assertSame(null, $m->error_union1);
         
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         null
 
         OUTPUT);

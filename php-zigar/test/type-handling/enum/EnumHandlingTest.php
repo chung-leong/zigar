@@ -15,7 +15,7 @@ final class EnumHandlingTest extends ZigarTestCase
         $this->assertSame($m->Donut->jelly, $m->Donut(gmp_init('0xfffffffffffffffffffffffffffffffe')));
         $this->assertSame('@enumFromInt(5)', (string) $m->Donut(gmp_init('5')));
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .cat
         .dog
 
@@ -28,7 +28,7 @@ final class EnumHandlingTest extends ZigarTestCase
     public function testPrintEnumArguments(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .cat .dog
 
         OUTPUT);
@@ -51,7 +51,7 @@ final class EnumHandlingTest extends ZigarTestCase
             $m->Pet->cat,
         ], (array) $m->array);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         { .monkey, .dog, .cat }
 
         OUTPUT);
@@ -67,7 +67,7 @@ final class EnumHandlingTest extends ZigarTestCase
         $this->assertSame($m->Pet->monkey, $b->pet1);
         $this->assertSame($m->Pet->dog, $b->pet2);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .pet1 = .dog, .pet2 = .cat }
         .{ .pet1 = .monkey, .pet2 = .dog }
 
@@ -90,7 +90,7 @@ final class EnumHandlingTest extends ZigarTestCase
         $this->assertSame(100, $b->number);
         $this->assertSame($m->Pet->cat, $b->pet3);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .pet1 = .dog, .pet2 = .cat, .number = 200, .pet3 = .monkey }
         .{ .pet1 = .monkey, .pet2 = .dog, .number = 100, .pet3 = .cat }
 
@@ -107,7 +107,7 @@ final class EnumHandlingTest extends ZigarTestCase
         $b = new $m->StructA(number: 500);
         $this->assertSame($m->Pet->cat, $b->pet);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .number = 500, .pet = .cat }
 
         OUTPUT);
@@ -169,7 +169,7 @@ final class EnumHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
         $this->assertSame($m->Pet->cat, $m->optional);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .cat
         null
         .monkey
@@ -186,7 +186,7 @@ final class EnumHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
         $this->assertSame($m->Pet->cat, $m->error_union);
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .cat
         error.GoldfishDied
         .dog

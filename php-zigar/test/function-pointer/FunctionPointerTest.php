@@ -5,7 +5,7 @@ final class FunctionPointerTest extends ZigarTestCase
     public function testReleaseFunctionPointer(): void
     {
         $m = ZigImporter::load(__DIR__ . '/release-function-pointer.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         Hello world!
         Hello world!
         foo
@@ -28,7 +28,7 @@ final class FunctionPointerTest extends ZigarTestCase
     public function testReleaseFunctionPointerAutomatically(): void
     {
         $m = ZigImporter::load(__DIR__ . '/release-function-pointer-automatically.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         Hello world!
 
         OUTPUT);
@@ -116,7 +116,7 @@ final class FunctionPointerTest extends ZigarTestCase
             return $ta;
         };
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         Callback 1 invoked!
         Hello world!
         Callback 2 invoked!
@@ -147,7 +147,7 @@ final class FunctionPointerTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/promise.zig');
         $saved = (object) [];
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         number = 1234, value = 55
         number = 1234, error = Unexpected
         number = 1234, value = 123
@@ -181,7 +181,7 @@ final class FunctionPointerTest extends ZigarTestCase
     public function testPassAllocatorAndPromiseAsArgument(): void
     {
         $m = ZigImporter::load(__DIR__ . '/promise-with-allocator.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         value = Hello world
         value = Hello world
         value = Hello world
@@ -202,7 +202,7 @@ final class FunctionPointerTest extends ZigarTestCase
     public function testPassGeneratorAsArgument(): void
     {
         $m = ZigImporter::load(__DIR__ . '/generator.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         number = 1234, value = 0
         number = 1234, value = 1
         number = 1234, value = 2
@@ -239,7 +239,7 @@ final class FunctionPointerTest extends ZigarTestCase
     public function testPassGeneratorWithAllocatorAsArgument(): void
     {
         $m = ZigImporter::load(__DIR__ . '/generator-with-allocator.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         real_name = Tony Stark, superhero_name = Ironman, age = 53
         real_name = Peter Parker, superhero_name = Spiderman, age = 17
         real_name = Natasha Romanoff, superhero_name = Black Widow, age = 39
@@ -264,7 +264,7 @@ final class FunctionPointerTest extends ZigarTestCase
     public function testThrowWhenPhpFunctionIsUsedAsTargetOfPointerToVariadicFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/variadic-function.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         123
         456
         789

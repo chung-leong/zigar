@@ -48,7 +48,7 @@ final class FunctionCallingTest extends ZigarTestCase
     public function testPrintSliceOfSlices(): void
     {
         $m = ZigImporter::load(__DIR__ . '/print-slice-of-slices.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         Hello
         World
         Dingo
@@ -118,7 +118,7 @@ final class FunctionCallingTest extends ZigarTestCase
         $object = new $m->Hello(dog: 3, cat: 7);
         $this->assertSame(10, $object->both);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         something = 200
         stdClass Object
         (
@@ -154,7 +154,7 @@ final class FunctionCallingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/change-pointer-target.zig');
         $this->assertSame(123, $m->number_ptr->{'*'});
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         odd = 123, even = 456
         odd = 777, even = 456
         odd = 777, even = 888
@@ -174,7 +174,7 @@ final class FunctionCallingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/allow-method-calls.zig');
         $a = new $m->Struct(number: 123);
         $b = new $m->Struct(number: 456);
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .number = 123 }
         .{ .number = 456 }
         .{ .number = 123 }
@@ -195,7 +195,7 @@ final class FunctionCallingTest extends ZigarTestCase
     public function testCallInlineFunction(): void 
     {
         $m = ZigImporter::load(__DIR__ . '/call-inline-function.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         Hello world!
 
         OUTPUT);
@@ -206,7 +206,7 @@ final class FunctionCallingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/handle-pointer-in-struct.zig');
         $user = new $m->User(name: 'Alice');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         Alice
         Alice
         Alice
@@ -261,7 +261,7 @@ final class FunctionCallingTest extends ZigarTestCase
             [ 'a' => 5, 'b' => 6 ],
             [ 'a' => 7, 'b' => 8 ],
         ];
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .a = 1, .b = 2 }
         .{ .a = 3, .b = 4 }
         .{ .a = 5, .b = 6 }
@@ -280,7 +280,7 @@ final class FunctionCallingTest extends ZigarTestCase
             [ 'a' => 5, 'b' => 6 ],
             [ 'a' => 7, 'b' => 8 ],
         ];
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .a = 1, .b = 2 }
         .{ .a = 3, .b = 4 }
         .{ .a = 5, .b = 6 }
@@ -363,7 +363,7 @@ final class FunctionCallingTest extends ZigarTestCase
     public function testCallCFunctions(): void 
     {
         $m = ZigImporter::load(__DIR__ . '/call-c-functions.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         Hello world
         Hello world!
         Hello?
@@ -387,7 +387,7 @@ final class FunctionCallingTest extends ZigarTestCase
     public function testCallVariadicFunctions(): void 
     {
         $m = ZigImporter::load(__DIR__ . '/call-variadic-functions.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         i8: -10
         i8: -20
         i8: -30
@@ -472,7 +472,7 @@ final class FunctionCallingTest extends ZigarTestCase
     public function testCorrectlyPassUnsignedIntToVariadicFunction(): void 
     {
         $m = ZigImporter::load(__DIR__ . '/call-variadic-functions-with-unsigned-int.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         u8: 255
         u8: 254
         u8: 253
@@ -541,7 +541,7 @@ final class FunctionCallingTest extends ZigarTestCase
     public function testCallPrintf(): void 
     {
         $m = ZigImporter::load(__DIR__ . '/call-printf.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         Hello world 123!
         Hello world, 123 234 345 456 567!!
         Hello world, 1.23 2.34 3.45 4.56 5.67!!

@@ -44,7 +44,7 @@ final class ComptimeFloatHandlingTest extends ZigarTestCase
 
         $b = new $m->StructA([]);
         $this->assertSame([ 'number1' => 0.1, 'number2' => 0.2 ], (array) $b);
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .number1 = 1.1, .number2 = 2.2 }
 
         OUTPUT);

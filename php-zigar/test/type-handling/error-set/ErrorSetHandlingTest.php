@@ -9,7 +9,7 @@ final class ErrorSetHandlingTest extends ZigarTestCase
         $this->assertInstanceOf('ZigException', $m->NormalError->OutOfMemory);
         $this->assertSame($m->NormalError->OutOfMemory, $m->PossibleError->OutOfMemory);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         error.FileNotFound
         error.OutOfMemory
         {"error":"file not found"}
@@ -26,7 +26,7 @@ final class ErrorSetHandlingTest extends ZigarTestCase
     public function testPrintErrorSetArguments(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         error.SystemIsOnFire
         error.NoMoreBeer
 
@@ -57,7 +57,7 @@ final class ErrorSetHandlingTest extends ZigarTestCase
             $m->StrangeError->CondomBrokeYouPregnant,
         ], (array) $m->array);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         { error.SystemIsOnFire, error.DogAteAllMemory, error.AlienInvasion, error.CondomBrokeYouPregnant }
         { error.SystemIsOnFire, error.DogAteAllMemory, error.NoMoreBeer, error.CondomBrokeYouPregnant }
 
@@ -77,7 +77,7 @@ final class ErrorSetHandlingTest extends ZigarTestCase
         $this->assertSame($m->StrangeError->SystemIsOnFire, $b->err1);
         $this->assertSame($m->StrangeError->DogAteAllMemory, $b->err2);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .err1 = error.AlienInvasion, .err2 = error.SystemIsOnFire }
         .{ .err1 = error.SystemIsOnFire, .err2 = error.DogAteAllMemory }
 
@@ -101,7 +101,7 @@ final class ErrorSetHandlingTest extends ZigarTestCase
         $b = new $m->StructA(number: 500);
         $this->assertSame($m->StrangeError->SystemIsOnFire, $b->err);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .number = 500, .err = error.SystemIsOnFire }
 
         OUTPUT);
@@ -163,7 +163,7 @@ final class ErrorSetHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
         $this->assertSame($m->StrangeError->SystemIsOnFire, $m->optional);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         error.SystemIsOnFire
         null
         error.NoMoreBeer

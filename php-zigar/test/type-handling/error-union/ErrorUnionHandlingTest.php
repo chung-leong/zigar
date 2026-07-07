@@ -42,7 +42,7 @@ final class ErrorUnionHandlingTest extends ZigarTestCase
     public function testPrintErrorUnionArguments(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         221
         error.NoMoney
 
@@ -75,7 +75,7 @@ final class ErrorUnionHandlingTest extends ZigarTestCase
         });
         $this->assertSame(4, $m->array[3]);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         { 1, 2, error.NoMoney, 4 }
         { 1, error.GoldfishDied, 3, 4 }
 
@@ -100,7 +100,7 @@ final class ErrorUnionHandlingTest extends ZigarTestCase
             $x = $b->number2;
         });
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .number1 = error.GoldfishDied, .number2 = -444 }
         .{ .number1 = 123, .number2 = error.NoMoney }
 
@@ -131,7 +131,7 @@ final class ErrorUnionHandlingTest extends ZigarTestCase
             $x = $b->number2;
         });
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .state = true, .number1 = 5000, .number2 = error.GoldfishDied }
 
         OUTPUT);
@@ -202,7 +202,7 @@ final class ErrorUnionHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
         $this->assertSame(3000, $m->optional);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         3000
         null
         error.GoldfishDied
@@ -223,7 +223,7 @@ final class ErrorUnionHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
         $this->assertSame(3000, $m->error_union);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         3000
         error.GoldfishDied
         error.Corrupted

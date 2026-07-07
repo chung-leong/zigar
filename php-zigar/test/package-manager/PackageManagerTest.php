@@ -5,7 +5,7 @@ final class PackageManagerTest extends ZigarTestCase
     public function testLinkInZiglua(): void
     {
         $m = ZigImporter::load(__DIR__ . '/use-ziglua/ziglua.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         Hello world
 
         OUTPUT);
@@ -27,7 +27,7 @@ final class PackageManagerTest extends ZigarTestCase
                 return $handle;
             }
         });
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         Handel: Music for the Royal Fireworks (Original Version 1749) - English Concert & Trevor Pinnock
         Armada: Music from the Courts of England and Spain - Fretwork
         Purcell: Music for the Queen Mary - Equale Brass Ensemble, John Eliot Gardiner & Munich Monteverdi Orchestra and Choir
@@ -86,7 +86,7 @@ final class PackageManagerTest extends ZigarTestCase
     public function testLinkInLocalPackage(): void
     {
         $m = ZigImporter::load(__DIR__ . '/use-local/local.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         sum = 579
 
         OUTPUT);

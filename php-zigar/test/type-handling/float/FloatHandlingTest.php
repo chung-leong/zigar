@@ -13,7 +13,7 @@ final class FloatHandlingTest extends ZigarTestCase
         $this->assertSame(M_PI, $m->float80);
         $this->assertSame(M_PI, $m->float128);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         3.141592653589793
         1.234
 
@@ -30,7 +30,7 @@ final class FloatHandlingTest extends ZigarTestCase
     public function testPrintFloatArguments(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         3.14 3.1415927
         3.141592653589793 3.141592653589793116 3.141592653589793115997963468544185
 
@@ -56,7 +56,7 @@ final class FloatHandlingTest extends ZigarTestCase
         $this->assertSame([ 1.1, 2.1, 3.1, 4.1 ], (array) $m->array2);
         $this->assertSame([ 1.1, 2.1, 3.1, 4.1 ], (array) $m->array3);        
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         { 1.25, 2.25, 3.25, 4.25 }
         { 3.5, 3.5, 3.5, 3.5 }
 
@@ -76,7 +76,7 @@ final class FloatHandlingTest extends ZigarTestCase
         $b = new $m->StructA();
         $this->assertSame([ 'number1' => 123.0, 'number2' => 0.456 ], (array) $b);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .number1 = -0.5, .number2 = -4.44 }
         .{ .number1 = 123, .number2 = 0.456 }
 
@@ -103,7 +103,7 @@ final class FloatHandlingTest extends ZigarTestCase
             'number3' => 3.0, 
         ], (array) $b);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .state = true, .number1 = 1.5, .number2 = 7.77, .number3 = -4.25 }
         .{ .state = false, .number1 = 1, .number2 = 2, .number3 = 3 }
 
@@ -120,7 +120,7 @@ final class FloatHandlingTest extends ZigarTestCase
         $b = new $m->StructA(state: true);
         $this->assertSame(5.55, $b->number);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .state = true, .number = 5.55 }
 
         OUTPUT);
@@ -182,7 +182,7 @@ final class FloatHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
         $this->assertSame(3.14, $m->optional);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         3.14
         null
         8.12
@@ -200,7 +200,7 @@ final class FloatHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
         $this->assertSame(3.14, $m->error_union);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         3.14
         error.GoldfishDied
         error.NoMoney
@@ -227,7 +227,7 @@ final class FloatHandlingTest extends ZigarTestCase
         $this->assertSame([ 1.5, 2.5, 3.5, 4.5 ], (array) $m->vector2);
         $this->assertSame([ 1.5, 2.5, 3.5, 4.5 ], (array) $m->vector3);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         { 1.5, 2.5, 3.5, 4.5 }
         { 3.5, 4.5, 5.5, 6.5 }
 

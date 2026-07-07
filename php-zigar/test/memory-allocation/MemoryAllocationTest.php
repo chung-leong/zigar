@@ -17,7 +17,7 @@ final class MemoryAllocationTest extends ZigarTestCase
             $slice[$j] = ($j + 1) * 10;
         }
         $m->printSlice($slice);
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         10
         20
         30

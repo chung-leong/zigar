@@ -7,7 +7,7 @@ final class FunctionHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/as-static-variables.zig');
         $this->assertTrue(is_callable($m->func));
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         hello
         world
         Hello world
@@ -34,7 +34,7 @@ final class FunctionHandlingTest extends ZigarTestCase
             echo "hello\n";
             echo "world\n";
         });
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         hello
         world
         hello
@@ -63,7 +63,7 @@ final class FunctionHandlingTest extends ZigarTestCase
         $ptr();
         $f();
         $m->getFunction()();
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         hello
         hello
         hello
@@ -78,7 +78,7 @@ final class FunctionHandlingTest extends ZigarTestCase
             $ptr();
             echo "\n";
         }
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         hello
         hello
         world
@@ -109,7 +109,7 @@ final class FunctionHandlingTest extends ZigarTestCase
         echo "\n";
         $m->struct_a->function2();
         echo "\n";
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         hello
         world
         world
@@ -180,7 +180,7 @@ final class FunctionHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
         $this->assertTrue(is_callable($m->optional));
         $this->assertTrue(is_callable($m->optional->{'*'}));
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         hello
         hello
         world
@@ -203,7 +203,7 @@ final class FunctionHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
         $this->assertTrue(is_callable($m->error_union));
         $this->assertTrue(is_callable($m->error_union->{'*'}));
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         hello
         hello
         world
@@ -233,7 +233,7 @@ final class FunctionHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
         $m->vector_const[0]();
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         hello
         hello
         world

@@ -22,6 +22,7 @@ class Settings {
             case 'arm64':
             case 'aarch64': $arch = 'aarch64'; break;
             case 'risc64': $arch = 'risc64'; break;
+            default: $arch = 'x86_64';
         }
         $current_target = "$arch-$platform";
         if ($platform === 'windows') {
@@ -38,99 +39,103 @@ class Settings {
 
 $build = false;
 $settings = new Settings;
-$menu = (new CliMenuBuilder)
-    ->setTitle('PHP-Zigar Extension Build Script')
-    ->addSubMenu('PHP version', function ($b) use($settings) {
-        $b->setTitle('Select the version(s) of PHP for which you wish to create the extension');
-        $versions = [ 
-            '8.1' => "8.1.x", 
-            '8.2' => "8.2.x",
-            '8.3' => "8.3.x",
-            '8.4' => "8.4.x", 
-            '8.5' => "8.5.x",
-        ];
-        $cb = function($menu) use($versions, $settings) {
-            $item = $menu->getSelectedItem();
-            $id = array_search($item->getText(), $versions);
-            $op = ($item->getChecked()) ? 'array_merge' : 'array_diff';
-            $settings->versions = $op($settings->versions, [ $id ]);
-            sort($settings->versions);
-        };
-        foreach ($versions as $id => $label) {
-            $item = new CheckboxItem($label, $cb, false, false);
-            if (in_array($id, $settings->versions)) {
-                $item->setChecked();
+if (is_callable('posix_isatty') && posix_isatty(STDIN)) {
+    $menu = (new CliMenuBuilder)
+        ->setTitle('PHP-Zigar Extension Build Script')
+        ->addSubMenu('PHP version', function ($b) use($settings) {
+            $b->setTitle('Select the version(s) of PHP for which you wish to create the extension');
+            $versions = [ 
+                '8.1' => "8.1.x", 
+                '8.2' => "8.2.x",
+                '8.3' => "8.3.x",
+                '8.4' => "8.4.x", 
+                '8.5' => "8.5.x",
+            ];
+            $cb = function($menu) use($versions, $settings) {
+                $item = $menu->getSelectedItem();
+                $id = array_search($item->getText(), $versions);
+                $op = ($item->getChecked()) ? 'array_merge' : 'array_diff';
+                $settings->versions = $op($settings->versions, [ $id ]);
+                sort($settings->versions);
+            };
+            foreach ($versions as $id => $label) {
+                $item = new CheckboxItem($label, $cb, false, false);
+                if (in_array($id, $settings->versions)) {
+                    $item->setChecked();
+                }
+                $b->addMenuItem($item);
             }
-            $b->addMenuItem($item);
-        }
-        $b->addLineBreak('-');
-    })
-    ->addSubMenu('PHP debug mode', function ($b) use($settings) {
-        $b->setTitle('Select the debug mode of the PHP executable');
-        $cb = function($menu) use($versions, $settings) {
-            $item = $menu->getSelectedItem();
-            $settings->debug = $item->getText() == 'Enabled';
-        };
-        foreach ([ false, true ] as $enabled) {
-            $label = $enabled ? 'Enabled' : 'Disabled';
-            $item = new RadioItem($label, $cb, false, false);
-            if ($settings->debug == $enabled) {
-                $item->setChecked();
+            $b->addLineBreak('-');
+        })
+        ->addSubMenu('PHP debug mode', function ($b) use($settings) {
+            $b->setTitle('Select the debug mode of the PHP executable');
+            $cb = function($menu) use($settings) {
+                $item = $menu->getSelectedItem();
+                $settings->debug = $item->getText() == 'Enabled';
+            };
+            foreach ([ false, true ] as $enabled) {
+                $label = $enabled ? 'Enabled' : 'Disabled';
+                $item = new RadioItem($label, $cb, false, false);
+                if ($settings->debug == $enabled) {
+                    $item->setChecked();
+                }
+                $b->addMenuItem($item);
             }
-            $b->addMenuItem($item);
-        }
-    })
-    ->addSubMenu('Operation System', function ($b) use($settings) {
-        $b->setTitle('Select the operation system(s) you wish to support');
-        $targets = [
-            'x86_64-linux-gnu' => "Linux x86 64-bit",
-            'aarch64-linux-gnu' => "Linux ARM 64-bit",
-            'x86_64-macos' => "MacOS x86 64-bit",
-            'aarch64-macos' => "MacOS ARM 64-bit",
-            'x86_64-windows' => "Windows x86 64-bit",
-            'x86_64-windows-ts' => "Windows x86 64-bit (thread-safe)",
-        ];
-        $cb = function($menu) use($targets, $settings) {
-            $item = $menu->getSelectedItem();
-            $id = array_search($item->getText(), $targets);
-            $op = ($item->getChecked()) ? 'array_merge' : 'array_diff';
-            $settings->targets = $op($settings->targets, [ $id ]);
-            sort($settings->targets);
-        };
-        foreach ($targets as $id => $label) {
-            $item = new CheckboxItem($label, $cb, false, false);
-            if (in_array($id, $settings->targets)) {
-                $item->setChecked();
+        })
+        ->addSubMenu('Operation System', function ($b) use($settings) {
+            $b->setTitle('Select the operation system(s) you wish to support');
+            $targets = [
+                'x86_64-linux-gnu' => "Linux x86 64-bit",
+                'aarch64-linux-gnu' => "Linux ARM 64-bit",
+                'x86_64-macos' => "MacOS x86 64-bit",
+                'aarch64-macos' => "MacOS ARM 64-bit",
+                'x86_64-windows' => "Windows x86 64-bit",
+                'x86_64-windows-ts' => "Windows x86 64-bit (thread-safe)",
+            ];
+            $cb = function($menu) use($targets, $settings) {
+                $item = $menu->getSelectedItem();
+                $id = array_search($item->getText(), $targets);
+                $op = ($item->getChecked()) ? 'array_merge' : 'array_diff';
+                $settings->targets = $op($settings->targets, [ $id ]);
+                sort($settings->targets);
+            };
+            foreach ($targets as $id => $label) {
+                $item = new CheckboxItem($label, $cb, false, false);
+                if (in_array($id, $settings->targets)) {
+                    $item->setChecked();
+                }
+                $b->addMenuItem($item);
             }
-            $b->addMenuItem($item);
-        }
-        $b->addLineBreak('-');
-    })
-    ->addSubMenu('Optimization level', function ($b) use($settings) {
-        $b->setTitle('Select the optimization level used to compile the extension');
-        $levels = [ 'Debug', 'ReleaseSafe', 'ReleaseSmall', 'ReleaseFast' ];
-        $cb = function($menu) use($versions, $settings) {
-            $item = $menu->getSelectedItem();
-            $settings->optimize = $item->getText();
-        };
-        foreach ($levels as $level) {
-            $item = new RadioItem($level, $cb, false, false);
-            if ($settings->optimize == $level) {
-                $item->setChecked();
+            $b->addLineBreak('-');
+        })
+        ->addSubMenu('Optimization level', function ($b) use($settings) {
+            $b->setTitle('Select the optimization level used to compile the extension');
+            $levels = [ 'Debug', 'ReleaseSafe', 'ReleaseSmall', 'ReleaseFast' ];
+            $cb = function($menu) use($settings) {
+                $item = $menu->getSelectedItem();
+                $settings->optimize = $item->getText();
+            };
+            foreach ($levels as $level) {
+                $item = new RadioItem($level, $cb, false, false);
+                if ($settings->optimize == $level) {
+                    $item->setChecked();
+                }
+                $b->addMenuItem($item);
             }
-            $b->addMenuItem($item);
-        }
-    })
-    ->addLineBreak('-')
-    ->addItem('Build', function($menu) use(&$build) {
-        $build = true;
-        $menu->close();
-    })
-    ->setMarginAuto()
-    ->setBackgroundColour(220, 'yellow')
-    ->setForegroundColour(0, 'black')
-    ->build();
-$menu->open();
+        })
+        ->addLineBreak('-')
+        ->addItem('Build', function($menu) use(&$build) {
+            $build = true;
+            $menu->close();
+        })
+        ->setMarginAuto()
+        ->setBackgroundColour(220, 'yellow')
+        ->setForegroundColour(0, 'black')
+        ->build();
+    $menu->open();
+} else {
+    $build = true;
+}
 
 if (!$build) exit(0);
 

@@ -18,7 +18,7 @@ final class OptionalHandlingTest extends ZigarTestCase
             'decimal' => 3.5,
         ], $m->struct_value);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         1234
         null
         4567
@@ -34,7 +34,7 @@ final class OptionalHandlingTest extends ZigarTestCase
     public function testPrintOptionalArguments(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         1234
         null
 
@@ -56,7 +56,7 @@ final class OptionalHandlingTest extends ZigarTestCase
         $this->assertSame(2, $m->array[1]);
         $this->assertSame(null, $m->array[2]);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         { 1, 2, null, 4 }
         { 1, null, null, 4 }
         { 1, null, 777, 4 }
@@ -75,7 +75,7 @@ final class OptionalHandlingTest extends ZigarTestCase
         $this->assertSame([ 'number1' => null,  'number2' => -444 ], (array) $m->struct_a);
         $b = new $m->StructA();
         $this->assertSame([ 'number1' => 123,  'number2' => null ], (array) $b);
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .number1 = null, .number2 = -444 }
         .{ .number1 = 123, .number2 = null }
 
@@ -107,7 +107,7 @@ final class OptionalHandlingTest extends ZigarTestCase
         $this->assertSame(5000, $b->number1);
         $this->assertSame(null, $b->number2);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .state = true, .number1 = 5000, .number2 = null }
 
         OUTPUT);
@@ -170,7 +170,7 @@ final class OptionalHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
         $this->assertSame(3000, $m->optional);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         3000
         null
         -4000
@@ -188,7 +188,7 @@ final class OptionalHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
         $this->assertSame(3000, $m->error_union);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         3000
         error.GoldfishDied
         error.NoMoney

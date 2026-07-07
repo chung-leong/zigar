@@ -45,7 +45,7 @@ final class EnumLiteralHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-struct.zig');
         $this->assertSame([ 'literal1' => 'hello', 'literal2' => 'world' ], (array) $m->struct_a);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .literal1 = .hello, .literal2 = .world }
 
         OUTPUT);
@@ -64,7 +64,7 @@ final class EnumLiteralHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/as-comptime-field.zig');
         $this->assertSame('hello', $m->struct_a->literal);
         
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .number = 123, .literal = .hello }
         .{ .number = 55, .literal = .hello }
 
@@ -95,7 +95,7 @@ final class EnumLiteralHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
         $this->assertSame('hello', $m->optional);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .hello
 
         OUTPUT);
@@ -107,7 +107,7 @@ final class EnumLiteralHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
         $this->assertSame('hello', $m->error_union);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .hello
 
         OUTPUT);

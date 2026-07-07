@@ -11,7 +11,7 @@ final class UnionHandlingTest extends ZigarTestCase
         $this->assertSame(123, $m->variant_b->integer);
         $this->assertSame(3.14, $m->variant_c->float);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         apple
         123
         3.14
@@ -48,7 +48,7 @@ final class UnionHandlingTest extends ZigarTestCase
     public function testPrintUnionArguments(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .integer = 200 }
         .{ .float = 3.14 }
         .{ .string = { 72, 101, 108, 108, 111 } }
@@ -78,7 +78,7 @@ final class UnionHandlingTest extends ZigarTestCase
         $this->assertSame('world', (string) $m->array[2]->string);
         $this->assertSame([ 'integer' => 777 ], (array) $m->array[3]);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         { .{ .integer = 123 }, .{ .float = 1.23 }, .{ .string = { 119, 111, 114, 108, 100 } }, .{ .integer = 777 } }
         { .{ .float = 4.567 }, .{ .float = 1.23 }, .{ .string = { 119, 111, 114, 108, 100 } }, .{ .integer = 777 } }
 
@@ -98,7 +98,7 @@ final class UnionHandlingTest extends ZigarTestCase
         $this->assertSame('world', (string) $b->variant1->string);
         $this->assertSame([ 'float' => 3.14 ], (array) $b->variant2);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .variant1 = .{ .float = 7.777 }, .variant2 = .{ .string = { 72, 101, 108, 108, 111 } } }
         .{ .variant1 = .{ .string = { 119, 111, 114, 108, 100 } }, .variant2 = .{ .float = 3.14 } }
 
@@ -124,7 +124,7 @@ final class UnionHandlingTest extends ZigarTestCase
         $b = new $m->StructA(number: 500);
         $this->assertSame('world', (string) $b->variant->string);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .number = 500, .variant = .{ .string = { 119, 111, 114, 108, 100 } } }
 
         OUTPUT);
@@ -183,7 +183,7 @@ final class UnionHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
         $this->assertSame(100, $m->optional->integer);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .integer = 100 }
         null
         .{ .float = 3.14 }
@@ -203,7 +203,7 @@ final class UnionHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
         $this->assertSame(100, $m->error_union->integer);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .integer = 100 }
         error.GoldfishDied
         .{ .float = 3.14 }

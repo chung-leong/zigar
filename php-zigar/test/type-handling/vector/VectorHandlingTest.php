@@ -11,7 +11,7 @@ final class VectorHandlingTest extends ZigarTestCase
 
         $m->v2 = [ 4.0, 5.0, 6.0 ];
         $this->assertSame([ 4.0, 5.0, 6.0 ], $m->v2->__plain);
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         { 4, 5, 6 }
         0: 1
         1: 2
@@ -30,7 +30,7 @@ final class VectorHandlingTest extends ZigarTestCase
     public function testPrintVectorArguments(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         { 1.1, 2.2, 3.3, 4.4 }
 
         OUTPUT);
@@ -55,7 +55,7 @@ final class VectorHandlingTest extends ZigarTestCase
             [ 2, 3, 4, 5 ],
         ], $m->array->__plain);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         { { 1, 2, 3, 4 }, { 2, 3, 4, 5 } }
         { { 1, 2, 300, 4 }, { 2, 3, 4, 5000 } }
 
@@ -84,7 +84,7 @@ final class VectorHandlingTest extends ZigarTestCase
             'vector2' => [ 5, 6, 7, 8 ],
         ], $b->__plain);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .vector1 = { 10, 20, 30, 40 }, .vector2 = { 11, 21, 31, 41 } }
         .{ .vector1 = { 1, 2, 3, 4 }, .vector2 = { 5, 6, 7, 8 } }
 
@@ -102,7 +102,7 @@ final class VectorHandlingTest extends ZigarTestCase
         $this->assertSame(200, $m->struct_a->number);
         $this->assertSame([ 12, 22, 32, 42 ], (array) $m->struct_a->vector3);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .vector1 = { 10, 20, 30, 40 }, .vector2 = { 2, 3, 4, 5 }, .number = 200, .vector3 = { 12, 22, 32, 42 } }
         .{ .vector1 = { 10, 20, 30, 40 }, .vector2 = { 2, 3, 4, 5 }, .number = 201, .vector3 = { 12, 22, 32, 43 } }
 
@@ -122,7 +122,7 @@ final class VectorHandlingTest extends ZigarTestCase
         $this->assertSame(500, $b->number);
         $this->assertSame([ 1, 2, 3, 4 ], (array) $b->vector);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .number = 500, .vector = { 1, 2, 3, 4 } }
 
         OUTPUT);
@@ -198,7 +198,7 @@ final class VectorHandlingTest extends ZigarTestCase
     public function testHandleVectorInOptional(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         { 1, 2, 3, 4 }
         null
         { 5, 6, 7, 8 }
@@ -216,7 +216,7 @@ final class VectorHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
         $this->assertSame([ 1, 2, 3, 4 ], (array) $m->error_union);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         { 1, 2, 3, 4 }
         error.GoldfishDied
         { 10, 20, 30, 40 }

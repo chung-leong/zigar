@@ -106,7 +106,7 @@ final class TypeHandlingTest extends ZigarTestCase
         $this->assertFalse(is_callable([ $m, 'optional2' ]));
         $this->assertFalse(is_callable($m->optional2));
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         bool
 
         OUTPUT);
@@ -124,7 +124,7 @@ final class TypeHandlingTest extends ZigarTestCase
             $x = $m->error_union2;
         });
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         bool
 
         OUTPUT);

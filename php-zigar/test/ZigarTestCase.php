@@ -47,6 +47,13 @@ abstract class ZigarTestCase extends TestCase
             }
         }
     }
+
+    protected function expectOutput($expected) {
+        if (PHP_EOL != "\n") {
+            $expected = str_replace(PHP_EOL, "\n", $expected);
+        }
+        $this->expectOutputString($expected);
+    }
 }
 
 function delay($ms) {

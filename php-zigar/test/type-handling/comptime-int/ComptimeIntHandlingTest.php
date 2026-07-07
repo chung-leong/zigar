@@ -47,7 +47,7 @@ final class ComptimeIntHandlingTest extends ZigarTestCase
 
         $b = new $m->StructA([]);
         $this->assertSame([ 'number1' => 100, 'number2' => 200 ], (array) $b);
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .number1 = 1, .number2 = 2 }
 
         OUTPUT);

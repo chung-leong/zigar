@@ -5,7 +5,7 @@ final class OutputTest extends ZigarTestCase
     public function testPrintToPhpOutput(): void
     {
         $m = ZigImporter::load(__DIR__ . '/print-with-newline.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         Hello world!
         
         OUTPUT);
@@ -15,7 +15,11 @@ final class OutputTest extends ZigarTestCase
     public function testPrintThruC(): void
     {
         $m = ZigImporter::load(__DIR__ . '/print-thru-c.zig');
-        $this->expectOutputString(<<<OUTPUT
+        switch (PHP_OS_FAMILY) {
+            case 'Windows': $error_msg = 'Permission denied'; break;
+            default: $error_msg = 'No such file or directory';
+        }
+        $this->expectOutput(<<<OUTPUT
         Hello 1234
         Hello Richard Nixon
         Hello 1234 3.14
@@ -25,7 +29,7 @@ final class OutputTest extends ZigarTestCase
         H
         Hello world
         Hello world
-        Hello worldHello worldHello: No such file or directory
+        Hello worldHello worldHello: $error_msg
         
         OUTPUT);
         $m->test_printf();

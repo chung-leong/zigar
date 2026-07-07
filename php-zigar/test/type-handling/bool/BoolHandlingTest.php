@@ -17,14 +17,14 @@ final class BoolHandlingTest extends ZigarTestCase
             $m->bool4 = false;
         });
 
-        $this->expectOutputString('no');
+        $this->expectOutput('no');
         $m->print();
     }
 
     public function testPrintBoolArguments(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         no
         yes
 
@@ -46,7 +46,7 @@ final class BoolHandlingTest extends ZigarTestCase
         $this->assertSame([ false, false, false, false ], (array) $m->array_const);
         $this->assertSame([ true, false, false, true ], (array) $m->array);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         { true, false, false, true }
         { false, false, false, true }
         { false, false, true, true }
@@ -71,7 +71,7 @@ final class BoolHandlingTest extends ZigarTestCase
         $this->assertTrue($b->state1);
         $this->assertFalse($b->state2);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .state1 = false, .state2 = true }
         .{ .state1 = true, .state2 = false }
 
@@ -98,7 +98,7 @@ final class BoolHandlingTest extends ZigarTestCase
             'state3' => false,
         ], (array) $b);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .state1 = false, .state2 = true, .number = 200, .state3 = true }
         .{ .state1 = true, .state2 = false, .number = 100, .state3 = false }
 
@@ -115,7 +115,7 @@ final class BoolHandlingTest extends ZigarTestCase
         $b = new $m->StructA([ 'number' => 500 ]);
         $this->assertFalse($b->state);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .number = 500, .state = false }
 
         OUTPUT);       
@@ -162,7 +162,7 @@ final class BoolHandlingTest extends ZigarTestCase
     public function testHandleBoolInOptional(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
-        $this->expectOutputString("true\nnull\nfalse\ntrue\n");
+        $this->expectOutput("true\nnull\nfalse\ntrue\n");
         $m->print();
         $m->optional = null;
         $m->print();
@@ -177,7 +177,7 @@ final class BoolHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
         $this->assertTrue($m->error_union);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         true
         error.GoldfishDied
         error.NoMoney
@@ -199,7 +199,7 @@ final class BoolHandlingTest extends ZigarTestCase
         $this->assertSame([ true, false, false, true ], (array) $m->vector);
         $this->assertSame([ false, false, false, false ], (array) $m->vector_const);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         { true, false, false, true }
         { false, false, false, true }
         { false, false, true, true }

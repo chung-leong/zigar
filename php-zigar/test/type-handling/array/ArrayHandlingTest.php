@@ -17,7 +17,7 @@ final class ArrayHandlingTest extends ZigarTestCase
             [ 4.1, 4.2, 4.3, 4.4 ],
         ], $m->float64_array4x4->__plain);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         { 1, 2, 3, 4 }
         { 4, 8, 12, 16 }
 
@@ -40,7 +40,7 @@ final class ArrayHandlingTest extends ZigarTestCase
     public function testPrintArrayArguments(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         { 1.1, 2.2, 3.3, 4.4 }
 
         OUTPUT);
@@ -68,7 +68,7 @@ final class ArrayHandlingTest extends ZigarTestCase
             [ 2, 3, 4, 5 ],
         ], $m->array->__plain);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         { { 1, 2, 3, 4 }, { 2, 3, 4, 5 } }
 
         OUTPUT);
@@ -92,7 +92,7 @@ final class ArrayHandlingTest extends ZigarTestCase
             'array2' => [ 5, 6, 7, 8 ],
         ], $b->__plain);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .array1 = { 10, 20, 30, 40 }, .array2 = { 11, 21, 31, 41 } }
         .{ .array1 = { 1, 2, 3, 4 }, .array2 = { 5, 6, 7, 8 } }
 
@@ -132,7 +132,7 @@ final class ArrayHandlingTest extends ZigarTestCase
             'array' => [ 1, 2, 3, 4 ],
         ], $b->__plain);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .number = 500, .array = { 1, 2, 3, 4 } }
 
         OUTPUT);
@@ -205,7 +205,7 @@ final class ArrayHandlingTest extends ZigarTestCase
         $this->assertSame([ 1, 2, 3, 4 ], (array) $m->optional);
         $this->assertSame([ 1, 2, 3, 4 ], $m->optional->__plain);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         { 1, 2, 3, 4 }
         null
         { 5, 6, 7, 8 }
@@ -223,7 +223,7 @@ final class ArrayHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
         $this->assertSame([ 1, 2, 3, 4 ], (array) $m->error_union);
         $this->assertSame([ 1, 2, 3, 4 ], $m->error_union->__plain);
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         { 1, 2, 3, 4 }
         error.GoldfishDied
         { 5, 6, 7, 8 }

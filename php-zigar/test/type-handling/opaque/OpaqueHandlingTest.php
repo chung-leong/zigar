@@ -20,7 +20,7 @@ final class OpaqueHandlingTest extends ZigarTestCase
     public function testPrintOpaqueArguments(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         Value = 1234
 
         OUTPUT);
@@ -31,7 +31,7 @@ final class OpaqueHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/as-return-value.zig');
         $s = $m->create(123, 456);
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .number1 = 123, .number2 = 456 }
 
         OUTPUT);
@@ -45,7 +45,7 @@ final class OpaqueHandlingTest extends ZigarTestCase
         for ($i = 0; $i < 4; $i++) {
             $this->assertTrue($m->array[$i]->{'*'} instanceof $m->Opaque);
         }
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         { 123, 345, 567, 789 }
         { 123, 345, 5555, 789 }
 
@@ -65,7 +65,7 @@ final class OpaqueHandlingTest extends ZigarTestCase
         $this->assertTrue($b->ptr1->{'*'} instanceof $m->Opaque);
         $this->assertTrue($b->ptr2->{'*'} instanceof $m->Opaque);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         8888 9999
         1234 4567
 
@@ -159,7 +159,7 @@ final class OpaqueHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
         $this->assertTrue($m->optional->{'*'} instanceof $m->Opaque);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         1234
         null
         4567
@@ -179,7 +179,7 @@ final class OpaqueHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
         $this->assertTrue($m->error_union->{'*'} instanceof $m->Opaque);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         1234
         error.GoldfishDied
         4567
@@ -197,7 +197,7 @@ final class OpaqueHandlingTest extends ZigarTestCase
     public function testHandleOpaqueInVector(): void
     {
         $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         { 1234, 1234, 1234, 1234 }
         { 1234, 1234, 1234, 1234 }
         { 2456, 2456, 2456, 2456 }

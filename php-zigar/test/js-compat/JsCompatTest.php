@@ -56,7 +56,7 @@ final class JsCompatTest extends ZigarTestCase
         $h = new Int8Array(4);
         $this->assertSame([ 0, 0, 0, 0 ], (array) $h);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         0: 1
         1: 2
         2: 3
@@ -85,7 +85,7 @@ final class JsCompatTest extends ZigarTestCase
         $g = new Uint8Array($buf, 1, 3);
         $this->assertSame([ 20, 30, 40 ], (array) $g);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         0: 1
         1: 2
         2: 3
@@ -114,7 +114,7 @@ final class JsCompatTest extends ZigarTestCase
         $g = new Int16Array($buf, 2, 3);
         $this->assertSame([ -2, -3, -4 ], (array) $g);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         0: 1
         1: 2
         2: 3
@@ -143,7 +143,7 @@ final class JsCompatTest extends ZigarTestCase
         $g = new Uint16Array($buf, 2, 3);
         $this->assertSame([ 20, 30, 40 ], (array) $g);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         0: 1
         1: 2
         2: 3
@@ -172,7 +172,7 @@ final class JsCompatTest extends ZigarTestCase
         $g = new Int32Array($buf, 4, 3);
         $this->assertSame([ -2, -3, -4 ], (array) $g);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         0: 1
         1: 2
         2: 3
@@ -201,7 +201,7 @@ final class JsCompatTest extends ZigarTestCase
         $g = new Uint32Array($buf, 4, 3);
         $this->assertSame([ 20, 30, 40 ], (array) $g);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         0: 1
         1: 2
         2: 3
@@ -230,7 +230,7 @@ final class JsCompatTest extends ZigarTestCase
         $g = new Int64Array($buf, 8, 3);
         $this->assertSame([ -2, -3, -4 ], (array) $g);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         0: 1
         1: 2
         2: 3
@@ -259,7 +259,7 @@ final class JsCompatTest extends ZigarTestCase
         $g = new Uint64Array($buf, 8, 3);
         $this->assertSame([ 20, 30, 40 ], (array) $g);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         0: 1
         1: 2
         2: 3
@@ -287,7 +287,7 @@ final class JsCompatTest extends ZigarTestCase
         $g = new Float16Array($buf, 2, 3);
         $this->assertSame([ -2.0, -3.0, -4.0 ], (array) $g);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         0: 1
         1: 2
         2: 3
@@ -316,7 +316,7 @@ final class JsCompatTest extends ZigarTestCase
         $g = new Float32Array($buf, 4, 3);
         $this->assertSame([ -2.0, -3.0, -4.0 ], (array) $g);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         0: 1
         1: 2
         2: 3
@@ -345,7 +345,7 @@ final class JsCompatTest extends ZigarTestCase
         $g = new Float64Array($buf, 8, 3);
         $this->assertSame([ -2.0, -3.0, -4.0 ], (array) $g);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         0: 1
         1: 2
         2: 3

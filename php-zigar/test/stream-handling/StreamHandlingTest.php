@@ -178,7 +178,7 @@ final class StreamHandlingTest extends ZigarTestCase
         $path = __DIR__ . '/data/test.txt';        
         $content = file_get_contents($path);
         $url_path = '/data://text/plain;base64,' . base64_encode($content);
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         ur fathers broug
         ur fathers broug
 
@@ -370,7 +370,7 @@ final class StreamHandlingTest extends ZigarTestCase
         $dir = new VirtualDir([ "test.txt" => $file ]);
         VirtualFSStream::add_root_node('hello', $dir);
         $handle = opendir('vfs://hello');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         size = 38
         ctime = 123,0
         mtime = 124,0
@@ -387,7 +387,7 @@ final class StreamHandlingTest extends ZigarTestCase
         mkdir($path, 0777, true);
         file_put_contents("$path/file.txt", "Hello world");
         try {
-            $this->expectOutputString(<<<OUTPUT
+            $this->expectOutput(<<<OUTPUT
             size = 11
 
             OUTPUT);
@@ -426,7 +426,7 @@ final class StreamHandlingTest extends ZigarTestCase
         $dir = new VirtualDir([ "test.txt" => $file ]);
         VirtualFSStream::add_root_node('hello', $dir);
         $handle = fopen("vfs://hello/test.txt", 'r');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         size = 38
         ctime = 1234000000000
         mtime = 0
@@ -443,7 +443,7 @@ final class StreamHandlingTest extends ZigarTestCase
         $file->ctime = 1234;
         $dir = new VirtualDir([ "test.txt" => $file ]);
         VirtualFSStream::add_root_node('hello', $dir);
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         size = 38
         ctime = 1234,0
         mtime = 0,0
@@ -458,7 +458,7 @@ final class StreamHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/stat-opened-file-in-file-system-with-posix-function.zig');
         $path = __DIR__ . '/data/fstat_test';
         file_put_contents($path, 'This is a test and this is only a test');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         size = 38
 
         OUTPUT);
@@ -474,7 +474,7 @@ final class StreamHandlingTest extends ZigarTestCase
         $file->mtime = 8888;
         $dir = new VirtualDir([ "test.txt" => $file ]);
         VirtualFSStream::add_root_node('hello', $dir);
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         size = 38
         ctime = 1234,0
         mtime = 8888,0
@@ -560,7 +560,7 @@ final class StreamHandlingTest extends ZigarTestCase
         ]);
         VirtualFSStream::add_root_node('test1', $dir1);
         $handle1 = opendir('vfs://test1');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         hello.txt file
         world directory
 
@@ -594,7 +594,7 @@ final class StreamHandlingTest extends ZigarTestCase
         try {
             VirtualFSStream::add_root_node('test1', $dir1);
             $handle1 = opendir('vfs://test1');
-            $this->expectOutputString(<<<OUTPUT
+            $this->expectOutput(<<<OUTPUT
             hello.txt file
             world directory
 
@@ -670,7 +670,7 @@ final class StreamHandlingTest extends ZigarTestCase
             'world' => new VirtualDir(),
         ]);
         VirtualFSStream::add_root_node('test', $dir);
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         This is a test and this is only a test
         OUTPUT);
         $handle = opendir('vfs://test');
@@ -686,7 +686,7 @@ final class StreamHandlingTest extends ZigarTestCase
             'world' => new VirtualDir(),
         ]);
         VirtualFSStream::add_root_node('test', $dir);
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         hello.txt (file)
         test.txt (file)
         world (dir)
@@ -705,7 +705,7 @@ final class StreamHandlingTest extends ZigarTestCase
             'world' => new VirtualDir(),
         ]);
         VirtualFSStream::add_root_node('test', $dir);
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         hello.txt (file)
         test.txt (file)
         world (dir)
@@ -1208,7 +1208,7 @@ final class StreamHandlingTest extends ZigarTestCase
 
         INPUT;
         $file = fopen("var://input", 'r');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         1 2 3 hello
         4 5 6 world
         count = 2
@@ -1229,7 +1229,7 @@ final class StreamHandlingTest extends ZigarTestCase
         INPUT;
         $file = fopen("var://input", 'r');
         $m->__zigar->redirect('stdin', $file);
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         1 2 3 hello
         4 5 6 world
         count = 2

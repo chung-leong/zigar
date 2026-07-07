@@ -14,7 +14,7 @@ final class PointerHandlingTest extends ZigarTestCase
     public function testPrintPointerArguments(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         hello
         world
 
@@ -41,7 +41,7 @@ final class PointerHandlingTest extends ZigarTestCase
         $this->assertSame('monkey', $m->array[2]->__string);
         $this->assertSame('cow', $m->array[3]->__string);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         { { 100, 111, 103 }, { 99, 97, 116 }, { 109, 111, 110, 107, 101, 121 }, { 99, 111, 119 } }
         { { 100, 111, 103 }, { 99, 97, 116 }, { 98, 101, 97, 114 }, { 99, 111, 119 } }
 
@@ -61,7 +61,7 @@ final class PointerHandlingTest extends ZigarTestCase
         $this->assertSame('apple', $b->text1->__string);
         $this->assertSame('orange', $b->text2->__string);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .text1 = { 100, 111, 103 }, .text2 = { 99, 97, 116 } }
         .{ .text1 = { 97, 112, 112, 108, 101 }, .text2 = { 111, 114, 97, 110, 103, 101 } }
 
@@ -96,7 +96,7 @@ final class PointerHandlingTest extends ZigarTestCase
         $b = new $m->StructA(number: 500);
         $this->assertSame('Hello', $b->text->__string);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         .{ .number = 500, .text = { 72, 101, 108, 108, 111 } }
 
         OUTPUT);
@@ -168,7 +168,7 @@ final class PointerHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
         $this->assertSame('Hello', $m->optional);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         Hello
         null
         World
@@ -188,7 +188,7 @@ final class PointerHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
         $this->assertSame('Hello', $m->error_union->__string);
 
-        $this->expectOutputString(<<<OUTPUT
+        $this->expectOutput(<<<OUTPUT
         { 72, 101, 108, 108, 111 }
         error.GoldfishDied
         { 87, 111, 114, 108, 100 }
