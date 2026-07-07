@@ -61,7 +61,9 @@ pub const Primitive = struct {
 
     pub fn compare(a: *Value, b: *Value) !c_int {
         const op1 = try getPrimitiveValue(a);
+        defer php.release(&op1);
         const op2 = try getPrimitiveValue(b);
+        defer php.release(&op2);
         return php.compareValues(&op1, &op2);
     }
 
@@ -82,7 +84,7 @@ pub const Primitive = struct {
                 }
             }
         }
-        return operand.*;
+        return php.reuse(operand).*;
     }
 
     pub const getExtent = Super.getExtent;
