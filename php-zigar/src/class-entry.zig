@@ -769,16 +769,12 @@ pub const ZigClassEntry = struct {
         std.debug.assert(!buf.flags.uninitialized and !buf.flags.transient);
         const result = self.host.object_map.find(obj);
         try self.host.object_map.insert(result, obj);
-        // each instance needs a reference on the host, since the class object can be released
-        // ahead of the instances during gc
-        self.host.addRef();
     }
 
     pub fn unregisterObject(self: *@This(), obj: *Object) void {
         const result = self.host.object_map.find(obj);
         if (result.found) {
             self.host.object_map.remove(result);
-            self.host.release();
         }
     }
 

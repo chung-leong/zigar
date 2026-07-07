@@ -50,6 +50,11 @@ pub fn ZigObject(comptime S: type) type {
             // handlers get set to null by zend_object_std_init() starting from PHP 8.3
             // so this call needs to happen here
             obj.handlers = getHandlers();
+            if (!@hasDecl(S, "scope") or S.scope != .static) {
+                // each instance needs a reference on the host, since the class object can be released
+                // ahead of the instances during gc; release() is called in freeObject()
+                class.host.addRef();
+            }
             return self;
         }
 

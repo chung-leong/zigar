@@ -371,6 +371,8 @@ pub fn Parent(comptime S: type) type {
                 php.release(&self.table);
             }
             class.destroyObject(obj);
+            // release ref created in ZigObject.create()
+            class.host.release();
         }
 
         pub fn castObject(obj: *Object, retval: *Value, type_id: c_int) !c_int {
