@@ -16,6 +16,7 @@ zig-out
 extensions
 php-devel
 lib
+build.ini
 
 *.a
 *.dep

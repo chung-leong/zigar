@@ -10,135 +10,189 @@ require_once(__DIR__ . '/vendor/autoload.php');
 
 class Settings {
     function __construct() {
-        $current_version = substr(PHP_VERSION, 0, strrpos(PHP_VERSION, '.'));
-        switch (PHP_OS_FAMILY) {
-            case 'Windows': $platform = 'windows'; break;
-            case 'Darwin': $platform = 'macos'; break;
-            case 'Linux': $platform = 'linux-gnu'; break;
-        }
-        switch (php_uname("m")) {
-            case 'x86': $arch = 'x86'; break;
-            case 'x86_64': $arch = 'x86_64'; break;
-            case 'arm64':
-            case 'aarch64': $arch = 'aarch64'; break;
-            case 'risc64': $arch = 'risc64'; break;
-            default: $arch = 'x86_64';
-        }
-        $current_target = "$arch-$platform";
-        if ($platform === 'windows') {
-            if (PHP_ZTS) {
-                $current_target .= '-ts';
+        $this->ini_path = join(DIRECTORY_SEPARATOR, [ __DIR__, 'build.ini' ]);
+        if (file_exists($this->ini_path)) {
+            $this->load();
+        } else {
+            $current_version = substr(PHP_VERSION, 0, strrpos(PHP_VERSION, '.'));
+            switch (PHP_OS_FAMILY) {
+                case 'Windows': $platform = 'windows'; break;
+                case 'Darwin': $platform = 'macos'; break;
+                case 'Linux': $platform = 'linux-gnu'; break;
             }
+            switch (php_uname("m")) {
+                case 'x86': $arch = 'x86'; break;
+                case 'x86_64': $arch = 'x86_64'; break;
+                case 'arm64':
+                case 'aarch64': $arch = 'aarch64'; break;
+                case 'risc64': $arch = 'risc64'; break;
+                default: $arch = 'x86_64';
+            }
+            $current_target = "$arch-$platform";
+            if ($platform === 'windows') {
+                if (PHP_ZTS) {
+                    $current_target .= '-ts';
+                }
+            }
+            $this->versions = [ $current_version ];
+            $this->targets = [ $current_target ];
+            $this->debug = PHP_DEBUG;
+            $this->optimize = 'ReleaseSmall';
         }
-        $this->versions = [ $current_version ];
-        $this->targets = [ $current_target ];
-        $this->debug = PHP_DEBUG;
-        $this->optimize = 'ReleaseSmall';
+    }
+
+    function load() {
+        $fields = parse_ini_file($this->ini_path);
+        $this->versions = array_map('trim', $fields['versions'] ?? []);
+        $this->debug = (bool) $fields['debug'];
+        $this->targets = array_map('trim', $fields['targets'] ?? []);
+        $this->optimize = trim($fields['optimize'] ?? 'ReleaseSmall');
+    }
+
+    function save() {
+        $lines = [];
+        $versions = [ '8.1', '8.2', '8.3', '8.4', '8.5' ];
+        foreach ($versions as $version) {
+            $prefix = in_array($version, $this->versions) ? '' : '; ';
+            $lines[] = $prefix . "versions[] = $version";
+        }
+        $lines[] = "";
+        $states = [ 'on' => true, 'off' => false ];
+        foreach ($states as $label => $state) {
+            $prefix = ($state == $this->debug) ? '' : '; ';
+            $lines[] = $prefix . "debug = $label";
+        }
+        $lines[] = "";
+        $targets = [ 'x86_64-linux-gnu', 'aarch64-linux-gnu', 'x86_64-macos', 'aarch64-macos', 'x86_64-windows', 'x86_64-windows-ts' ];
+        foreach ($targets as $target) {
+            $prefix = in_array($target, $this->targets) ? '' : '; ';
+            $lines[] = $prefix . "targets[] = $target";
+        }
+        $lines[] = "";
+        $modes = [ 'Debug', 'ReleaseSafe', 'ReleaseSmall', 'ReleaseFast' ];
+        foreach ($modes as $mode) {
+            $prefix = ($mode == $this->optimize) ? '' : '; ';
+            $lines[] = $prefix . "optimize = $mode";
+        }
+        $lines[] = "";
+        file_put_contents($this->ini_path, join(PHP_EOL, $lines));
     }
 }
 
 $build = false;
 $settings = new Settings;
-if (is_callable('posix_isatty') && posix_isatty(STDIN)) {
-    $menu = (new CliMenuBuilder)
-        ->setTitle('PHP-Zigar Extension Build Script')
-        ->addSubMenu('PHP version', function ($b) use($settings) {
-            $b->setTitle('Select the version(s) of PHP for which you wish to create the extension');
-            $versions = [ 
-                '8.1' => "8.1.x", 
-                '8.2' => "8.2.x",
-                '8.3' => "8.3.x",
-                '8.4' => "8.4.x", 
-                '8.5' => "8.5.x",
-            ];
-            $cb = function($menu) use($versions, $settings) {
-                $item = $menu->getSelectedItem();
-                $id = array_search($item->getText(), $versions);
-                $op = ($item->getChecked()) ? 'array_merge' : 'array_diff';
-                $settings->versions = $op($settings->versions, [ $id ]);
-                sort($settings->versions);
-            };
-            foreach ($versions as $id => $label) {
-                $item = new CheckboxItem($label, $cb, false, false);
-                if (in_array($id, $settings->versions)) {
-                    $item->setChecked();
-                }
-                $b->addMenuItem($item);
+$menu = (new CliMenuBuilder)
+    ->setTitle('PHP-Zigar Extension Build Script')
+    ->addSubMenu('PHP version', function ($b) use($settings) {
+        $b->setTitle('Select the version(s) of PHP for which you wish to create the extension');
+        $versions = [ 
+            '8.1' => "8.1.x", 
+            '8.2' => "8.2.x",
+            '8.3' => "8.3.x",
+            '8.4' => "8.4.x", 
+            '8.5' => "8.5.x",
+        ];
+        $cb = function($menu) use($versions, $settings) {
+            $item = $menu->getSelectedItem();
+            $id = array_search($item->getText(), $versions);
+            $op = ($item->getChecked()) ? 'array_merge' : 'array_diff';
+            $settings->versions = $op($settings->versions, [ $id ]);
+            sort($settings->versions);
+        };
+        foreach ($versions as $id => $label) {
+            $item = new CheckboxItem($label, $cb, false, false);
+            if (in_array($id, $settings->versions)) {
+                $item->setChecked();
             }
-            $b->addLineBreak('-');
-        })
-        ->addSubMenu('PHP debug mode', function ($b) use($settings) {
-            $b->setTitle('Select the debug mode of the PHP executable');
-            $cb = function($menu) use($settings) {
-                $item = $menu->getSelectedItem();
-                $settings->debug = $item->getText() == 'Enabled';
-            };
-            foreach ([ false, true ] as $enabled) {
-                $label = $enabled ? 'Enabled' : 'Disabled';
-                $item = new RadioItem($label, $cb, false, false);
-                if ($settings->debug == $enabled) {
-                    $item->setChecked();
-                }
-                $b->addMenuItem($item);
+            $b->addMenuItem($item);
+        }
+        $b->addLineBreak('-');
+    })
+    ->addSubMenu('PHP debug mode', function ($b) use($settings) {
+        $b->setTitle('Select the debug mode of the PHP executable');
+        $cb = function($menu) use($settings) {
+            $item = $menu->getSelectedItem();
+            $settings->debug = $item->getText() == 'Enabled';
+        };
+        foreach ([ false, true ] as $enabled) {
+            $label = $enabled ? 'Enabled' : 'Disabled';
+            $item = new RadioItem($label, $cb, false, false);
+            if ($settings->debug == $enabled) {
+                $item->setChecked();
             }
-        })
-        ->addSubMenu('Operation System', function ($b) use($settings) {
-            $b->setTitle('Select the operation system(s) you wish to support');
-            $targets = [
-                'x86_64-linux-gnu' => "Linux x86 64-bit",
-                'aarch64-linux-gnu' => "Linux ARM 64-bit",
-                'x86_64-macos' => "MacOS x86 64-bit",
-                'aarch64-macos' => "MacOS ARM 64-bit",
-                'x86_64-windows' => "Windows x86 64-bit",
-                'x86_64-windows-ts' => "Windows x86 64-bit (thread-safe)",
-            ];
-            $cb = function($menu) use($targets, $settings) {
-                $item = $menu->getSelectedItem();
-                $id = array_search($item->getText(), $targets);
-                $op = ($item->getChecked()) ? 'array_merge' : 'array_diff';
-                $settings->targets = $op($settings->targets, [ $id ]);
-                sort($settings->targets);
-            };
-            foreach ($targets as $id => $label) {
-                $item = new CheckboxItem($label, $cb, false, false);
-                if (in_array($id, $settings->targets)) {
-                    $item->setChecked();
-                }
-                $b->addMenuItem($item);
+            $b->addMenuItem($item);
+        }
+    })
+    ->addSubMenu('Operation System', function ($b) use($settings) {
+        $b->setTitle('Select the operation system(s) you wish to support');
+        $targets = [
+            'x86_64-linux-gnu' => "Linux x86 64-bit",
+            'aarch64-linux-gnu' => "Linux ARM 64-bit",
+            'x86_64-macos' => "MacOS x86 64-bit",
+            'aarch64-macos' => "MacOS ARM 64-bit",
+            'x86_64-windows' => "Windows x86 64-bit",
+            'x86_64-windows-ts' => "Windows x86 64-bit (thread-safe)",
+        ];
+        $cb = function($menu) use($targets, $settings) {
+            $item = $menu->getSelectedItem();
+            $id = array_search($item->getText(), $targets);
+            $op = ($item->getChecked()) ? 'array_merge' : 'array_diff';
+            $settings->targets = $op($settings->targets, [ $id ]);
+            sort($settings->targets);
+        };
+        foreach ($targets as $id => $label) {
+            $item = new CheckboxItem($label, $cb, false, false);
+            if (in_array($id, $settings->targets)) {
+                $item->setChecked();
             }
-            $b->addLineBreak('-');
-        })
-        ->addSubMenu('Optimization level', function ($b) use($settings) {
-            $b->setTitle('Select the optimization level used to compile the extension');
-            $levels = [ 'Debug', 'ReleaseSafe', 'ReleaseSmall', 'ReleaseFast' ];
-            $cb = function($menu) use($settings) {
-                $item = $menu->getSelectedItem();
-                $settings->optimize = $item->getText();
-            };
-            foreach ($levels as $level) {
-                $item = new RadioItem($level, $cb, false, false);
-                if ($settings->optimize == $level) {
-                    $item->setChecked();
-                }
-                $b->addMenuItem($item);
+            $b->addMenuItem($item);
+        }
+        $b->addLineBreak('-');
+    })
+    ->addSubMenu('Optimization level', function ($b) use($settings) {
+        $b->setTitle('Select the optimization level used to compile the extension');
+        $levels = [ 'Debug', 'ReleaseSafe', 'ReleaseSmall', 'ReleaseFast' ];
+        $cb = function($menu) use($settings) {
+            $item = $menu->getSelectedItem();
+            $settings->optimize = $item->getText();
+        };
+        foreach ($levels as $level) {
+            $item = new RadioItem($level, $cb, false, false);
+            if ($settings->optimize == $level) {
+                $item->setChecked();
             }
-        })
-        ->addLineBreak('-')
-        ->addItem('Build', function($menu) use(&$build) {
-            $build = true;
-            $menu->close();
-        })
-        ->setMarginAuto()
-        ->setBackgroundColour(220, 'yellow')
-        ->setForegroundColour(0, 'black')
-        ->build();
-    $menu->open();
-} else {
-    $build = true;
-}
+            $b->addMenuItem($item);
+        }
+    })
+    ->addLineBreak('-')
+    ->addItem('Build', function($menu) use(&$build) {
+        $build = true;
+        $menu->close();
+    })
+    ->setMarginAuto()
+    ->setBackgroundColour(220, 'yellow')
+    ->setForegroundColour(0, 'black')
+    ->build();
 
+$action = $argv[1] ?? '';
+switch ($action) {
+    case '': 
+        $build = true; 
+        break;
+    case 'menu': 
+        if (!is_callable('posix_isatty') or !posix_isatty(STDIN)) {
+            echo "Unable to show menu\n";
+            exit(1);
+        }
+        $menu->open();
+        break;
+    default:
+        echo "Unknown action: $action\n";
+        exit(1);
+}
 if (!$build) exit(0);
 
+$settings->save();
 $results = [];
 foreach ($settings->versions as $version) {
     foreach ($settings->targets as $target) {
@@ -199,15 +253,21 @@ foreach ($settings->versions as $version) {
         if ($ts) {
             $so_rel_parts[] = 'TS';
         }
-        $so_rel_path = join(DIRECTORY_SEPARATOR, $so_rel_parts);
-        $so_path = join(DIRECTORY_SEPARATOR, [ $so_rel_path ]);
+        $so_rel_dir = join(DIRECTORY_SEPARATOR, $so_rel_parts);
+        $so_dir = join(DIRECTORY_SEPARATOR, [ $so_rel_dir ]);
+        switch ($platform) {
+            case 'windows': $so_ext = 'dll'; break;
+            case 'macos': $so_ext = 'dylib'; break;
+            default: $so_ext = 'so'; break;
+        }
+        $so_name = "php_zigar.$so_ext";
         $cmd = [ 
             'zig',
             'build', 
             "-Dtarget=$target",
             "-Doptimize=$settings->optimize",
             "-Dphp-include=$include_path",
-            "-Dphp-extension=$so_path",
+            "-Dphp-extension=$so_dir",
         ];
         if ($settings->debug) {
             $cmd[] = "-Dphp-debug";
@@ -219,12 +279,7 @@ foreach ($settings->versions as $version) {
             'bypass_shell' => true,
         ]);
         if (proc_close($zig) == 0) {
-            switch ($platform) {
-                case 'windows': $so_ext = 'dll'; break;
-                case 'macos': $so_ext = 'dylib'; break;
-                default: $so_ext = 'so'; break;
-            }
-            $results[] = join(DIRECTORY_SEPARATOR, [ $so_rel_path, "php_zigar.$so_ext" ]);
+            $results[] = join(DIRECTORY_SEPARATOR, [ $so_rel_dir, $so_name ]);
         }
     }
 }
