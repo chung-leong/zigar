@@ -9,7 +9,7 @@
     #include <errno.h>
 #endif
 
-#ifdef __OSX__
+#ifdef __APPLE__
     #include <pthread.h>
     #include <libkern/OSCacheControl.h>
 #endif
