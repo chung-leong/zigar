@@ -1382,7 +1382,8 @@ final class StreamHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/read-stdin-with-getchar.zig');
         $path = __DIR__ . '/data/macbeth.txt';
-        $m->__zigar->redirect('stdin', $path);
+        $strm = fopen($path, 'r');
+        $m->__zigar->redirect('stdin', $strm);
         ob_start();
         $m->print();
         $text = ob_get_clean();
@@ -1394,7 +1395,8 @@ final class StreamHandlingTest extends ZigarTestCase
         global $input;
         $m = ZigImporter::load(__DIR__ . '/push-character-into-stdin-with-ungetc.zig');
         $input = "\x01\x02\x03\x04";
-        $m->__zigar->redirect('stdin', 'var://input');
+        $strm = fopen('var://input', 'r');
+        $m->__zigar->redirect('stdin', $strm);
         $m->push(5);
         $result1 = $m->get();
         $this->assertSame(5, $result1);

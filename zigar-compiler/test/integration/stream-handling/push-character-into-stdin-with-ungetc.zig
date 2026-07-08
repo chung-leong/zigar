@@ -10,13 +10,13 @@ const os = switch (builtin.target.os.tag) {
     else => .unknown,
 };
 
-pub fn push(c: c_int) void {
+pub fn push(ch: c_int) void {
     const stdin = switch (os) {
         .darwin => c.stdin(),
         .windows => c.__acrt_iob_func(0),
         else => c.stdin,
     };
-    _ = c.ungetc(c, stdin);
+    _ = c.ungetc(ch, stdin);
 }
 
 pub fn get() c_int {
