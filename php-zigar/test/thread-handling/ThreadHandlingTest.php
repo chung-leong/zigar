@@ -491,6 +491,9 @@ final class ThreadHandlingTest extends ZigarTestCase
         });
     }
 
+    /**
+     * @requires OS Linux|Windows
+     */
     public function testWaitMomentarilyForMutexCreatedUsingPthread(): void
     {
         $m = ZigImporter::load(__DIR__ . '/wait-momentarily-for-mutex-created-with-pthread.zig');
@@ -511,6 +514,9 @@ final class ThreadHandlingTest extends ZigarTestCase
         });
     }
 
+    /**
+     * @requires OS Linux|Windows
+     */
     public function testCreateSpinlockUsingPthread(): void
     {
         $m = ZigImporter::load(__DIR__ . '/create-spinlock-with-pthread.zig');
@@ -555,6 +561,9 @@ final class ThreadHandlingTest extends ZigarTestCase
         });
     }
 
+    /**
+     * @requires OS Linux|Windows
+     */
     public function testWaitMomentarilyForReadLockUsingPthread(): void
     {
         $m = ZigImporter::load(__DIR__ . '/wait-momentarily-for-read-lock-created-with-pthread.zig');
@@ -574,6 +583,9 @@ final class ThreadHandlingTest extends ZigarTestCase
         });
     }
 
+    /**
+     * @requires OS Linux|Windows
+     */
     public function testWaitMomentarilyForWriteLockUsingPthread(): void
     {
         $m = ZigImporter::load(__DIR__ . '/wait-momentarily-for-write-lock-created-with-pthread.zig');
@@ -593,6 +605,9 @@ final class ThreadHandlingTest extends ZigarTestCase
         });
     }
 
+    /**
+     * @requires OS Linux|Windows
+     */
     public function testCreateSemaphoreUsingPthread(): void
     {
         $m = ZigImporter::load(__DIR__ . '/create-semaphore-with-pthread.zig');
@@ -609,6 +624,9 @@ final class ThreadHandlingTest extends ZigarTestCase
         });
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testCreateNamedSemaphoreUsingPthread(): void
     {
         $m = ZigImporter::load(__DIR__ . '/create-semaphore-with-pthread.zig');
@@ -625,6 +643,9 @@ final class ThreadHandlingTest extends ZigarTestCase
         });
     }
 
+    /**
+     * @requires OS Linux|Windows
+     */
     public function testWaitMomentarilyForSemaphoreCreatedUsingPthread(): void
     {
         $m = ZigImporter::load(__DIR__ . '/wait-momentarily-for-semaphore-created-with-pthread.zig');
@@ -641,6 +662,9 @@ final class ThreadHandlingTest extends ZigarTestCase
         });
     }
 
+    /**
+     * @requires OS Linux|Windows
+     */
     public function testGetSemaphoreCreatedWithPthread(): void
     {
         $m = ZigImporter::load(__DIR__ . '/get-semaphore-created-with-pthread.zig');
@@ -736,6 +760,9 @@ final class ThreadHandlingTest extends ZigarTestCase
         });
     }
 
+    /**
+     * @requires OS Linux|Windows
+     */
     public function testWaitMomentarilyForConditionCreatedUsingPthread(): void
     {
         $m = ZigImporter::load(__DIR__ . '/wait-momentarily-for-condition-created-with-pthread.zig');

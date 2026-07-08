@@ -73,6 +73,9 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame($correct, $digest->__string);
     }
 
+    /**
+     * @requires OS Linux
+     */
     public function testOpenFileUsingDirectSyscall(): void
     {
         $m = ZigImporter::load(__DIR__ . '/open-file-through-direct-syscall.zig');
@@ -246,6 +249,16 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame("This is a test", $output);
     }
 
+    /**
+     * @requires OS Windows
+     */
+    public function testOpenAndWriteToFileUsingWin32Functions(): void 
+    {
+        global $output;
+        $m = ZigImporter::load(__DIR__ . '/open-and-write-to-file-with-win32-functions.zig');
+        // TODO
+    }
+
     public function testObtainErrorCodeUsingLibcFunction(): void 
     {
         $m = ZigImporter::load(__DIR__ . '/return-last-error-with-libc-function.zig');
@@ -292,6 +305,9 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertTrue($result4);
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testCheckAccessOfFileInDirectoryUsingPosixFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/check-access-at-dir-with-posix-function.zig');
@@ -315,6 +331,9 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertTrue($result3);
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testCheckAccessOfFileInDirectoryInFileSystemUsingPosixFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/check-access-at-dir-in-file-system-with-posix-function.zig');
@@ -330,6 +349,9 @@ final class StreamHandlingTest extends ZigarTestCase
         }
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testOpenFileInDirectoryUsingPosixFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/open-file-at-dir-with-posix-function.zig');
@@ -343,6 +365,9 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame($text, $file->content);
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testOpenFileInDirectoryInFileSystemUsingPosixFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/open-file-at-dir-in-file-system-with-posix-function.zig');
@@ -360,6 +385,9 @@ final class StreamHandlingTest extends ZigarTestCase
         }
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testRetrieveStatsOfFileInDirectoryUsingPosixFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/stat-file-at-dir-with-posix-function.zig');
@@ -380,6 +408,9 @@ final class StreamHandlingTest extends ZigarTestCase
         $m->stat($handle, 'test.txt');
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testRetrieveStatsOfFileInDirectoryInFileSystemUsingPosixFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/stat-file-at-dir-in-file-system-with-posix-function.zig');
@@ -456,13 +487,17 @@ final class StreamHandlingTest extends ZigarTestCase
     public function testGetStatsOfOpenedFileInFileSystemUsingPosixFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/stat-opened-file-in-file-system-with-posix-function.zig');
-        $path = __DIR__ . '/data/fstat_test';
+        $path = __DIR__ . '/data/fstat_test';        
         file_put_contents($path, 'This is a test and this is only a test');
-        $this->expectOutput(<<<OUTPUT
-        size = 38
+        try {
+            $this->expectOutput(<<<OUTPUT
+            size = 38
 
-        OUTPUT);
-        $m->print($path);
+            OUTPUT);
+            $m->print($path);
+        } finally {
+            unlink($path);
+        }
     }
 
     public function testGetStatsOfFileReferencedByPathUsingPosixFunction(): void
@@ -484,16 +519,25 @@ final class StreamHandlingTest extends ZigarTestCase
         $m->print("/vfs://hello/test.txt");
     }
 
+    /**
+     * @requires OS Windows
+     */
     public function testGetSizeOfOpenedFileUsingWin32Function(): void
     {
         // TODO
     }
 
+    /**
+     * @requires OS Windows
+     */
     public function testGetStatsOfOpenedFileUsingWin32Function(): void
     {
         // TODO
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testSetAccessAndModifiedTimeOfOpenedFileUsingPosixFunction(): void    
     {
         $m = ZigImporter::load(__DIR__ . '/set-times-of-opened-file-with-posix-function.zig');
@@ -505,11 +549,17 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame(456, $file->mtime);
     }
 
+    /**
+     * @requires OS Windows
+     */
     public function testSetAccessAndModifiedTimeOfOpenedFileUsingFutime(): void
     {
         // TODO
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testSetAccessAndModifiedTimeOfOpenedFileUsingPosixFunctionWithNsPrecision(): void    
     {
         $m = ZigImporter::load(__DIR__ . '/set-ns-times-of-opened-file-with-posix-function.zig');
@@ -521,6 +571,9 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame(456, $file->mtime);
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testSetAccessAndModifiedTimeOfFileUsingPosixFunction(): void    
     {
         $m = ZigImporter::load(__DIR__ . '/set-times-of-file-by-path-with-posix-function.zig');
@@ -620,6 +673,9 @@ final class StreamHandlingTest extends ZigarTestCase
         }
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testPerformSyncOperationUsingPosixFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/perform-sync-with-posix-function.zig');
@@ -630,6 +686,9 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame("This is a test", $file->content);
     }
 
+    /**
+     * @requires OS Linux
+     */
     public function testPerformDataSyncOperationUsingPosixFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/perform-datasync-with-posix-function.zig');
@@ -640,6 +699,9 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame("This is a test", $file->content);
     }
 
+    /**
+     * @requires OS Linux
+     */
     public function testPerformAdviseOperationUsingPosixFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/perform-advise-with-posix-function.zig');
@@ -650,6 +712,9 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame("This is a test", $file->content);
     }
 
+    /**
+     * @requires OS Linux
+     */
     public function testFailToPerformAllocateOperationUsingPosixFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/perform-allocate-with-posix-function.zig');
@@ -824,6 +889,9 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame('Hello world!', $content);
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testRenameFileInDirectory(): void
     {
         $m = ZigImporter::load(__DIR__ . '/rename-file-at-dir.zig');
@@ -893,14 +961,20 @@ final class StreamHandlingTest extends ZigarTestCase
         }
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testFailToCreateSymlink(): void
     {
         $m = ZigImporter::load(__DIR__ . '/create-symlink.zig');
-        $this->assertExceptionMessage('file not found', function() use($m) {
+        $this->assertExceptionMessage('access denied', function() use($m) {
             $m->symlink('/vfs://test/hello/world.txt', '/vfs://test/hello/earth.txt');
         });
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testFailToCreateSymlinkInDirectory(): void
     {
         $m = ZigImporter::load(__DIR__ . '/create-symlink-at-dir.zig');
@@ -914,6 +988,9 @@ final class StreamHandlingTest extends ZigarTestCase
         });
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testFailToCreateSymlinkUsingPosixFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/create-symlink-with-posix-function.zig');
@@ -928,6 +1005,18 @@ final class StreamHandlingTest extends ZigarTestCase
         });
     }
 
+    /**
+     * @requires OS Windows
+     */
+    public function testFailToCreateSymlinkUsingWin32Function(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/create-symlink-with-win32-function.zig');
+        // TODO
+    }
+
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testFailToCreateSymlinkInDirectoryUsingPosixFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/create-symlink-at-dir-with-posix-function.zig');
@@ -940,6 +1029,9 @@ final class StreamHandlingTest extends ZigarTestCase
         });
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testSetMtimeAndATimeOfFileInFileSystemUsingPosixFunction(): void 
     {
         $m = ZigImporter::load(__DIR__ . '/set-times-of-file-in-file-system-with-posix-functions.zig');
@@ -975,6 +1067,9 @@ final class StreamHandlingTest extends ZigarTestCase
         }
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testOpenAndReadFromFileUsingPread(): void 
     {
         $m = ZigImporter::load(__DIR__ . '/open-and-read-file-with-pread.zig');
@@ -985,6 +1080,9 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame('cated to the pro', (string) $chunk);
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testOpenAndReadFromFileUsingPreadv(): void 
     {
         $m = ZigImporter::load(__DIR__ . '/open-and-read-file-with-preadv.zig');
@@ -1005,6 +1103,9 @@ final class StreamHandlingTest extends ZigarTestCase
         ]);
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testOpenAndReadFromFileUsingReadv(): void 
     {
         $m = ZigImporter::load(__DIR__ . '/open-and-read-file-with-readv.zig');
@@ -1025,6 +1126,9 @@ final class StreamHandlingTest extends ZigarTestCase
         ]);
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testOpenAndWriteToFileUsingPwrite(): void 
     {
         global $output;
@@ -1037,6 +1141,9 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame('Hello world', $text);
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testOpenAndWriteToFileUsingPwritev(): void 
     {
         global $output;
@@ -1049,6 +1156,9 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame('Hello world???', $text);
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testOpenAndWriteToFileUsingWritev(): void 
     {
         global $output;
@@ -1061,6 +1171,9 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame('Hello world???', $text);
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testSetLockOnFile(): void 
     {
         $m = ZigImporter::load(__DIR__ . '/set-lock-on-file.zig');
@@ -1078,6 +1191,9 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame(0, $file->lock);
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testSetLockOnFileUsingFcntl(): void 
     {
         $m = ZigImporter::load(__DIR__ . '/set-lock-with-fcntl.zig');
@@ -1099,6 +1215,9 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame(LOCK_EX, $file2->lock);
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testGetLockOnFileUsingFcntl(): void 
     {
         $m = ZigImporter::load(__DIR__ . '/get-lock-with-fcntl.zig');
@@ -1115,6 +1234,9 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertTrue($result3);
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testSetLockOnFileUsingPosixFunction(): void 
     {
         $m = ZigImporter::load(__DIR__ . '/set-lock-with-posix-function.zig');       
@@ -1132,6 +1254,9 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame(0, $file->lock);
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testSetLockOnFileInsideThread(): void 
     {
         $m = ZigImporter::load(__DIR__ . '/set-lock-on-file-in-thread.zig');
@@ -1149,6 +1274,9 @@ final class StreamHandlingTest extends ZigarTestCase
         }
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testSetNoblockingFlagUsingFcntl(): void 
     {
         $m = ZigImporter::load(__DIR__ . '/set-non-blocking-flag-with-fcntl.zig');
@@ -1435,6 +1563,9 @@ final class StreamHandlingTest extends ZigarTestCase
         }
     }
 
+    /**
+     * @requires OS Windows
+     */
     public function testIgnoreOffsetToWriteFileWhenStreamIsUnseekable(): void     
     {
         // TODO
@@ -1495,6 +1626,9 @@ final class StreamHandlingTest extends ZigarTestCase
         }
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testCopyRealFileToVirtualFileUsingSendfile(): void 
     {
         global $output;
@@ -1512,6 +1646,9 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame($content, $output);
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testCopyVirtualFileToVirtualFileUsingSendfile(): void 
     {
         global $input, $output;
@@ -1526,6 +1663,9 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame($input, $output);
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testCopyVirtualFileToRealFileUsingSendfile(): void 
     {
         global $input;
@@ -1606,11 +1746,17 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame(16, $file->size);
     }
 
+    /**
+     * @requires OS Windows
+     */
     public function testTruncateOpenedFileUsingWin32Function(): void
     {
         // TODO
     }
 
+    /**
+     * @requires OS Linux
+     */
     public function testCopyRealFileToVirtualFileUsingCopyFileRange(): void 
     {
         global $output;
@@ -1627,6 +1773,9 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame("Hell$chunk", $output);
     }
 
+    /**
+     * @requires OS Linux
+     */
     public function testCopyVirtualFileToRealFileUsingCopyFileRange(): void 
     {
         global $input;
