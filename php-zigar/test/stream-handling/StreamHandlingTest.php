@@ -1313,7 +1313,8 @@ final class StreamHandlingTest extends ZigarTestCase
         global $input;
         $m = ZigImporter::load(__DIR__ . '/read-line-from-stdin-with-fgets.zig');
         $path = __DIR__ . '/data/macbeth.txt';
-        $m->__zigar->redirect('stdin', $path);
+        $strm = fopen($path, 'r');
+        $m->__zigar->redirect('stdin', $strm);
         $m->startup();
         ob_start();
         try {
