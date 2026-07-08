@@ -836,6 +836,13 @@ pub const TypedArray = struct {
 
 const type_list = [_]type{ i8, i16, i32, i64, u8, u16, u32, u64, f16, f32, f64 };
 
+pub const TypeArrays = init: {
+    var types: [type_list.len + 1]type = undefined;
+    for (type_list, 0..) |T, i| types[i] = TypedArrayOf(T, false);
+    types[type_list.len] = TypedArrayOf(u8, true);
+    break :init types;
+};
+
 pub fn registerClasses() !void {
     try ArrayBuffer.registerClass();
     errdefer ArrayBuffer.unregisterClass();

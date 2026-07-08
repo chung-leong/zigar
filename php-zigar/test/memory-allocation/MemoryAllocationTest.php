@@ -74,11 +74,11 @@ final class MemoryAllocationTest extends ZigarTestCase
         $a->free($buf);
         $this->assertTrue($buf->detached);
         $array1 = new Float64Array([ 1.1, 2.2, 3.3, 4.4, 5.5 ]);
-        $buf = $a->dupe($array);
-        $array2 = new Float64Array($buf);
+        $array2 = $a->dupe($array1);
         for ($i = 0; $i < count($array1); $i++) {
             $this->assertSame($array1[$i], $array2[$i]);
         }
+        $a->free($array2);
     }
 
     public function testUseReturnedAllocatorInCall(): void

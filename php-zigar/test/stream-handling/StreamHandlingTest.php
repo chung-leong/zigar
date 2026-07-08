@@ -2202,6 +2202,7 @@ class VirtualFile extends VirtualFSObject {
     var $content;
     var $lock;
     var $blocking;
+    var $bad;
 
     function __construct($content = '') {
         $this->content = $content;

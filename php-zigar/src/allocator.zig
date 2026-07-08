@@ -11,6 +11,7 @@ const Function = php.Function;
 const String = php.String;
 const Value = php.Value;
 const structure = @import("structure.zig");
+const TypeArrays = @import("js-compat.zig").TypeArrays;
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 const ZigObject = @import("object.zig").ZigObject;
 
@@ -63,10 +64,7 @@ pub const AllocatorStatic = struct {
         const arg0 = arg_iter.next().?;
         var obj = try php.getValueObject(arg0);
         const buf = get: {
-            if (php.instanceOf(obj, ArrayBuffer.entry())) {
-                const ar = ArrayBuffer.fromObject(obj);
-                break :get ar.buffer;
-            } else if (ZigClassEntry.isZig(obj.ce)) {
+            if (ZigClassEntry.isZig(obj.ce)) {
                 const class = ZigClassEntry.fromObject(obj);
                 if (class.type == .pointer) {
                     // dereference pointer
@@ -74,11 +72,20 @@ pub const AllocatorStatic = struct {
                     obj = try ptr_struct.getTarget();
                 }
                 break :get getObjectBuffer(obj);
+            } else if (php.instanceOf(obj, ArrayBuffer.entry())) {
+                const ar = ArrayBuffer.fromObject(obj);
+                break :get ar.buffer;
+            } else inline for (TypeArrays) |TA| {
+                if (php.instanceOf(obj, TA.entry())) {
+                    const ta = TA.fromObject(obj);
+                    break :get ta.buffer;
+                }
             } else {
                 return error.InvalidOperation;
             }
         };
         if (!buf.inZigMemory()) return error.InvalidOperation;
+        if (buf.flags.uninitialized) return error.AccessingDeallocatedMemory;
         const allocator = try getAllocatorFromThis(&arg_iter);
         switch (buf.source_type) {
             .allocator => {
@@ -98,14 +105,19 @@ pub const AllocatorStatic = struct {
         var arg_iter: ArgumentIterator = .init(ed);
         try arg_iter.verifyCount(1, 2, "dupe");
         const arg0 = arg_iter.next().?;
-        const bytes = get: {
+        const bytes, const is_typed_array = get: {
             if (php.getValueString(arg0)) |str| {
-                break :get php.getStringContent(str);
+                break :get .{ php.getStringContent(str), false };
             } else |_| {
                 const obj = try php.getValueObject(arg0);
                 if (php.instanceOf(obj, ArrayBuffer.entry())) {
                     const ar = ArrayBuffer.fromObject(obj);
-                    break :get try ar.buffer.data(0, false);
+                    break :get .{ try ar.buffer.data(0, false), false };
+                } else inline for (TypeArrays) |TA| {
+                    if (php.instanceOf(obj, TA.entry())) {
+                        const ta = TA.fromObject(obj);
+                        break :get .{ try ta.buffer.data(0, false), true };
+                    }
                 }
             }
             return error.InvalidOperation;
@@ -117,7 +129,20 @@ pub const AllocatorStatic = struct {
         try buf.copyBytes(bytes);
         const ar_obj = try ArrayBuffer.create(buf);
         _ = buf.externalize();
-        return_value.* = php.createValueObject(ar_obj);
+        if (is_typed_array) {
+            const obj = try php.getValueObject(arg0);
+            const new_ta_obj = inline for (TypeArrays) |TA| {
+                if (php.instanceOf(obj, TA.entry())) {
+                    const ta_obj = try TA.create(buf);
+                    const ta_struct = TA.fromObject(ta_obj);
+                    ta_struct.array_buffer = ar_obj;
+                    break ta_obj;
+                }
+            } else unreachable;
+            return_value.* = php.createValueObject(new_ta_obj);
+        } else {
+            return_value.* = php.createValueObject(ar_obj);
+        }
     }
 
     fn getAllocatorFromThis(arg_iter: *ArgumentIterator) !*std.mem.Allocator {
