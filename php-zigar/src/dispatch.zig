@@ -62,7 +62,7 @@ pub const CallDispatcher = struct {
     pipe_ptr: [*]c_int,
     release_resources_called: bool = false,
 
-    pub threadlocal var trapping_syscalls: bool = false;
+    pub threadlocal var trapping_syscalls: bool = true;
     pub threadlocal var event_loop: EventLoop(runScheduledTask) = .{};
 
     threadlocal var thread_initialized: bool = false;
