@@ -1475,8 +1475,15 @@ final class StreamHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/create-directory-in-file-system-with-posix-function.zig');
         $path = __DIR__ . '/data/mkdir_test';
-        $m->makeDirectory($path);
-        $this->expectNotToPerformAssertions();
+        if (file_exists($path)) {
+            rmdir($path);
+        }
+        try {
+            $m->makeDirectory($path);
+            $this->expectNotToPerformAssertions();
+        } finally {
+            rmdir($path);
+        }
     }
 
     public function testCreateDirectoryInAnotherDirectoryInFileSystemUsingPosixFunction(): void 
