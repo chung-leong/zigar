@@ -21,6 +21,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
         stream: *const Value,
         in_loop: bool,
         terminated: bool,
+        deinit_deferred: bool,
         timer: std.time.Timer,
         timeouts: std.ArrayList(Timeout),
 
@@ -45,22 +46,28 @@ pub fn EventLoop(comptime cb: fn () void) type {
             self.stream = stream;
             self.terminated = false;
             self.in_loop = false;
+            self.deinit_deferred = false;
             self.timer = try .start();
             self.timeouts = .empty;
-            // star the loop fiber
+            // start the loop fiber
             self.in_loop = true;
             _ = try self.fiber_cache.method.start.invoke(&.{});
         }
 
         pub fn deinit(self: *@This()) void {
-            if (!self.terminated) {
+            if (!self.in_loop) {
+                if (!self.terminated) {
+                    self.terminated = true;
+                    // jump into the loop fiber so the loop would terminate
+                    _ = self.fiber_cache.method.@"resume".invoke(&.{}) catch {};
+                }
+                php.release(&self.fiber);
+                self.fiber_cache.deinit();
+                self.fiber_class_cache.deinit();
+            } else {
                 self.terminated = true;
-                // jump into the loop fiber so the loop would terminate
-                self.resumeLoop() catch {};
+                self.deinit_deferred = true;
             }
-            php.release(&self.fiber);
-            self.fiber_cache.deinit();
-            self.fiber_class_cache.deinit();
         }
 
         pub fn getFiber(_: *@This()) !Value {
@@ -90,6 +97,9 @@ pub fn EventLoop(comptime cb: fn () void) type {
             }
             self.in_loop = true;
             _ = try self.fiber_cache.method.@"resume".invoke(&.{});
+            if (self.deinit_deferred) {
+                self.deinit();
+            }
         }
 
         pub fn addTimeout(self: *@This(), seconds: f64, signal: *AbortSignal) !void {

@@ -32,7 +32,10 @@ abstract class ZigarTestCase extends TestCase
 		$this->fail($errorMessage);
 	}
 
-    protected function inEventLoops($event_loops, $cb) {
+    protected function inEventLoops(array $event_loops, callable $callback) {
+		// make sure the callback gets gc'ed properly
+		$cb = $callback;
+		$callback = null;
         foreach ($event_loops as $loop) {
             ini_set('zigar.event_loop', $loop);
             if ($loop == 'revolt') {

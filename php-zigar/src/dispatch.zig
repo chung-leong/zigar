@@ -58,7 +58,7 @@ pub const CallDispatcher = struct {
     env_variable_bytes: ?[]const u8 = null,
     env_variable_ptr: *[*:null]?[*:0]const u8 = undefined,
     env_variable_original: *[*:null]?[*:0]const u8 = undefined,
-    multithread_enabled: bool = false,
+    multithread_count: usize = 0,
     pipe_ptr: [*]c_int,
     release_resources_called: bool = false,
 
@@ -68,7 +68,7 @@ pub const CallDispatcher = struct {
     threadlocal var thread_initialized: bool = false;
     threadlocal var in_main_thread: bool = false;
     threadlocal var pipes: [2]c_int = undefined;
-    threadlocal var multithread_count: usize = 0;
+    threadlocal var total_multithread_count: usize = 0;
 
     var pipe_list_mutex: std.Thread.Mutex = .{};
     var pipe_list: std.ArrayList(c_int) = .empty;
@@ -453,10 +453,9 @@ pub const CallDispatcher = struct {
 
     pub fn enableMultithread(self: *@This()) !void {
         if (in_main_thread) {
-            if (self.multithread_enabled) return;
-            self.multithread_enabled = true;
-            multithread_count += 1;
-            if (multithread_count > 1) return;
+            self.multithread_count += 1;
+            total_multithread_count += 1;
+            if (total_multithread_count > 1) return;
             const strm_obj = try php.openDescriptor(pipes[0], "r");
             php.preserveStream(strm_obj);
             errdefer php.close(strm_obj);
@@ -471,10 +470,10 @@ pub const CallDispatcher = struct {
 
     pub fn disableMultithread(self: *@This()) !void {
         if (in_main_thread) {
-            if (!self.multithread_enabled) return;
-            self.multithread_enabled = false;
-            multithread_count -= 1;
-            if (multithread_count > 0) return;
+            if (self.multithread_count == 0) return;
+            self.multithread_count -= 1;
+            total_multithread_count -= 1;
+            if (total_multithread_count > 0) return;
             event_loop.deinit();
         } else {
             try self.scheduleTask(.{ .disable = {} });
