@@ -136,7 +136,7 @@ pub const ByteBuffer = struct {
         self.bytes = @constCast(bytes);
         if (parent) |p_buf| {
             const base = p_buf.getBase();
-            self.flags = base.flags.assign(.{ .has_allocator = false, .read_only = false });
+            self.flags = base.flags.assign(.{ .has_allocator = false, .read_only = false, .temporary = false });
             if (base.source_type != .none) {
                 self.source_type = .buffer;
                 self.source = .{ .buffer = base };
@@ -172,7 +172,7 @@ pub const ByteBuffer = struct {
             .bytes = @constCast(slice_bytes),
             .alignment = slice_alignment,
             .bit_offset = slice_bit_offset,
-            .flags = self.flags.assign(.{ .has_allocator = false }),
+            .flags = self.flags.assign(.{ .has_allocator = false, .temporary = false }),
         };
         if (src_buf.source_type != .none) {
             new.source_type = .buffer;

@@ -113,6 +113,7 @@ pub const ErrorUnion = struct {
             const static = class.getStaticData(@This());
             const run = !options.ignore_inactive or check: {
                 const err = try static.error_acc.get(self.buffer);
+                defer php.release(&err);
                 break :check php.getValueType(&err) != .object;
             };
             if (run) {
