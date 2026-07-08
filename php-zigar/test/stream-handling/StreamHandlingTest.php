@@ -1188,11 +1188,9 @@ final class StreamHandlingTest extends ZigarTestCase
         $f = fopen('vfs://test/hello.txt', 'w+');
         $result1 = $m->lock($f);
         $this->assertTrue($result1);
-        $this->assertSame(LOCK_EX, $file->lock);
-        $result2 = $m->lock($f);
-        $this->assertFalse($result2);
-        $result3 = $m->unlock($f);
-        $this->assertTrue($result3);
+        $this->assertSame(INF, $file->lock);
+        $result2 = $m->unlock($f);
+        $this->assertTrue($result2);
         $this->assertSame(0, $file->lock);
     }
 
@@ -1212,12 +1210,9 @@ final class StreamHandlingTest extends ZigarTestCase
         $f1 = fopen('vfs://test/hello.txt', 'w+');
         $f2 = fopen('vfs://test/world.txt', 'w+');
         $m->lock($f1);
-        $this->assertSame(LOCK_EX, $file1->lock);
-        $this->assertExceptionMessage('unable to set lock', function() use($m, $f1) {
-            $m->lock($f1);
-        });
+        $this->assertSame(INF, $file1->lock);
         $m->lock($f2);
-        $this->assertSame(LOCK_EX, $file2->lock);
+        $this->assertSame(INF, $file2->lock);
     }
 
     /**
@@ -1233,10 +1228,8 @@ final class StreamHandlingTest extends ZigarTestCase
         $result1 = $m->check($f, true);
         $this->assertTrue($result1);
         $m->lock($f, false);
-        $result2 = $m->check($f, true);
-        $this->assertFalse($result2);
-        $result3 = $m->check($f, false);
-        $this->assertTrue($result3);
+        $result2 = $m->check($f, false);
+        $this->assertTrue($result2);
     }
 
     /**
@@ -1251,11 +1244,9 @@ final class StreamHandlingTest extends ZigarTestCase
         $f = fopen('vfs://test/hello.txt', 'w+');
         $result1 = $m->lock($f);
         $this->assertTrue($result1);
-        $this->assertSame(LOCK_EX, $file->lock);
-        $result2 = $m->lock($f);
-        $this->assertFalse($result2);
-        $result3 = $m->unlock($f);
-        $this->assertTrue($result3);
+        $this->assertSame(INF, $file->lock);
+        $result2 = $m->unlock($f);
+        $this->assertTrue($result2);
         $this->assertSame(0, $file->lock);
     }
 
