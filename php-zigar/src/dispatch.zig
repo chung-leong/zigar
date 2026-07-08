@@ -778,7 +778,7 @@ pub const CallDispatcher = struct {
     }
 
     fn handleOpen(self: *@This(), args: anytype) !E {
-        const loc = (self.resolvePath(args.dirfd, args.path) catch return .BADF) orelse return .OPNOTSUPP;
+        const loc = (self.resolvePath(args.dirfd, args.path) catch return .NOENT) orelse return .OPNOTSUPP;
         defer loc.deinit();
         const strm, const file_type: std.os.wasi.filetype_t = open: {
             if (args.rights.FD_READDIR) {
@@ -823,7 +823,7 @@ pub const CallDispatcher = struct {
 
     fn handleRead(self: *@This(), args: anytype) !E {
         const entry = self.findStream(args.fd) catch return .BADF;
-        const read = php.read(entry.stream, args.bytes, args.len) catch return .BADF;
+        const read = php.read(entry.stream, args.bytes, args.len) catch return .INVAL;
         args.read = @intCast(read);
         return .SUCCESS;
     }
@@ -834,7 +834,7 @@ pub const CallDispatcher = struct {
         const iovs = args.iovs[0..len];
         var total: usize = 0;
         for (iovs) |iov| {
-            total += php.read(entry.stream, iov.base, iov.len) catch return .BADF;
+            total += php.read(entry.stream, iov.base, iov.len) catch return .INVAL;
         }
         args.read = @intCast(total);
         return .SUCCESS;
@@ -842,7 +842,7 @@ pub const CallDispatcher = struct {
 
     fn handlePositionalRead(self: *@This(), args: anytype) !E {
         const entry = self.findStream(args.fd) catch return .BADF;
-        const pos = php.tell(entry.stream) catch return .BADF;
+        const pos = php.tell(entry.stream) catch return .INVAL;
         defer php.seek(entry.stream, @intCast(pos), 0) catch {};
         php.seek(entry.stream, @intCast(args.offset), 0) catch return .INVAL;
         const read = php.read(entry.stream, args.bytes, args.len) catch return .IO;
@@ -852,14 +852,14 @@ pub const CallDispatcher = struct {
 
     fn handlePositionalVectorRead(self: *@This(), args: anytype) !E {
         const entry = self.findStream(args.fd) catch return .BADF;
-        const pos = php.tell(entry.stream) catch return .BADF;
+        const pos = php.tell(entry.stream) catch return .INVAL;
         defer php.seek(entry.stream, @intCast(pos), 0) catch {};
         php.seek(entry.stream, @intCast(args.offset), 0) catch return .INVAL;
         const len: usize = args.count;
         const iovs = args.iovs[0..len];
         var total: usize = 0;
         for (iovs) |iov| {
-            total += php.read(entry.stream, iov.base, iov.len) catch return .BADF;
+            total += php.read(entry.stream, iov.base, iov.len) catch return .INVAL;
         }
         args.read = @intCast(total);
         return .SUCCESS;
@@ -867,14 +867,14 @@ pub const CallDispatcher = struct {
 
     fn handleWrite(self: *@This(), args: anytype) !E {
         const entry = self.findStream(args.fd) catch return .BADF;
-        const written = php.write(entry.stream, args.bytes, args.len) catch return .BADF;
+        const written = php.write(entry.stream, args.bytes, args.len) catch return .INVAL;
         args.written = @intCast(written);
         return .SUCCESS;
     }
 
     fn handleWriteStderr(self: *@This(), args: anytype) !E {
         const entry = self.findStream(2) catch return .BADF;
-        _ = php.write(entry.stream, args.bytes, args.len) catch return .BADF;
+        _ = php.write(entry.stream, args.bytes, args.len) catch return .INVAL;
         return .SUCCESS;
     }
 
@@ -884,7 +884,7 @@ pub const CallDispatcher = struct {
         const iovs = args.iovs[0..len];
         var total: usize = 0;
         for (iovs) |iov| {
-            total += php.write(entry.stream, iov.base, iov.len) catch return .BADF;
+            total += php.write(entry.stream, iov.base, iov.len) catch return .INVAL;
         }
         args.written = @intCast(total);
         return .SUCCESS;
@@ -892,10 +892,10 @@ pub const CallDispatcher = struct {
 
     fn handlePositionalWrite(self: *@This(), args: anytype) !E {
         const entry = self.findStream(args.fd) catch return .BADF;
-        const pos = php.tell(entry.stream) catch return .BADF;
+        const pos = php.tell(entry.stream) catch return .INVAL;
         defer php.seek(entry.stream, @intCast(pos), 0) catch {};
         php.seek(entry.stream, @intCast(args.offset), 0) catch return .INVAL;
-        const written = php.write(entry.stream, args.bytes, args.len) catch return .BADF;
+        const written = php.write(entry.stream, args.bytes, args.len) catch return .INVAL;
         args.written = @intCast(written);
         return .SUCCESS;
     }
@@ -909,7 +909,7 @@ pub const CallDispatcher = struct {
         const iovs = args.iovs[0..len];
         var total: usize = 0;
         for (iovs) |iov| {
-            total += php.write(entry.stream, iov.base, iov.len) catch return .BADF;
+            total += php.write(entry.stream, iov.base, iov.len) catch return .INVAL;
         }
         args.written = @intCast(total);
         return .SUCCESS;
@@ -918,13 +918,13 @@ pub const CallDispatcher = struct {
     fn handleSeek(self: *@This(), args: anytype) !E {
         const entry = self.findStream(args.fd) catch return .BADF;
         php.seek(entry.stream, args.offset, args.whence) catch return .INVAL;
-        args.position = php.tell(entry.stream) catch return .BADF;
+        args.position = php.tell(entry.stream) catch return .INVAL;
         return .SUCCESS;
     }
 
     fn handleTell(self: *@This(), args: anytype) !E {
         const entry = self.findStream(args.fd) catch return .BADF;
-        args.position = php.tell(entry.stream) catch return .BADF;
+        args.position = php.tell(entry.stream) catch return .INVAL;
         return .SUCCESS;
     }
 
@@ -953,9 +953,9 @@ pub const CallDispatcher = struct {
     fn handleStat(self: *@This(), args: anytype) !E {
         if (@hasField(@TypeOf(args.*), "fd")) {
             const entry = self.findStream(args.fd) catch return .BADF;
-            php.fstat(entry.stream, &args.stat) catch return .BADF;
+            php.fstat(entry.stream, &args.stat) catch return .INVAL;
         } else {
-            const loc = (self.resolvePath(args.dirfd, args.path) catch return .BADF) orelse return .OPNOTSUPP;
+            const loc = (self.resolvePath(args.dirfd, args.path) catch return .NOENT) orelse return .OPNOTSUPP;
             defer loc.deinit();
             php.stat(loc.url, loc.context, args.lookup_flags, &args.stat) catch return .NOENT;
         }
@@ -967,7 +967,7 @@ pub const CallDispatcher = struct {
             const entry = self.findStream(args.fd) catch return .BADF;
             php.truncate(entry.stream, args.len) catch return .FBIG;
         } else {
-            const loc = (self.resolvePath(args.dirfd, args.path) catch return .BADF) orelse return .OPNOTSUPP;
+            const loc = (self.resolvePath(args.dirfd, args.path) catch return .NOENT) orelse return .OPNOTSUPP;
             defer loc.deinit();
             const strm = php.open(loc.url, "x", loc.context, 0) catch return .NOENT;
             defer php.close(strm);
@@ -1060,7 +1060,7 @@ pub const CallDispatcher = struct {
     }
 
     fn handleMkdir(self: *@This(), args: anytype) !E {
-        const loc = (self.resolvePath(args.dirfd, args.path) catch return .BADF) orelse return .OPNOTSUPP;
+        const loc = (self.resolvePath(args.dirfd, args.path) catch return .NOENT) orelse return .OPNOTSUPP;
         defer loc.deinit();
         php.mkdir(loc.url, args.mode, loc.context) catch {
             var info: std.os.wasi.filestat_t = undefined;
@@ -1070,35 +1070,35 @@ pub const CallDispatcher = struct {
     }
 
     fn handleRmdir(self: *@This(), args: anytype) !E {
-        const loc = (self.resolvePath(args.dirfd, args.path) catch return .BADF) orelse return .OPNOTSUPP;
+        const loc = (self.resolvePath(args.dirfd, args.path) catch return .NOENT) orelse return .OPNOTSUPP;
         defer loc.deinit();
         php.rmdir(loc.url, loc.context) catch return .NOENT;
         return .SUCCESS;
     }
 
     fn handleUnlink(self: *@This(), args: anytype) !E {
-        const loc = (self.resolvePath(args.dirfd, args.path) catch return .BADF) orelse return .OPNOTSUPP;
+        const loc = (self.resolvePath(args.dirfd, args.path) catch return .NOENT) orelse return .OPNOTSUPP;
         defer loc.deinit();
         php.unlink(loc.url, loc.context) catch return .NOENT;
         return .SUCCESS;
     }
 
     fn handleReadlink(self: *@This(), args: anytype) !E {
-        const loc = (self.resolvePath(args.dirfd, args.path) catch return .BADF) orelse return .OPNOTSUPP;
+        const loc = (self.resolvePath(args.dirfd, args.path) catch return .NOENT) orelse return .OPNOTSUPP;
         defer loc.deinit();
         return .ACCES;
     }
 
     fn handleSymlink(self: *@This(), args: anytype) !E {
-        const loc = (self.resolvePath(args.dirfd, args.path) catch return .BADF) orelse return .OPNOTSUPP;
+        const loc = (self.resolvePath(args.dirfd, args.path) catch return .NOENT) orelse return .OPNOTSUPP;
         defer loc.deinit();
         return .ACCES;
     }
 
     fn handleRename(self: *@This(), args: anytype) !E {
-        const loc = (self.resolvePath(args.dirfd, args.path) catch return .BADF) orelse return .OPNOTSUPP;
+        const loc = (self.resolvePath(args.dirfd, args.path) catch return .NOENT) orelse return .OPNOTSUPP;
         defer loc.deinit();
-        const new_loc = (self.resolvePath(args.new_dirfd, args.new_path) catch return .BADF) orelse return .OPNOTSUPP;
+        const new_loc = (self.resolvePath(args.new_dirfd, args.new_path) catch return .NOENT) orelse return .OPNOTSUPP;
         defer new_loc.deinit();
         php.rename(loc.url, new_loc.url, loc.context) catch return .NOENT;
         return .SUCCESS;

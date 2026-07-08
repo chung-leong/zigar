@@ -262,7 +262,12 @@ final class StreamHandlingTest extends ZigarTestCase
     public function testObtainErrorCodeUsingLibcFunction(): void 
     {
         $m = ZigImporter::load(__DIR__ . '/return-last-error-with-libc-function.zig');
-        $result = $m->triggerError("/cow://moo");
+        $file = new VirtualFile();
+        $file->bad = true;
+        $dir = new VirtualDir([ 'cow.txt' => $file ]);
+        VirtualFSStream::add_root_node('hello', $dir);
+        $result = $m->triggerError("/vfs://hello/cow.txt");
+        $this->assertSame('INVAL', (string) $result);
     }
 
     public function testDetectEndOfFileUsingLibcFunction(): void
@@ -2038,6 +2043,7 @@ class VirtualFSStream {
 
     function stream_read($count)
     {
+        if ($this->node->bad) return false;
         $content = $this->node->content;
         $ret = substr($content, $this->position, $count);
         $this->position += strlen($ret);
@@ -2046,6 +2052,7 @@ class VirtualFSStream {
 
     function stream_write($data)
     {
+        if ($this->node->bad) return false;
         $content = &$this->node->content;
         $left = substr($content, 0, $this->position);
         $right = substr($content, $this->position + strlen($data));
