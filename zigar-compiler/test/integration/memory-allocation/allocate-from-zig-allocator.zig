@@ -1,8 +1,9 @@
 const std = @import("std");
+
 const zigar = @import("zigar");
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-pub const defaultAllocator = gpa.allocator();
+pub const default_allocator = gpa.allocator();
 
 pub const Struct = struct { number1: i32, number2: i32 };
 

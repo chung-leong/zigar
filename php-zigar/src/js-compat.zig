@@ -375,7 +375,8 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
             const self = fromObject(obj);
             const len = self.getLength();
             const index = try getIndex(key, len);
-            const ptr: [*]T = @ptrCast(@alignCast(self.buffer.bytes.ptr));
+            const bytes = try self.buffer.data(index * @sizeOf(T), false);
+            const ptr: [*]const T = @ptrCast(@alignCast(bytes.ptr));
             retval.* = switch (@typeInfo(T)) {
                 .int => php.createValueAnyInt(ptr[index]),
                 .float => php.createValueDouble(ptr[index]),
@@ -388,7 +389,8 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
             const self = fromObject(obj);
             const len = self.getLength();
             const index = try getIndex(key, len);
-            const ptr: [*]T = @ptrCast(@alignCast(self.buffer.bytes.ptr));
+            const bytes = try self.buffer.data(index * @sizeOf(T), true);
+            const ptr: [*]T = @ptrCast(@alignCast(bytes.ptr));
             ptr[index] = try extractValue(value);
         }
 
@@ -461,8 +463,12 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
         pub fn getPropertiesFor(obj: *Object, purpose_i: c_uint) !*HashTable {
             const purpose: php.PropPurpose = @enumFromInt(purpose_i);
             const self = fromObject(obj);
-            const len = self.getLength();
-            const ptr: [*]T = @ptrCast(@alignCast(self.buffer.bytes.ptr));
+            const ptr: [*]const T, const len = init: {
+                const bytes = self.buffer.data(0, false) catch {
+                    break :init .{ &.{}, 0 };
+                };
+                break :init .{ @ptrCast(@alignCast(bytes.ptr)), self.getLength() };
+            };
             const items = ptr[0..len];
             const ht = php.createArray();
             if (purpose == .debug) {

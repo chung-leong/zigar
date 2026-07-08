@@ -49,13 +49,52 @@ final class MemoryAllocationTest extends ZigarTestCase
         $this->assertSame('Hello world', $copy2->__string);
     }
 
-    // public function testReturnZigAllocator(): void
-    // {
-    //     $m = ZigImporter::load(__DIR__ . '/return-allocator.zig');
-    // }
+    public function testReturnZigAllocator(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/return-allocator.zig');
+        $a = $m->getAllocator();
+        $struct = new $m->Struct(number1: 123, number2: 456, allocator: $a);
+        $this->assertEquals((object) [
+            'number1' => 123,
+            'number2' => 456,
+        ], $struct->__plain);
+        $this->expectOutput(<<<OUTPUT
+        .{ .number1 = 123, .number2 = 456 }
 
-    // public function testUseReturnedAllocatorInCall(): void
-    // {
-    //     $m = ZigImporter::load(__DIR__ . '/allocate-from-zig-allocator.zig');
-    // }
+        OUTPUT);
+        $m->ptr_maybe = $struct;        
+        $m->print();
+        $a->free($struct);
+        $msg = 'Hello world';
+        $buf = $a->dupe($msg);
+        $array = new Uint8Array($buf);
+        for ($i = 0; $i < strlen($msg); $i++) {
+            $this->assertSame($array[$i], ord($msg[$i]));
+        }
+        $a->free($buf);
+        $this->assertTrue($buf->detached);
+        $array1 = new Float64Array([ 1.1, 2.2, 3.3, 4.4, 5.5 ]);
+        $buf = $a->dupe($array);
+        $array2 = new Float64Array($buf);
+        for ($i = 0; $i < count($array1); $i++) {
+            $this->assertSame($array1[$i], $array2[$i]);
+        }
+    }
+
+    public function testUseReturnedAllocatorInCall(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/allocate-from-zig-allocator.zig');
+        $struct = new $m->Struct(number1: 123, number2: 456, allocator: $m->default_allocator);
+        $this->assertEquals((object) [
+            'number1' => 123,
+            'number2' => 456,
+        ], $struct->__plain);
+        $m->default_allocator->free($struct);
+        $ptr = $m->alloc(allocator: $m->default_allocator);
+        $this->assertEquals((object) [
+            'number1' => 123,
+            'number2' => 456,
+        ], $ptr->__plain);
+        $m->default_allocator->free($ptr);
+    }
 }

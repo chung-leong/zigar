@@ -538,6 +538,7 @@ final class ThreadHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/create-rwlock-with-pthread.zig');
         $this->inEventLoops([ 'revolt' ], function() use($m) {
+            $m->startup();
             try {
                 $this->expectOutputRegex("/Main thread acquired write lock");
                 $this->expectOutputRegex("/Main thread released write lock/");
