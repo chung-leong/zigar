@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include <stdio.h>
+#include <pthread.h>
 
 #ifdef _WIN32
     #include <windows.h>
@@ -8,5 +9,4 @@
     #include <semaphore.h>
     #include <fcntl.h>
     #include <time.h>
-    #include <pthread.h>
 #endif
