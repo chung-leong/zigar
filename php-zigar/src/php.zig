@@ -1757,26 +1757,45 @@ const allocator_impl = struct {
         .free = @This().free,
     };
 
-    fn alloc(
-        _: *anyopaque,
-        len: usize,
-        alignment: std.mem.Alignment,
-        return_address: usize,
-    ) ?[*]u8 {
+    fn alloc(_: *anyopaque, len: usize, alignment: std.mem.Alignment, return_address: usize) ?[*]u8 {
         _ = return_address;
-        _ = alignment;
         std.debug.assert(len > 0);
         const ptr = emalloc(len, @src());
+        const address = @intFromPtr(ptr);
+        // most of the times we'll get a correctly aligned pointer from PHP;
+        // allocate extra bytes to accommodate misalignment only when it happens
+        if (!alignment.check(address)) {
+            efree(ptr, @src());
+            return alignedAlloc(len, alignment);
+        }
         return @ptrCast(ptr);
     }
 
-    fn resize(
-        _: *anyopaque,
-        memory: []u8,
-        alignment: std.mem.Alignment,
-        new_len: usize,
-        return_address: usize,
-    ) bool {
+    fn getHeader(ptr: [*]u8) *[*]u8 {
+        return @ptrCast(@alignCast(ptr - @sizeOf(usize)));
+    }
+
+    fn alignedAlloc(len: usize, alignment: std.mem.Alignment) ?[*]u8 {
+        const alignment_bytes = alignment.toByteUnits();
+        const unaligned_ptr = @as([*]u8, @ptrCast(emalloc(len + alignment_bytes + @sizeOf(usize), @src()) orelse return null));
+        const unaligned_addr = @intFromPtr(unaligned_ptr);
+        const aligned_addr = std.mem.alignForward(usize, unaligned_addr + @sizeOf(usize), alignment_bytes);
+        const aligned_ptr = unaligned_ptr + (aligned_addr - unaligned_addr);
+        getHeader(aligned_ptr).* = unaligned_ptr;
+        return aligned_ptr;
+    }
+
+    fn alignedFree(ptr: [*]u8, alignment: std.mem.Alignment) bool {
+        const alignment_bytes = alignment.toByteUnits();
+        const unaligned_ptr = getHeader(ptr).*;
+        const unaligned_addr = @intFromPtr(unaligned_ptr);
+        const aligned_addr = std.mem.alignForward(usize, unaligned_addr + @sizeOf(usize), alignment_bytes);
+        if (@intFromPtr(ptr) != aligned_addr) return false;
+        efree(unaligned_ptr, @src());
+        return true;
+    }
+
+    fn resize(_: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, return_address: usize) bool {
         _ = alignment;
         _ = return_address;
         std.debug.assert(new_len > 0);
@@ -1786,13 +1805,7 @@ const allocator_impl = struct {
         return false;
     }
 
-    fn remap(
-        ctx: *anyopaque,
-        memory: []u8,
-        alignment: std.mem.Alignment,
-        new_len: usize,
-        return_address: usize,
-    ) ?[*]u8 {
+    fn remap(ctx: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, return_address: usize) ?[*]u8 {
         std.debug.assert(new_len > 0);
         if (resize(ctx, memory, alignment, new_len, return_address)) {
             return memory.ptr;
@@ -1800,15 +1813,11 @@ const allocator_impl = struct {
         return null;
     }
 
-    fn free(
-        _: *anyopaque,
-        memory: []u8,
-        alignment: std.mem.Alignment,
-        return_address: usize,
-    ) void {
-        _ = alignment;
+    fn free(_: *anyopaque, memory: []u8, alignment: std.mem.Alignment, return_address: usize) void {
         _ = return_address;
-        efree(memory.ptr, @src());
+        if (!alignedFree(memory.ptr, alignment)) {
+            efree(memory.ptr, @src());
+        }
     }
 };
 
