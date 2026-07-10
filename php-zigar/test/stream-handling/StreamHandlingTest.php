@@ -969,6 +969,9 @@ final class StreamHandlingTest extends ZigarTestCase
         });
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testFailToPollFile(): void
     {
         $m = ZigImporter::load(__DIR__ . '/poll-file.zig');
@@ -1859,6 +1862,9 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertFalse($result2);
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testGetTerminalNameUsingLibcFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/get-terminal-name-with-libc-function.zig');
