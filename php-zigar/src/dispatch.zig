@@ -297,7 +297,10 @@ pub const CallDispatcher = struct {
         const fd = self.pipe_ptr[1];
         const task: ScheduledTask = .{ .self = self, .operation = operation };
         const written = c.write(fd, @ptrCast(&task), @sizeOf(ScheduledTask));
-        // std.debug.print("CallDispatcher.scheduleTask() called\n", .{});
+        if (builtin.target.os.tag == .windows) {
+            // segfault occurs without this call; not sure what the issue is
+            c.Sleep(0);
+        }
         if (written < 0) return error.Unexpected;
     }
 
@@ -459,10 +462,12 @@ pub const CallDispatcher = struct {
             const strm_obj = try php.openDescriptor(pipes[0], "r");
             php.preserveStream(strm_obj);
             errdefer php.close(strm_obj);
-            try php.setBlocking(strm_obj, false);
+            if (builtin.target.os.tag != .windows) {
+                try php.setBlocking(strm_obj, false);
+            }
             const strm = php.createValueStream(strm_obj);
-            try event_loop.init(&strm);
             defer php.release(&strm);
+            try event_loop.init(&strm);
         } else {
             return error.NotInMainThread;
         }
@@ -486,7 +491,6 @@ pub const CallDispatcher = struct {
         const read = c.read(fd, @ptrCast(&task), @sizeOf(ScheduledTask));
         if (read != @sizeOf(ScheduledTask)) return;
         const self = task.self;
-        // std.debug.print("runScheduledTask\n", .{});
         switch (task.operation) {
             .jscall => |call| _ = self.handleJscall(call) catch unreachable,
             .syscall => |call| _ = self.handleSyscall(call) catch unreachable,

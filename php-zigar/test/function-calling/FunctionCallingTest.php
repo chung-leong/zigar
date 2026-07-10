@@ -384,6 +384,9 @@ final class FunctionCallingTest extends ZigarTestCase
         $m->puts($str4);
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testCallVariadicFunctions(): void 
     {
         $m = ZigImporter::load(__DIR__ . '/call-variadic-functions.zig');

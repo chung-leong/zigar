@@ -58,7 +58,9 @@ final class StreamHandlingTest extends ZigarTestCase
     public function testOpenAndReadFromFileSystemUsingPosixFunctions(): void
     {
         $m = ZigImporter::load(__DIR__ . '/open-and-read-from-file-system-with-posix-function.zig');
-        $correct = 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
+        $correct = (PHP_OS_FAMILY === 'Windows')
+        ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
+        : 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
         $path = __DIR__ . '/data/test.txt';
         $digest = $m->hash($path);
         $this->assertSame($correct, $digest->__string);
@@ -67,7 +69,9 @@ final class StreamHandlingTest extends ZigarTestCase
     public function testOpenAndReadFromFileSystemUsingLibcFunctions(): void
     {
         $m = ZigImporter::load(__DIR__ . '/open-and-read-from-file-system-with-libc-function.zig');
-        $correct = 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
+        $correct = (PHP_OS_FAMILY === 'Windows')
+        ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
+        : 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
         $path = __DIR__ . '/data/test.txt';
         $digest = $m->hash($path);
         $this->assertSame($correct, $digest->__string);
@@ -597,6 +601,9 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame(5678, $file2->mtime);
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testSetAccessAndModifiedTimeOfFileInDirectoryUsingPosixFunction(): void    
     {
         $m = ZigImporter::load(__DIR__ . '/set-times-of-file-at-dir-with-posix-function.zig');
@@ -894,9 +901,6 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame('Hello world!', $content);
     }
 
-    /**
-     * @requires OS Linux|Darwin
-     */
     public function testRenameFileInDirectory(): void
     {
         $m = ZigImporter::load(__DIR__ . '/rename-file-at-dir.zig');
@@ -933,6 +937,9 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame('Hello world!', $content);
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testRenameFileInDirectoryUsingPosixFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/rename-file-at-dir-with-posix-function.zig');
@@ -1446,16 +1453,15 @@ final class StreamHandlingTest extends ZigarTestCase
                 break;
         }
         switch (php_uname('m')) {
-            case 'i386':
-                $arch = 'x86';
-                break;
-            case 'x86_64':
-                $arch = 'x86_64';
-                break;
+            case 'arm64':
+            case 'aarch64': $arch = 'aarch64'; break;
+            case 'i386': $arch = 'x86'; break;
+            case 'x86_64': $arch = 'x86_64'; break;
+            default: $arch = 'x86_64';
         }
-        $lib_path = __DIR__ . "/data/print.$ext";
-        $zig_path = __DIR__ . '/redirect-shared-lib-target.zig';
-        shell_exec("zig build-lib '$zig_path' -target $arch-$os -dynamic -O ReleaseSmall -femit-bin='$lib_path'");
+        $lib_path = join(DIRECTORY_SEPARATOR, [ __DIR__, "data", "print.$ext" ]);
+        $zig_path = join(DIRECTORY_SEPARATOR, [ __DIR__, "redirect-shared-lib-target.zig" ]);
+        $text = shell_exec("zig build-lib \"$zig_path\" -target $arch-$os -dynamic -O ReleaseSmall -femit-bin=\"$lib_path\"");
         ob_start();
         $m->use($lib_path);
         $text = ob_get_clean();
@@ -1477,6 +1483,9 @@ final class StreamHandlingTest extends ZigarTestCase
         }
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testCreateDirectoryInAnotherDirectoryInFileSystemUsingPosixFunction(): void 
     {
         $m = ZigImporter::load(__DIR__ . '/create-directory-at-dir-in-file-system-with-posix-function.zig');
@@ -1518,6 +1527,9 @@ final class StreamHandlingTest extends ZigarTestCase
         }
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testThrowWhenAttemptingToReadlink(): void 
     {
         $m = ZigImporter::load(__DIR__ . '/read-link-with-posix-function.zig');

@@ -261,6 +261,9 @@ final class FunctionPointerTest extends ZigarTestCase
         });
     }
 
+    /**
+     * @requires OS Linux|Darwin
+     */
     public function testThrowWhenPhpFunctionIsUsedAsTargetOfPointerToVariadicFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/variadic-function.zig');

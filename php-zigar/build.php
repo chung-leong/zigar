@@ -261,6 +261,7 @@ foreach ($settings->versions as $version) {
             default: $so_ext = 'so'; break;
         }
         $so_name = "php_zigar.$so_ext";
+        $so_path = join(DIRECTORY_SEPARATOR, [ $so_dir, $so_name ]);
         $cmd = [ 
             'zig',
             'build', 
@@ -274,6 +275,11 @@ foreach ($settings->versions as $version) {
         }
         if ($ts) {
             $cmd[] = "-Dphp-ts";
+        }
+        if (!@unlink($so_path)) {
+            // can't delete a DLL when it's still loaded in Windows
+            // renaming is possible on the other hand
+            @rename($so_path, $so_path . ".prev");
         }
         $zig = proc_open($cmd, [ STDIN, STDOUT, STDERR ], $pipes, null, null, [
             'bypass_shell' => true,
