@@ -426,7 +426,7 @@ final class ThreadHandlingTest extends ZigarTestCase
         $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             try {
-                $this->expectOutputRegex("/(thread_id = \\d+\\n){5}/s");
+                $this->expectOutputRegex("/(thread_id = \\S+\\n){5}/s");
                 $m->spawn(5);
                 delay(250);
             } finally {

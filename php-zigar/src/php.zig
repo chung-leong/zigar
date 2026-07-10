@@ -1789,6 +1789,8 @@ const allocator_impl = struct {
         const alignment_bytes = alignment.toByteUnits();
         const unaligned_ptr = getHeader(ptr).*;
         const unaligned_addr = @intFromPtr(unaligned_ptr);
+        // since unaligned_addr is usually an invalid address, overflow can definitely occur
+        if (unaligned_addr >= std.math.maxInt(usize) - alignment_bytes - @sizeOf(usize)) return false;
         const aligned_addr = std.mem.alignForward(usize, unaligned_addr + @sizeOf(usize), alignment_bytes);
         if (@intFromPtr(ptr) != aligned_addr) return false;
         efree(unaligned_ptr, @src());

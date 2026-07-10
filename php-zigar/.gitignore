@@ -14,9 +14,12 @@ Makefile.*
 zig-out
 .zig-cache
 extensions
+vendor
 php-devel
 lib
 build.ini
+.phpunit.cache
+composer.phar
 
 *.a
 *.dep
@@ -27,5 +30,3 @@ build.ini
 *.so
 *.node
 *.bak
-
-vendor

@@ -1444,7 +1444,7 @@ final class StreamHandlingTest extends ZigarTestCase
                 $ext = 'dll';
                 break;
             case 'Darwin':
-                $os = 'macox';
+                $os = 'macos';
                 $ext = 'dynlib';
                 break;
             case 'Linux':
@@ -1718,7 +1718,8 @@ final class StreamHandlingTest extends ZigarTestCase
         $f = fopen('php://memory', 'w');
         $result1 = $m->check($f);
         $this->assertFalse($result1);
-        $result2 = $m->check(STDIN);
+        $stdin = fopen("php://stdin", "r");
+        $result2 = $m->check($stdin);
         $this->assertFalse($result2);
     }
 
@@ -1730,9 +1731,10 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertNull($result1);
         $result2 = $m->get2($f);
         $this->assertNull($result2);
-        $result3 = $m->get1(STDIN);
+        $stdin = fopen("php://stdin", "r");
+        $result3 = $m->get1($stdin);
         $this->assertNull($result3);
-        $result4 = $m->get2(STDIN);
+        $result4 = $m->get2($stdin);
         $this->assertNull($result4);
     }
 
