@@ -969,7 +969,11 @@ pub const CallDispatcher = struct {
     fn handleTruncate(self: *@This(), args: anytype) !E {
         if (@hasField(@TypeOf(args.*), "fd")) {
             const entry = self.findStream(args.fd) catch return .BADF;
-            php.truncate(entry.stream, args.len) catch return .FBIG;
+            const len = switch (args.len) {
+                std.math.maxInt(u64) => try php.tell(entry.stream),
+                else => args.len,
+            };
+            php.truncate(entry.stream, len) catch return .FBIG;
         } else {
             const loc = (self.resolvePath(args.dirfd, args.path) catch return .NOENT) orelse return .OPNOTSUPP;
             defer loc.deinit();

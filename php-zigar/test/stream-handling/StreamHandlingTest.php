@@ -161,6 +161,31 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame('ur fathers broug', (string) $chunk);
     }
 
+    /**
+     * @requires OS WinNT
+     */
+    public function testOpenFileAndSeekToParticularPositionUsingWin32Function(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/seek-file-with-win32-function.zig');
+        $path = __DIR__ . '/data/test.txt';        
+        $content = file_get_contents($path);
+        $url = 'data://text/plain;base64,' . base64_encode($content);
+        $strm = fopen($url, "r");
+        $chunk = $m->read($strm, 32, 16);
+        $this->assertSame('ur fathers broug', (string) $chunk);
+    }
+
+    /**
+     * @requires OS WinNT
+     */
+    public function testOpenFileInFileSystemUsingWin32Function(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/seek-file-in-file-system-with-win32-function.zig');
+        $path = __DIR__ . '/data/test.txt';        
+        $chunk = $m->read($path, 32, 16);
+        $this->assertSame('ur fathers broug', (string) $chunk);
+    }
+
     public function testObtainExpectedPositionAfterSeekUsingPosixFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/return-file-position-with-posix-functions.zig');
@@ -254,13 +279,17 @@ final class StreamHandlingTest extends ZigarTestCase
     }
 
     /**
-     * @requires OS Windows
+     * @requires OS WinNT
      */
     public function testOpenAndWriteToFileUsingWin32Functions(): void 
     {
         global $output;
         $m = ZigImporter::load(__DIR__ . '/open-and-write-to-file-with-win32-functions.zig');
-        // TODO
+        $output = '';
+        $url_path = '/var://output';
+        $len = $m->save($url_path, "This is a test");
+        $this->assertSame(14, $len);
+        $this->assertSame("This is a test", $output);
     }
 
     public function testObtainErrorCodeUsingLibcFunction(): void 
@@ -529,19 +558,38 @@ final class StreamHandlingTest extends ZigarTestCase
     }
 
     /**
-     * @requires OS Windows
+     * @requires OS WinNT
      */
     public function testGetSizeOfOpenedFileUsingWin32Function(): void
     {
-        // TODO
+        $m = ZigImporter::load(__DIR__ . '/get-size-with-win32-function.zig');
+        $file = new VirtualFile('This is a test and this is only a test');
+        $dir = new VirtualDir([ "test.txt" => $file ]);
+        VirtualFSStream::add_root_node('hello', $dir);
+        $strm = fopen("vfs://hello/test.txt", "r");
+        $size = $m->get($strm);
+        $this->assertSame(strlen($file->content), $size);
     }
 
     /**
-     * @requires OS Windows
+     * @requires OS WinNT
      */
     public function testGetStatsOfOpenedFileUsingWin32Function(): void
     {
-        // TODO
+        $m = ZigImporter::load(__DIR__ . '/get-info-with-win32-function.zig');
+        $file = new VirtualFile('This is a test and this is only a test');
+        $size = strlen($file->content);
+        $dir = new VirtualDir([ "test.txt" => $file ]);
+        VirtualFSStream::add_root_node('hello', $dir);
+        $this->expectOutput(<<<OUTPUT
+        size = $size
+        ctime = 3577643008, 27111902
+        atime = 3577643008, 27111902
+        mtime = 3577643008, 27111902
+
+        OUTPUT);
+        $strm = fopen("vfs://hello/test.txt", "r");
+        $m->print($strm);
     }
 
     /**
@@ -559,11 +607,17 @@ final class StreamHandlingTest extends ZigarTestCase
     }
 
     /**
-     * @requires OS Windows
+     * @requires OS WinNT
      */
     public function testSetAccessAndModifiedTimeOfOpenedFileUsingFutime(): void
     {
-        // TODO
+        $m = ZigImporter::load(__DIR__ . '/set-times-of-opened-file-with-futime.zig');
+        $file = new VirtualFile('Hello world!!!');
+        $dir = new VirtualDir([ 'hello.txt' => $file ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $m->setTimes('/vfs://test/hello.txt', 123, 456);
+        $this->assertSame(123, $file->atime);
+        $this->assertSame(456, $file->mtime);
     }
 
     /**
@@ -791,6 +845,30 @@ final class StreamHandlingTest extends ZigarTestCase
         $m->print('/vfs://test');
     } 
 
+    /**
+     * @requires OS WinNT
+     */
+    public function testDeleteFileUsingWin32Function(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/delete-file-with-win32-function.zig');
+        $dir = new VirtualDir([
+            'hello.txt' => new VirtualFile('Hello world'),
+            'test.txt' => new VirtualFile('This is a test and this is only a test'),
+            'world' => new VirtualDir(),
+        ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $m->remove("/vfs://test/test.txt");
+        $this->assertArrayNotHasKey('test.txt', $dir->children);
+        $this->assertExceptionMessage('unable to delete file', function() use($m) {
+            $m->remove("/vfs://test/test.txt");
+        });
+        $m->removeW("/vfs://test/hello.txt");
+        $this->assertArrayNotHasKey('hello.txt', $dir->children);
+        $this->assertExceptionMessage('unable to delete file', function() use($m) {
+            $m->remove("/vfs://test/hello.txt");
+        });
+    }
+
     public function testDeleteFileInDirectory(): void
     {
         $m = ZigImporter::load(__DIR__ . '/delete-file-at-dir.zig');
@@ -808,6 +886,31 @@ final class StreamHandlingTest extends ZigarTestCase
         });
     }
 
+    /**
+     * @requires OS WinNT
+     */
+    public function testRemoveDirectoryUsingWin32Function(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/remove-directory-with-win32-function.zig');
+        $dir = new VirtualDir([
+            'hello.txt' => new VirtualFile('Hello world'),
+            'test.txt' => new VirtualFile('This is a test and this is only a test'),
+            'world' => new VirtualDir(),
+            'turkey' => new VirtualDir(),
+        ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $m->remove("/vfs://test/world");
+        $this->assertArrayNotHasKey('world', $dir->children);
+        $this->assertExceptionMessage('unable to remove directory', function() use($m) {
+            $m->remove("/vfs://test/world");
+        });
+        $m->removeW("/vfs://test/turkey");
+        $this->assertArrayNotHasKey('turkey', $dir->children);
+        $this->assertExceptionMessage('unable to remove directory', function() use($m) {
+            $m->remove("/vfs://test/turkey");
+        });
+    }
+
     public function testRemoveDirectoryInDirectory(): void
     {
         $m = ZigImporter::load(__DIR__ . '/remove-directory-at-dir.zig');
@@ -822,6 +925,30 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertArrayNotHasKey('world', $dir->children);
         $this->assertExceptionMessage('not found', function() use($handle, $m) {
             $m->remove($handle, 'world');
+        });
+    }
+
+    /**
+     * @requires OS WinNT
+     */
+    public function testMakeDirectoryUsingWin32Function(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/make-directory-with-win32-function.zig');
+        $dir = new VirtualDir([
+            'hello.txt' => new VirtualFile('Hello world'),
+            'test.txt' => new VirtualFile('This is a test and this is only a test'),
+            'world' => new VirtualDir(),
+        ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $m->mkdir("/vfs://test/cow");
+        $this->assertArrayHasKey('cow', $dir->children);
+        $this->assertExceptionMessage('unable to make directory', function() use($m) {
+            $m->mkdir("/vfs://test/cow");
+        });
+        $m->mkdirW("/vfs://test/pig");
+        $this->assertArrayHasKey('pig', $dir->children);
+        $this->assertExceptionMessage('unable to make directory', function() use($m) {
+            $m->mkdir("/vfs://test/pig");
         });
     }
 
@@ -1018,12 +1145,14 @@ final class StreamHandlingTest extends ZigarTestCase
     }
 
     /**
-     * @requires OS Windows
+     * @requires OS WinNT
      */
     public function testFailToCreateSymlinkUsingWin32Function(): void
     {
         $m = ZigImporter::load(__DIR__ . '/create-symlink-with-win32-function.zig');
-        // TODO
+        $this->assertExceptionMessage('unable to create symlink', function() use($m) {
+            $m->symlink('/vfs://test/hello/world.txt', '/vfs://test/hello/earth.txt');
+        });
     }
 
     /**
@@ -1582,11 +1711,18 @@ final class StreamHandlingTest extends ZigarTestCase
     }
 
     /**
-     * @requires OS Windows
+     * @requires OS WinNT
      */
     public function testIgnoreOffsetToWriteFileWhenStreamIsUnseekable(): void     
     {
-        // TODO
+        $m = ZigImporter::load(__DIR__ . '/write-to-stdout-at-position-with-win32-function.zig');
+        $this->expectOutput(<<<OUTPUT
+        Hello world
+        Hello world
+
+        OUTPUT);
+        $m->write();
+        $m->write();
     }
 
     public function testCopyRealFileToVirtualFile(): void 
@@ -1767,11 +1903,19 @@ final class StreamHandlingTest extends ZigarTestCase
     }
 
     /**
-     * @requires OS Windows
+     * @requires OS WinNT
      */
     public function testTruncateOpenedFileUsingWin32Function(): void
     {
-        // TODO
+        $m = ZigImporter::load(__DIR__ . '/truncate-opened-file-with-win32-function.zig');
+        $file = new VirtualFile(str_repeat('X', 256));
+        $dir = new VirtualDir([ 'hello.txt' => $file ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $f = fopen('vfs://test/hello.txt', 'w');
+        $this->assertSame(256, $file->size);
+        $this->assertSame(256, strlen($file->content));
+        $m->truncate($f, 16);
+        $this->assertSame(16, $file->size);
     }
 
     /**

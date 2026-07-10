@@ -2080,7 +2080,7 @@ pub fn rename(path: *const String, new_path: *const String, context: ?*StreamCon
     if (handler.?(wrapper, p.ptr, np.ptr, 0, context) == 0) return error.Failure;
 }
 
-pub fn tell(strm: *Stream) !usize {
+pub fn tell(strm: *Stream) !u64 {
     const pos = pc._php_stream_tell(strm);
     if (pos < 0) return error.Failure;
     return @intCast(pos);

@@ -4531,6 +4531,20 @@ pub fn Win32Substitute(comptime redirector: type) type {
             return null;
         }
 
+        pub fn SetEndOfFile(handle: HANDLE) BOOL {
+            const fd = toDescriptor(handle);
+            var result: c_int = undefined;
+            if (redirector.ftruncateT(u64, fd, std.math.maxInt(u64), &result)) {
+                if (result < 0) {
+                    _ = saveError(result);
+                    return FALSE;
+                }
+                _ = c.SetLastError(0);
+                return TRUE;
+            }
+            return Original.SetEndOfFile(handle);
+        }
+
         pub fn SetFilePointer(
             handle: HANDLE,
             offset: LONG,
@@ -4960,6 +4974,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
             pub var ReadFile: *const @TypeOf(Self.ReadFile) = undefined;
             pub var RemoveDirectory: *const @TypeOf(Self.RemoveDirectory) = undefined;
             pub var RemoveDirectoryW: *const @TypeOf(Self.RemoveDirectoryW) = undefined;
+            pub var SetEndOfFile: *const @TypeOf(Self.SetEndOfFile) = undefined;
             pub var SetFilePointer: *const @TypeOf(Self.SetFilePointer) = undefined;
             pub var SetFilePointerEx: *const @TypeOf(Self.SetFilePointerEx) = undefined;
             pub var SetHandleInformation: *const @TypeOf(Self.SetHandleInformation) = undefined;
