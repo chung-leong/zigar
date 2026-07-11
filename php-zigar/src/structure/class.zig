@@ -2,6 +2,7 @@ const std = @import("std");
 
 const accessor = @import("../accessor.zig");
 const Transform = accessor.Transform;
+const ExternalAllocator = @import("../allocator.zig").ExternalAllocator;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const failure = @import("../failure.zig");
@@ -236,12 +237,13 @@ pub fn Class(comptime S: type) type {
             const this_struct = try S.fromValue(&ed.This);
             // see if an allocator is specified
             var arg_iter: ArgumentIterator = .init(ed);
-            const custom_allocator = try extractAllocator(&arg_iter);
+            var custom_allocator = try extractAllocator(&arg_iter);
+            const allocator_ptr = if (custom_allocator) |*ptr| ptr else null;
             try this_struct.checkArguments(&arg_iter);
             const arg = arg_iter.next() orelse null;
-            try this_struct.initialize(custom_allocator, arg, false);
+            try this_struct.initialize(allocator_ptr, arg, false);
             try this_struct.finalize(true);
-            if (custom_allocator != null) {
+            if (allocator_ptr != null) {
                 // make buffers allocated from custom allocator external
                 try this_struct.externalize();
             }
@@ -254,7 +256,7 @@ pub fn Class(comptime S: type) type {
             retval.* = try this_struct.getValue(.string);
         }
 
-        fn extractAllocator(arg_iter: *ArgumentIterator) !?*std.mem.Allocator {
+        fn extractAllocator(arg_iter: *ArgumentIterator) !?std.mem.Allocator {
             var special_args: struct {
                 allocator: ?Value = null,
             } = .{};
@@ -266,8 +268,7 @@ pub fn Class(comptime S: type) type {
             if (src_class.type != .@"struct" or src_class.purpose != .allocator) {
                 return error.NotAllocator;
             }
-            const src_struct = structure.Struct.fromObject(src_obj);
-            return @ptrCast(@alignCast(src_struct.buffer.bytes.ptr));
+            return ExternalAllocator.fromObject(src_obj);
         }
 
         pub const visitPointers = Super.Super.visitPointers;

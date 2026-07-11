@@ -513,11 +513,6 @@ pub const Struct = struct {
         }
     }
 
-    pub fn toAllocator(self: *@This()) !*std.mem.Allocator {
-        const bytes = try self.buffer.data(0, false);
-        return @ptrCast(@alignCast(@constCast(bytes.ptr)));
-    }
-
     pub fn initSpecial(self: *@This(), comptime T: type, args: SpecialArgs) !void {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());

@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 const ArrayBuffer = @import("js-compat.zig").ArrayBuffer;
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
@@ -6,8 +7,10 @@ const failure = @import("failure.zig");
 const getObjectBuffer = @import("object.zig").getObjectBuffer;
 const php = @import("php.zig");
 const ArgumentIterator = php.ArgumentIterator;
+const N = php.getStaticString;
 const ExecuteData = php.ExecuteData;
 const Function = php.Function;
+const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
 const structure = @import("structure.zig");
@@ -48,10 +51,10 @@ pub const AllocatorStatic = struct {
         const alignment_bu = if (arg_iter.next()) |arg1| try php.getValueUlong(arg1) else 1;
         if (!std.math.isPowerOfTwo(alignment_bu)) return error.InvalidAligment;
         const alignment = std.mem.Alignment.fromByteUnits(alignment_bu);
-        const allocator = try getAllocatorFromThis(&arg_iter);
+        var allocator = try ExternalAllocator.fromValue(arg_iter.this);
         const buf = try ByteBuffer.create(alignment);
         errdefer buf.release();
-        try buf.allocate(allocator, len);
+        try buf.allocate(&allocator, len);
         defer buf.release();
         const ar_obj = try ArrayBuffer.create(buf);
         _ = buf.externalize();
@@ -86,10 +89,10 @@ pub const AllocatorStatic = struct {
         };
         if (!buf.inZigMemory()) return error.InvalidOperation;
         if (buf.flags.uninitialized) return error.AccessingDeallocatedMemory;
-        const allocator = try getAllocatorFromThis(&arg_iter);
+        var allocator = try ExternalAllocator.fromValue(arg_iter.this);
         switch (buf.source_type) {
             .allocator => {
-                if (buf.source.allocator != allocator) return error.InvalidOperation;
+                if (buf.source.allocator.ptr != allocator.ptr) return error.InvalidOperation;
                 buf.free();
             },
             .none => {
@@ -122,9 +125,9 @@ pub const AllocatorStatic = struct {
             }
             return error.InvalidOperation;
         };
-        const allocator = try getAllocatorFromThis(&arg_iter);
+        var allocator = try ExternalAllocator.fromValue(arg_iter.this);
         const buf = try ByteBuffer.create(.@"1");
-        try buf.allocate(allocator, bytes.len);
+        try buf.allocate(&allocator, bytes.len);
         defer buf.release();
         try buf.copyBytes(bytes);
         const ar_obj = try ArrayBuffer.create(buf);
@@ -144,10 +147,165 @@ pub const AllocatorStatic = struct {
             return_value.* = php.createValueObject(ar_obj);
         }
     }
+};
 
-    fn getAllocatorFromThis(arg_iter: *ArgumentIterator) !*std.mem.Allocator {
-        const this_obj = try php.getValueObject(arg_iter.this);
-        const this_struct = structure.Struct.fromObject(this_obj);
-        return try this_struct.toAllocator();
+pub const ExternalAllocator = struct {
+    const CallContext = struct {};
+
+    pub fn fromValue(value: *Value) !std.mem.Allocator {
+        const obj = try php.getValueObject(value);
+        return fromObject(obj);
+    }
+
+    pub fn fromObject(obj: *Object) std.mem.Allocator {
+        const allocator_struct = structure.Struct.fromObject(obj);
+        const allocator_class = ZigClassEntry.fromStructure(allocator_struct);
+        // call convention is different between debug and release; when there's a mismatch
+        // route call to function in the vtable through their thunks
+        const debug = builtin.mode == .Debug;
+        if (allocator_class.host.module.attributes.debug != debug) {
+            return .{
+                .ptr = allocator_struct,
+                .vtable = &.{
+                    .alloc = alloc,
+                    .free = free,
+                    .remap = remap,
+                    .resize = resize,
+                },
+            };
+        } else {
+            const allocator_ptr: *std.mem.Allocator = @ptrCast(@alignCast(allocator_struct.buffer.bytes.ptr));
+            return allocator_ptr.*;
+        }
+    }
+
+    fn invoke(context: *anyopaque, comptime name: []const u8, arg_struct: *ArgStruct(name)) !void {
+        const allocator_struct: *structure.Struct = @ptrCast(@alignCast(context));
+        // set the context pointer
+        const ptr = try allocator_struct.getProperty(N("ptr"), null);
+        defer php.release(&ptr);
+        const ptr_struct = try structure.Pointer.fromValue(&ptr);
+        const ptr_address = try ptr_struct.getAddress();
+        arg_struct.@"0" = @ptrFromInt(ptr_address);
+        // retrieve thunk and function addresses
+        const vtable_ptr = try allocator_struct.getProperty(N("vtable"), null);
+        defer php.release(&vtable_ptr);
+        const vtable_ptr_struct = try structure.Pointer.fromValue(&vtable_ptr);
+        const vtable_obj = try vtable_ptr_struct.getTarget();
+        const vtable_struct = structure.Struct.fromObject(vtable_obj);
+        const alloc_ptr = try vtable_struct.getProperty(N(name), null);
+        defer php.release(&alloc_ptr);
+        const alloc_ptr_struct = try structure.Pointer.fromValue(&alloc_ptr);
+        const alloc_obj = try alloc_ptr_struct.getTarget();
+        const alloc_struct = structure.Function.fromObject(alloc_obj);
+        const alloc_class = ZigClassEntry.fromObject(alloc_obj);
+        const alloc_static = alloc_class.getStaticData(structure.Function);
+        const thunk_addr = alloc_static.thunk_address;
+        const fn_addr = @intFromPtr(alloc_struct.buffer.bytes.ptr);
+        const arg_addr = @intFromPtr(arg_struct);
+        const host = alloc_class.host;
+        try host.runThunk(thunk_addr, fn_addr, arg_addr);
+    }
+
+    fn ArgStruct(comptime name: []const u8) type {
+        const Ptr = @FieldType(std.mem.Allocator.VTable, name);
+        const Fn = @typeInfo(Ptr).pointer.child;
+        return Arg(.normal, Fn);
+    }
+
+    fn alloc(context: *anyopaque, len: usize, alignment: std.mem.Alignment, ret_addr: usize) ?[*]u8 {
+        var arg_struct: ArgStruct("alloc") = .{
+            .retval = undefined,
+            .@"0" = undefined,
+            .@"1" = len,
+            .@"2" = alignment,
+            .@"3" = ret_addr,
+        };
+        invoke(context, "alloc", &arg_struct) catch return null;
+        return arg_struct.retval;
+    }
+
+    fn resize(context: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, ret_addr: usize) bool {
+        var arg_struct: ArgStruct("resize") = .{
+            .retval = undefined,
+            .@"0" = undefined,
+            .@"1" = memory,
+            .@"2" = alignment,
+            .@"3" = new_len,
+            .@"4" = ret_addr,
+        };
+        invoke(context, "resize", &arg_struct) catch return false;
+        return arg_struct.retval;
+    }
+
+    fn remap(context: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, ret_addr: usize) ?[*]u8 {
+        var arg_struct: ArgStruct("remap") = .{
+            .retval = undefined,
+            .@"0" = undefined,
+            .@"1" = memory,
+            .@"2" = alignment,
+            .@"3" = new_len,
+            .@"4" = ret_addr,
+        };
+        invoke(context, "remap", &arg_struct) catch return null;
+        return arg_struct.retval;
+    }
+
+    fn free(context: *anyopaque, old_memory: []u8, alignment: std.mem.Alignment, ret_addr: usize) void {
+        var arg_struct: ArgStruct("free") = .{
+            .retval = undefined,
+            .@"0" = undefined,
+            .@"1" = old_memory,
+            .@"2" = alignment,
+            .@"3" = ret_addr,
+        };
+        invoke(context, "free", &arg_struct) catch {};
     }
 };
+
+pub fn Arg(comptime _: @TypeOf(.enum_literal), comptime T: type) type {
+    const f = @typeInfo(T).@"fn";
+    const count = get: {
+        var count = 1;
+        for (f.params) |param| {
+            if (param.type != null) {
+                count += 1;
+            }
+        }
+        break :get count;
+    };
+    const RT = if (f.return_type) |RT| switch (RT) {
+        noreturn => void,
+        else => RT,
+    } else void;
+    var fields: [count]std.builtin.Type.StructField = undefined;
+    fields[0] = .{
+        .name = "retval",
+        .type = RT,
+        .is_comptime = false,
+        .alignment = @alignOf(RT),
+        .default_value_ptr = null,
+    };
+    var arg_index = 0;
+    for (f.params) |param| {
+        if (param.type != null) {
+            const name = std.fmt.comptimePrint("{d}", .{arg_index});
+            fields[arg_index + 1] = .{
+                .name = name,
+                .type = param.type.?,
+                .is_comptime = false,
+                .alignment = @alignOf(param.type.?),
+                .default_value_ptr = null,
+            };
+            arg_index += 1;
+        }
+    }
+    return @Type(.{
+        .@"struct" = .{
+            .layout = .auto,
+            .decls = &.{},
+            .fields = &fields,
+            .is_tuple = false,
+        },
+    });
+}

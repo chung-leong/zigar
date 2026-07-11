@@ -400,6 +400,7 @@ pub fn createModule(comptime module_ns: type) Module {
             },
             .libc = builtin.link_libc,
             .io_redirection = exporter.options.use_redirection,
+            .debug = builtin.mode == .Debug,
         },
         .module_path = switch (builtin.mode) {
             .Debug => exporter.options.module_path.ptr,

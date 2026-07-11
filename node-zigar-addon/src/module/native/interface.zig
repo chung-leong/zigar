@@ -27,6 +27,7 @@ pub fn Module(comptime Value: type) type {
             runtime_safety: bool,
             libc: bool,
             io_redirection: bool,
+            debug: bool,
             _: u28 = 0,
         };
         pub const Imports = extern struct { // vtable that's filled by the addon

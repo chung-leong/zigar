@@ -154,7 +154,9 @@ pub const GeneratorStatic = struct {
                 if (generator_struct.getProperty(N("allocator"), null)) |av| {
                     defer php.release(&av);
                     const allocator_struct = try structure.Struct.fromValue(&av);
-                    break :get try allocator_struct.toAllocator();
+                    const allocator_bytes = try allocator_struct.buffer.data(0, false);
+                    const allocator_ptr: *std.mem.Allocator = @ptrCast(@alignCast(@constCast(allocator_bytes.ptr)));
+                    break :get allocator_ptr;
                 } else |_| break :get null;
             };
             const callback_value = try generator_struct.getProperty(N("callback"), null);
