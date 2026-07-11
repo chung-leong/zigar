@@ -89,7 +89,8 @@ pub const AllocatorStatic = struct {
         };
         if (!buf.inZigMemory()) return error.InvalidOperation;
         if (buf.flags.uninitialized) return error.AccessingDeallocatedMemory;
-        var allocator = try ExternalAllocator.fromValue(arg_iter.this);
+        const allocator_obj = try php.getValueObject(arg_iter.this);
+        var allocator = ExternalAllocator.fromObject(allocator_obj);
         switch (buf.source_type) {
             .allocator => {
                 if (buf.source.allocator.ptr != allocator.ptr) return error.InvalidOperation;
@@ -102,6 +103,8 @@ pub const AllocatorStatic = struct {
             },
             else => return error.InvalidOperation,
         }
+        const allocator_class = ZigClassEntry.fromObject(allocator_obj);
+        allocator_class.host.object_map.free(buf);
     }
 
     pub fn handleDupe(ed: *ExecuteData, return_value: *Value) !void {
