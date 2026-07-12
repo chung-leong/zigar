@@ -33,13 +33,14 @@ final class StreamHandlingTest extends ZigarTestCase
 
     public function testOpenAndReadFromFileInMainThread(): void
     {
+        global $input;
         $m = ZigImporter::load(__DIR__ . '/open-and-read-from-file-in-main-thread.zig');
         $correct = (PHP_OS_FAMILY === 'Windows')
         ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
         : 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
         $path = __DIR__ . '/data/test.txt';        
-        $content = file_get_contents($path);
-        $url_path = '/data://text/plain;base64,' . base64_encode($content);
+        $input = file_get_contents($path);
+        $url_path = '/var://input';
         $digest = $m->hash($url_path);
         $this->assertSame($correct, $digest->__string);
     }

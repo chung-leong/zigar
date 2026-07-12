@@ -846,9 +846,9 @@ pub const CallDispatcher = struct {
 
     fn handlePositionalRead(self: *@This(), args: anytype) !E {
         const entry = self.findStream(args.fd) catch return .BADF;
-        const pos = php.tell(entry.stream) catch return .INVAL;
+        const pos = php.tell(entry.stream) catch return .SPIPE;
         defer php.seek(entry.stream, @intCast(pos), 0) catch {};
-        php.seek(entry.stream, @intCast(args.offset), 0) catch return .INVAL;
+        php.seek(entry.stream, @intCast(args.offset), 0) catch return .SPIPE;
         const read = php.read(entry.stream, args.bytes, args.len) catch return .IO;
         args.read = @intCast(read);
         return .SUCCESS;
@@ -856,9 +856,9 @@ pub const CallDispatcher = struct {
 
     fn handlePositionalVectorRead(self: *@This(), args: anytype) !E {
         const entry = self.findStream(args.fd) catch return .BADF;
-        const pos = php.tell(entry.stream) catch return .INVAL;
+        const pos = php.tell(entry.stream) catch return .SPIPE;
         defer php.seek(entry.stream, @intCast(pos), 0) catch {};
-        php.seek(entry.stream, @intCast(args.offset), 0) catch return .INVAL;
+        php.seek(entry.stream, @intCast(args.offset), 0) catch return .SPIPE;
         const len: usize = args.count;
         const iovs = args.iovs[0..len];
         var total: usize = 0;
@@ -896,9 +896,9 @@ pub const CallDispatcher = struct {
 
     fn handlePositionalWrite(self: *@This(), args: anytype) !E {
         const entry = self.findStream(args.fd) catch return .BADF;
-        const pos = php.tell(entry.stream) catch return .INVAL;
+        const pos = php.tell(entry.stream) catch return .SPIPE;
         defer php.seek(entry.stream, @intCast(pos), 0) catch {};
-        php.seek(entry.stream, @intCast(args.offset), 0) catch return .INVAL;
+        php.seek(entry.stream, @intCast(args.offset), 0) catch return .SPIPE;
         const written = php.write(entry.stream, args.bytes, args.len) catch return .INVAL;
         args.written = @intCast(written);
         return .SUCCESS;
@@ -906,7 +906,7 @@ pub const CallDispatcher = struct {
 
     fn handlePositionalVectorWrite(self: *@This(), args: anytype) !E {
         const entry = self.findStream(args.fd) catch return .BADF;
-        const pos = php.tell(entry.stream) catch return .BADF;
+        const pos = php.tell(entry.stream) catch return .SPIPE;
         defer php.seek(entry.stream, @intCast(pos), 0) catch {};
         php.seek(entry.stream, @intCast(args.offset), 0) catch return .SPIPE;
         const len: usize = args.count;
@@ -921,14 +921,14 @@ pub const CallDispatcher = struct {
 
     fn handleSeek(self: *@This(), args: anytype) !E {
         const entry = self.findStream(args.fd) catch return .BADF;
-        php.seek(entry.stream, args.offset, args.whence) catch return .INVAL;
-        args.position = php.tell(entry.stream) catch return .INVAL;
+        php.seek(entry.stream, args.offset, args.whence) catch return .SPIPE;
+        args.position = php.tell(entry.stream) catch return .SPIPE;
         return .SUCCESS;
     }
 
     fn handleTell(self: *@This(), args: anytype) !E {
         const entry = self.findStream(args.fd) catch return .BADF;
-        args.position = php.tell(entry.stream) catch return .INVAL;
+        args.position = php.tell(entry.stream) catch return .SPIPE;
         return .SUCCESS;
     }
 
