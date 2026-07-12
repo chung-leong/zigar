@@ -1759,42 +1759,10 @@ const allocator_impl = struct {
 
     fn alloc(_: *anyopaque, len: usize, alignment: std.mem.Alignment, return_address: usize) ?[*]u8 {
         _ = return_address;
+        _ = alignment;
         std.debug.assert(len > 0);
         const ptr = emalloc(len, @src());
-        const address = @intFromPtr(ptr);
-        // most of the times we'll get a correctly aligned pointer from PHP;
-        // allocate extra bytes to accommodate misalignment only when it happens
-        if (!alignment.check(address)) {
-            efree(ptr, @src());
-            return alignedAlloc(len, alignment);
-        }
         return @ptrCast(ptr);
-    }
-
-    fn getHeader(ptr: [*]u8) *[*]u8 {
-        return @ptrCast(@alignCast(ptr - @sizeOf(usize)));
-    }
-
-    fn alignedAlloc(len: usize, alignment: std.mem.Alignment) ?[*]u8 {
-        const alignment_bytes = alignment.toByteUnits();
-        const unaligned_ptr = @as([*]u8, @ptrCast(emalloc(len + alignment_bytes + @sizeOf(usize), @src()) orelse return null));
-        const unaligned_addr = @intFromPtr(unaligned_ptr);
-        const aligned_addr = std.mem.alignForward(usize, unaligned_addr + @sizeOf(usize), alignment_bytes);
-        const aligned_ptr = unaligned_ptr + (aligned_addr - unaligned_addr);
-        getHeader(aligned_ptr).* = unaligned_ptr;
-        return aligned_ptr;
-    }
-
-    fn alignedFree(ptr: [*]u8, alignment: std.mem.Alignment) bool {
-        const alignment_bytes = alignment.toByteUnits();
-        const unaligned_ptr = getHeader(ptr).*;
-        const unaligned_addr = @intFromPtr(unaligned_ptr);
-        // since unaligned_addr is usually an invalid address, overflow can definitely occur
-        if (unaligned_addr >= std.math.maxInt(usize) - alignment_bytes - @sizeOf(usize)) return false;
-        const aligned_addr = std.mem.alignForward(usize, unaligned_addr + @sizeOf(usize), alignment_bytes);
-        if (@intFromPtr(ptr) != aligned_addr) return false;
-        efree(unaligned_ptr, @src());
-        return true;
     }
 
     fn resize(_: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, return_address: usize) bool {
@@ -1817,9 +1785,8 @@ const allocator_impl = struct {
 
     fn free(_: *anyopaque, memory: []u8, alignment: std.mem.Alignment, return_address: usize) void {
         _ = return_address;
-        if (!alignedFree(memory.ptr, alignment)) {
-            efree(memory.ptr, @src());
-        }
+        _ = alignment;
+        efree(memory.ptr, @src());
     }
 };
 
