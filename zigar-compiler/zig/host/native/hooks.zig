@@ -719,7 +719,12 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                             .getlk = .{
                                 .fd = @intCast(fd),
                                 .lock = .{
-                                    .type = lock.type,
+                                    .type = switch (lock.type) {
+                                        F.RDLCK => Syscall.Lock.RDLCK,
+                                        F.WRLCK => Syscall.Lock.WRLCK,
+                                        F.UNLCK => Syscall.Lock.UNLCK,
+                                        else => 0,
+                                    },
                                     .whence = lock.whence,
                                     .start = @intCast(lock.start),
                                     .len = @intCast(lock.len),

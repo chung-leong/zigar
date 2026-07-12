@@ -2016,7 +2016,7 @@ class VariableStream {
     {
         switch ($whence) {
             case SEEK_SET:
-                if ($offset < strlen($GLOBALS[$this->varname]) && $offset >= 0) {
+                if ($offset <= strlen($GLOBALS[$this->varname]) && $offset >= 0) {
                      $this->position = $offset;
                      return true;
                 } else {
@@ -2251,12 +2251,15 @@ class VirtualFSStream {
     function stream_seek($offset, $whence)
     {
         $content = $this->node->content;
+        echo "stream_seek\n";
         switch ($whence) {
             case SEEK_SET:
-                if ($offset < strlen($content) && $offset >= 0) {
+                echo "offset = $offset\n";
+                if ($offset <= strlen($content) && $offset >= 0) {
                      $this->position = $offset;
                      return true;
                 } else {
+                     echo "returning false\n";
                      return false;
                 }
                 break;
