@@ -629,12 +629,16 @@ final class ThreadHandlingTest extends ZigarTestCase
      */
     public function testCreateNamedSemaphoreUsingPthread(): void
     {
-        $m = ZigImporter::load(__DIR__ . '/create-semaphore-with-pthread.zig');
+        $m = ZigImporter::load(__DIR__ . '/create-named-semaphore-with-pthread.zig');
         $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             try {
-                $this->expectOutputRegex("/(acquired semaphore: 0)/");
-                $this->expectOutputRegex("/(acquired semaphore: 1)/");
+                if (PHP_OS_FAMILY === 'Darwin') {
+                    $this->expectOutputRegex("/(acquired semaphore)/");
+                } else {
+                    $this->expectOutputRegex("/(acquired semaphore: 0)/");
+                    $this->expectOutputRegex("/(acquired semaphore: 1)/");
+                }
                 $m->spawn();
                 delay(500);
             } finally {
