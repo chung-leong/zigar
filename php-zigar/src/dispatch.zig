@@ -1159,9 +1159,9 @@ pub const CallDispatcher = struct {
 
     fn handleCopyFileRange(self: *@This(), args: anytype) !E {
         const out_strm, const close_out_strm = self.useStream(args.out_fd, "w") catch return .BADF;
-        defer if (close_out_strm) php.close(out_strm);
+        defer if (close_out_strm) php.closeCasted(out_strm);
         const in_strm, const close_in_strm = self.useStream(args.in_fd, "r") catch return .BADF;
-        defer if (close_in_strm) php.close(in_strm);
+        defer if (close_in_strm) php.closeCasted(in_strm);
         args.copied = php.copyFileRange(in_strm, out_strm, args.in_offset, args.out_offset, args.len) catch |err| {
             return switch (err) {
                 error.InvalidOffset => .INVAL,

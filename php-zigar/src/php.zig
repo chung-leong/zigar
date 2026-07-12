@@ -1937,6 +1937,10 @@ pub fn close(strm: *Stream) void {
     _ = pc._php_stream_free(strm, c.PHP_STREAM_FREE_CLOSE);
 }
 
+pub fn closeCasted(strm: *Stream) void {
+    _ = pc._php_stream_free(strm, c.PHP_STREAM_FREE_CLOSE_CASTED);
+}
+
 pub fn flush(strm: *Stream) void {
     _ = pc._php_stream_flush(strm, 0);
 }
@@ -2126,16 +2130,22 @@ pub fn copyFileRange(in_strm: *Stream, out_strm: *Stream, in_offset: ?*i64, out_
     var original_out_pos: i64 = 0;
     var copied: i64 = 0;
     if (in_offset) |ptr| {
+        const new_in_pos = ptr.*;
         original_in_pos = pc._php_stream_tell(in_strm);
         if (original_in_pos < 0) return error.Failure;
-        const pos = pc._php_stream_seek(in_strm, ptr.*, c.SEEK_SET);
-        if (pos < 0) return error.InvalidOffset;
+        if (original_in_pos != new_in_pos) {
+            const pos = pc._php_stream_seek(in_strm, @intCast(new_in_pos), c.SEEK_SET);
+            if (pos < 0) return error.InvalidOffset;
+        }
     }
     if (out_offset) |ptr| {
+        const new_out_pos = ptr.*;
         original_out_pos = pc._php_stream_tell(out_strm);
         if (original_out_pos < 0) return error.Failure;
-        const pos = pc._php_stream_seek(out_strm, ptr.*, c.SEEK_SET);
-        if (pos < 0) return error.InvalidOffset;
+        if (original_out_pos != new_out_pos) {
+            const pos = pc._php_stream_seek(out_strm, @intCast(new_out_pos), c.SEEK_SET);
+            if (pos < 0) return error.InvalidOffset;
+        }
     }
     var buf: [8192]u8 = undefined;
     var remaining = len;
