@@ -212,8 +212,8 @@ pub const CallDispatcher = struct {
         } else {
             if (c.pipe(&pipes) != 0) return error.UnableToOpenPipes;
             // set read end of pipe to non-blocking
-            const flags = c.fcntl(pipes[0], c.F_GETFL, 0);
-            c.fcntl(pipes[0], c.F_SETFL, flags | c.O_NONBLOCK);
+            const flags = c.fcntl(pipes[0], c.F_GETFL, @as(c_int, 0));
+            _ = c.fcntl(pipes[0], c.F_SETFL, flags | c.O_NONBLOCK);
         }
     }
 

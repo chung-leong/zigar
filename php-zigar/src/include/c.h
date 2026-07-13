@@ -13,4 +13,5 @@
 #ifdef linux
     #include <ucontext.h>
     #include <sys/prctl.h>
+    #include <fcntl.h>
 #endif

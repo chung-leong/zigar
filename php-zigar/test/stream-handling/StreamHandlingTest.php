@@ -2251,10 +2251,8 @@ class VirtualFSStream {
     function stream_seek($offset, $whence)
     {
         $content = $this->node->content;
-        echo "stream_seek\n";
         switch ($whence) {
             case SEEK_SET:
-                echo "offset = $offset\n";
                 if ($offset <= strlen($content) && $offset >= 0) {
                      $this->position = $offset;
                      return true;
