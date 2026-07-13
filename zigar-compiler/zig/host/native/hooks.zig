@@ -4536,7 +4536,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
             return null;
         }
 
-        pub fn SetEndOfFile(handle: HANDLE) BOOL {
+        pub fn SetEndOfFile(handle: HANDLE) callconv(WINAPI) BOOL {
             const fd = toDescriptor(handle);
             var result: c_int = undefined;
             if (redirector.ftruncateT(u64, fd, std.math.maxInt(u64), &result)) {
