@@ -3459,6 +3459,10 @@ pub fn LibcSubstituteWindows(comptime redirector: type) type {
 
         pub const lseeki64 = posix.lseek64;
 
+        pub fn _chsize(fd: c_int, size: c_long) callconv(.c) c_int {
+            return posix.ftruncate64(fd, size);
+        }
+
         pub fn _findclose(handle: isize) callconv(.c) c_int {
             const d: *std.c.DIR = @ptrFromInt(@as(usize, @bitCast(handle)));
             if (RedirectedDir.cast(d)) |dir| {
@@ -3602,6 +3606,7 @@ pub fn LibcSubstituteWindows(comptime redirector: type) type {
         const Self = @This();
         pub const Original = struct {
             pub var lseeki64: *const @TypeOf(Self.lseeki64) = undefined;
+            pub var _chsize: *const @TypeOf(Self._chsize) = undefined;
             pub var _findclose: *const @TypeOf(Self._findclose) = undefined;
             pub var _findfirst32: *const @TypeOf(Self._findfirst32) = undefined;
             pub var _findfirst64: *const @TypeOf(Self._findfirst64) = undefined;

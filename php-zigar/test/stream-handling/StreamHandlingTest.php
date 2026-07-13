@@ -882,7 +882,8 @@ final class StreamHandlingTest extends ZigarTestCase
         $handle = opendir("vfs://test");
         $m->remove($handle, 'test.txt');
         $this->assertArrayNotHasKey('test.txt', $dir->children);
-        $this->assertExceptionMessage('not found', function() use($handle, $m) {
+        $error_msg = (PHP_OS_FAMILY === 'Windows') ? 'access denied' : 'not found';
+        $this->assertExceptionMessage($error_msg, function() use($handle, $m) {
             $m->remove($handle, 'test.txt');
         });
     }
@@ -924,7 +925,8 @@ final class StreamHandlingTest extends ZigarTestCase
         $handle = opendir("vfs://test");
         $m->remove($handle, 'world');
         $this->assertArrayNotHasKey('world', $dir->children);
-        $this->assertExceptionMessage('not found', function() use($handle, $m) {
+        $error_msg = (PHP_OS_FAMILY === 'Windows') ? 'access denied' : 'not found';
+        $this->assertExceptionMessage($error_msg, function() use($handle, $m) {
             $m->remove($handle, 'world');
         });
     }

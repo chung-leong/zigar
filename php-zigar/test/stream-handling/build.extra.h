@@ -1,4 +1,5 @@
 #define _GNU_SOURCE
+#define _POSIX
 #include <stdio.h>
 #include <unistd.h>
 #include <fcntl.h>
