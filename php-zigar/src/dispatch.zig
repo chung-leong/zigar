@@ -513,25 +513,23 @@ pub const CallDispatcher = struct {
     }
 
     fn runScheduledTask() void {
-        while (true) {
-            const fd = pipes[0];
-            var task: ScheduledTask = undefined;
-            if (builtin.target.os.tag == .windows) {
-                const handle: c.HANDLE = @ptrFromInt(@as(usize, @bitCast(c._get_osfhandle(fd))));
-                var available: c.DWORD = undefined;
-                if (c.PeekNamedPipe(handle, null, 0, null, &available, null) == c.FALSE) return;
-                if (available < @sizeOf(ScheduledTask)) return;
-            }
-            const read = c.read(fd, @ptrCast(&task), @sizeOf(ScheduledTask));
-            if (read != @sizeOf(ScheduledTask)) return;
-            const self = task.self;
-            switch (task.operation) {
-                .jscall => |call| _ = self.handleJscall(call) catch unreachable,
-                .syscall => |call| _ = self.handleSyscall(call) catch unreachable,
-                .disable => self.disableMultithread() catch unreachable,
-            }
-            event_loop.resumePendingFiber();
+        const fd = pipes[0];
+        var task: ScheduledTask = undefined;
+        if (builtin.target.os.tag == .windows) {
+            const handle: c.HANDLE = @ptrFromInt(@as(usize, @bitCast(c._get_osfhandle(fd))));
+            var available: c.DWORD = undefined;
+            if (c.PeekNamedPipe(handle, null, 0, null, &available, null) == c.FALSE) return;
+            if (available < @sizeOf(ScheduledTask)) return;
         }
+        const read = c.read(fd, @ptrCast(&task), @sizeOf(ScheduledTask));
+        if (read != @sizeOf(ScheduledTask)) return;
+        const self = task.self;
+        switch (task.operation) {
+            .jscall => |call| _ = self.handleJscall(call) catch unreachable,
+            .syscall => |call| _ = self.handleSyscall(call) catch unreachable,
+            .disable => self.disableMultithread() catch unreachable,
+        }
+        event_loop.resumePendingFiber();
     }
 
     pub fn initializeThread(self: *@This()) !void {
