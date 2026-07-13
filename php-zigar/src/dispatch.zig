@@ -184,7 +184,7 @@ pub const CallDispatcher = struct {
         if (!thread_initialized) {
             in_main_thread = true;
             redirection_controller.installSignalHandler() catch {};
-            if (php.pipe(&pipes) < 0) return error.UnableToOpenPipe;
+            try createPipes();
             pipe_list_mutex.lock();
             defer pipe_list_mutex.unlock();
             for (pipes) |fd| try pipe_list.append(std.heap.c_allocator, fd);
@@ -193,8 +193,32 @@ pub const CallDispatcher = struct {
 
     pub fn uninstallHandlers() void {
         trapping_syscalls = false;
-        for (pipes) |fd| _ = c.close(fd);
+        destroyPipes();
         redirection_controller.uninstallSignalHandler();
+    }
+
+    fn createPipes() !void {
+        if (builtin.target.os.tag == .windows) {
+            var read_handle: c.HANDLE = undefined;
+            var write_handle: c.HANDLE = undefined;
+            var security: c.SECURITY_ATTRIBUTES = .{
+                .nLength = @sizeOf(c.SECURITY_ATTRIBUTES),
+                .lpSecurityDescriptor = null,
+                .bInheritHandle = c.TRUE,
+            };
+            if (c.CreatePipe(&read_handle, &write_handle, &security, 0) != c.TRUE) return error.UnableToOpenPipes;
+            pipes[0] = c._open_osfhandle(@bitCast(@intFromPtr(read_handle)), c._O_RDONLY);
+            pipes[1] = c._open_osfhandle(@bitCast(@intFromPtr(write_handle)), c._O_WRONLY);
+        } else {
+            if (c.pipe(&pipes) != 0) return error.UnableToOpenPipes;
+            // set read end of pipe to non-blocking
+            const flags = c.fcntl(pipes[0], c.F_GETFL, 0);
+            c.fcntl(pipes[0], c.F_SETFL, flags | c.O_NONBLOCK);
+        }
+    }
+
+    fn destroyPipes() void {
+        for (pipes) |fd| _ = c.close(fd);
     }
 
     pub fn createJsThunk(self: *@This(), class: *ZigClassEntry, callable: *Value, buffer: *ByteBuffer) !void {
@@ -296,12 +320,15 @@ pub const CallDispatcher = struct {
     fn scheduleTask(self: *@This(), operation: ScheduledTask.Operation) !void {
         const fd = self.pipe_ptr[1];
         const task: ScheduledTask = .{ .self = self, .operation = operation };
-        const written = c.write(fd, @ptrCast(&task), @sizeOf(ScheduledTask));
         if (builtin.target.os.tag == .windows) {
-            // segfault occurs without this call; not sure what the issue is
-            c.Sleep(0);
+            const handle: c.HANDLE = @ptrFromInt(@as(usize, @bitCast(c._get_osfhandle(fd))));
+            var written: c.DWORD = undefined;
+            if (c.WriteFile(handle, &task, @sizeOf(ScheduledTask), &written, null) == c.FALSE) return error.Unexpected;
+            if (written != @sizeOf(ScheduledTask)) return error.Unexpected;
+        } else {
+            const written = c.write(fd, @ptrCast(&task), @sizeOf(ScheduledTask));
+            if (written < 0) return error.Unexpected;
         }
-        if (written < 0) return error.Unexpected;
     }
 
     pub fn releaseCallingThread(handle: usize, err: E) void {
@@ -486,17 +513,25 @@ pub const CallDispatcher = struct {
     }
 
     fn runScheduledTask() void {
-        const fd = pipes[0];
-        var task: ScheduledTask = undefined;
-        const read = c.read(fd, @ptrCast(&task), @sizeOf(ScheduledTask));
-        if (read != @sizeOf(ScheduledTask)) return;
-        const self = task.self;
-        switch (task.operation) {
-            .jscall => |call| _ = self.handleJscall(call) catch unreachable,
-            .syscall => |call| _ = self.handleSyscall(call) catch unreachable,
-            .disable => self.disableMultithread() catch unreachable,
+        while (true) {
+            const fd = pipes[0];
+            var task: ScheduledTask = undefined;
+            if (builtin.target.os.tag == .windows) {
+                const handle: c.HANDLE = @ptrFromInt(@as(usize, @bitCast(c._get_osfhandle(fd))));
+                var available: c.DWORD = undefined;
+                if (c.PeekNamedPipe(handle, null, 0, null, &available, null) == c.FALSE) return;
+                if (available < @sizeOf(ScheduledTask)) return;
+            }
+            const read = c.read(fd, @ptrCast(&task), @sizeOf(ScheduledTask));
+            if (read != @sizeOf(ScheduledTask)) return;
+            const self = task.self;
+            switch (task.operation) {
+                .jscall => |call| _ = self.handleJscall(call) catch unreachable,
+                .syscall => |call| _ = self.handleSyscall(call) catch unreachable,
+                .disable => self.disableMultithread() catch unreachable,
+            }
+            event_loop.resumePendingFiber();
         }
-        event_loop.resumePendingFiber();
     }
 
     pub fn initializeThread(self: *@This()) !void {

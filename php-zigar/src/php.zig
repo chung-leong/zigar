@@ -1882,24 +1882,6 @@ pub fn getDescriptor(strm: *Stream) ?c_int {
     } else null;
 }
 
-pub fn pipe(fds: *[2]c_int) c_int {
-    if (builtin.target.os.tag == .windows) {
-        var read_pipe: c.HANDLE = undefined;
-        var write_pipe: c.HANDLE = undefined;
-        var security: c.SECURITY_ATTRIBUTES = .{
-            .nLength = @sizeOf(c.SECURITY_ATTRIBUTES),
-            .lpSecurityDescriptor = null,
-            .bInheritHandle = c.TRUE,
-        };
-        if (c.CreatePipe(&read_pipe, &write_pipe, &security, 0) != c.TRUE) return -1;
-        fds[0] = c._open_osfhandle(@bitCast(@intFromPtr(read_pipe)), c._O_RDONLY);
-        fds[1] = c._open_osfhandle(@bitCast(@intFromPtr(write_pipe)), 0);
-        return 0;
-    } else {
-        return c.pipe(fds);
-    }
-}
-
 pub fn close(strm: *Stream) void {
     _ = pc._php_stream_free(strm, c.PHP_STREAM_FREE_CLOSE);
 }

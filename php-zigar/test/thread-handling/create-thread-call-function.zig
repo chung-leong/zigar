@@ -2,8 +2,6 @@ const std = @import("std");
 
 const zigar = @import("zigar");
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-
 pub fn spawn(cb: *const fn () error{Unexpected}!void) !void {
     const ns = struct {
         fn run(f: *const fn () error{Unexpected}!void) void {
@@ -12,10 +10,7 @@ pub fn spawn(cb: *const fn () error{Unexpected}!void) !void {
             };
         }
     };
-    const thread = try std.Thread.spawn(.{
-        .allocator = gpa.allocator(),
-        .stack_size = 1024 * 512,
-    }, ns.run, .{cb});
+    const thread = try std.Thread.spawn(.{}, ns.run, .{cb});
     thread.detach();
 }
 

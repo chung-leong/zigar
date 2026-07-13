@@ -1,24 +1,25 @@
 const std = @import("std");
 
+const zigar = @import("zigar");
+
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
-pub const Struct = struct { number1: i32, number2: i32 };
-pub var ptr_maybe: ?*Struct = null;
-
-pub fn getAllocator() std.mem.Allocator {
-    return gpa.allocator();
+pub fn spawn(cb: *const fn () error{Unexpected}!void) !void {
+    const ns = struct {
+        fn run(f: *const fn () error{Unexpected}!void) void {
+            f() catch |err| {
+                std.debug.print("Error: {s}\n", .{@errorName(err)});
+            };
+        }
+    };
+    const thread = try std.Thread.spawn(.{}, ns.run, .{cb});
+    thread.detach();
 }
 
-pub fn allocate(a: std.mem.Allocator, len: usize) ![]u8 {
-    const slice = try a.alloc(u8, len);
-    for (slice) |*ptr| ptr.* = 77;
-    return slice;
+pub fn startup() !void {
+    try zigar.thread.use();
 }
 
-pub fn print() void {
-    if (ptr_maybe) |ptr| {
-        std.debug.print("{any}\n", .{ptr.*});
-    } else {
-        std.debug.print("empty\n", .{});
-    }
+pub fn shutdown() void {
+    zigar.thread.end();
 }
