@@ -6,6 +6,8 @@ use PhpSchool\CliMenu\MenuItem\CheckboxItem;
 use PhpSchool\CliMenu\MenuItem\RadioItem;
 use PhpZip\ZipFile;
 
+error_reporting(E_ALL ^ E_DEPRECATED);
+
 require_once(__DIR__ . '/vendor/autoload.php');
 
 class Settings {

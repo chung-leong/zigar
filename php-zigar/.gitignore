@@ -1,5 +1,4 @@
 autom4te.cache*
-build
 config.h
 config.h.in*
 config.log

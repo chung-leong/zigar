@@ -475,10 +475,10 @@ final class StreamHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/decompress.zig');
         $m->startup(1);
+        $input_path = __DIR__ . '/data/test.txt.gz';
+        $output_path = __DIR__ . '/data/decompressed.txt';
         try {
-            $input_path = __DIR__ . '/data/test.txt.gz';
             $input = fopen($input_path, 'r');
-            $output_path = __DIR__ . '/data/decompressed.txt';
             $output = fopen($output_path, 'w');
             $m->decompress($input, $output);
             fclose($input);
@@ -488,6 +488,7 @@ final class StreamHandlingTest extends ZigarTestCase
             $this->assertStringContainsString('shall not perish from the earth', $content);
         } finally {
             $m->shutdown();
+            @unlink($output_path);
         }
     }
 
@@ -845,14 +846,25 @@ final class StreamHandlingTest extends ZigarTestCase
             'world' => new VirtualDir(),
         ]);
         VirtualFSStream::add_root_node('test', $dir);
-        $this->expectOutput(<<<OUTPUT
-        . (dir)
-        .. (dir)
-        hello.txt (file)
-        test.txt (file)
-        world (dir)
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->expectOutput(<<<OUTPUT
+            . (dir)
+            .. (dir)
+            hello.txt (unknown)
+            test.txt (unknown)
+            world (unknown)
 
-        OUTPUT);
+            OUTPUT);
+        } else {
+            $this->expectOutput(<<<OUTPUT
+            . (dir)
+            .. (dir)
+            hello.txt (file)
+            test.txt (file)
+            world (dir)
+
+            OUTPUT);
+        }
         $m->print('/vfs://test');
     } 
 
