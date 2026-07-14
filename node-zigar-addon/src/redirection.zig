@@ -299,7 +299,8 @@ pub fn Controller(comptime Host: type) type {
         pub fn installHooksInLibraryOf(host: *Host, ptr: *const anyopaque) !LibExtent {
             var lib = try DynLib.openBySymbol(ptr);
             defer lib.close();
-            return try installHooks(host, &lib);
+            const extent = try installHooks(host, &lib);
+            return extent;
         }
 
         pub fn installHook(hook: Host.HookEntry, address: usize, read_only: bool) !void {

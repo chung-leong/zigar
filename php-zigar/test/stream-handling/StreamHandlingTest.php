@@ -495,13 +495,14 @@ final class StreamHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/stat-opened-file.zig');
         $file = new VirtualFile('This is a test and this is only a test');
-        $file->ctime = 1234;
+        $file->ctime = 12345;
         $dir = new VirtualDir([ "test.txt" => $file ]);
         VirtualFSStream::add_root_node('hello', $dir);
         $handle = fopen("vfs://hello/test.txt", 'r');
+        $ctime = (PHP_OS_FAMILY === 'Windows') ? '12300' : '12345000000000';
         $this->expectOutput(<<<OUTPUT
         size = 38
-        ctime = 1234000000000
+        ctime = $ctime
         mtime = 0
         atime = 0
 
@@ -513,12 +514,13 @@ final class StreamHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/stat-opened-file-with-posix-function.zig');
         $file = new VirtualFile('This is a test and this is only a test');
-        $file->ctime = 1234;
+        $file->ctime = 123456789000;
         $dir = new VirtualDir([ "test.txt" => $file ]);
         VirtualFSStream::add_root_node('hello', $dir);
+        $ctime = (PHP_OS_FAMILY === 'Windows') ? '123' : '123456789000';
         $this->expectOutput(<<<OUTPUT
         size = 38
-        ctime = 1234,0
+        ctime = $ctime,0
         mtime = 0,0
         atime = 0,0
 
@@ -546,16 +548,19 @@ final class StreamHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/stat-file-by-path-with-posix-function.zig');
         $file = new VirtualFile('This is a test and this is only a test');
-        $file->ctime = 1234;
-        $file->atime = 4567;
-        $file->mtime = 8888;
+        $file->ctime = 123400000000;
+        $file->atime = 456700000000;
+        $file->mtime = 888800000000;
         $dir = new VirtualDir([ "test.txt" => $file ]);
         VirtualFSStream::add_root_node('hello', $dir);
+        $ctime = (PHP_OS_FAMILY === 'Windows') ? '123' : '123400000000';
+        $atime = (PHP_OS_FAMILY === 'Windows') ? '456' : '456700000000';
+        $mtime = (PHP_OS_FAMILY === 'Windows') ? '888' : '888800000000';
         $this->expectOutput(<<<OUTPUT
         size = 38
-        ctime = 1234,0
-        mtime = 8888,0
-        atime = 4567,0
+        ctime = $ctime,0
+        mtime = $mtime,0
+        atime = $atime,0
 
         OUTPUT);
         $m->print("/vfs://hello/test.txt");

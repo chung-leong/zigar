@@ -7,6 +7,7 @@ const c = @import("c");
 pub const DynLib = struct {
     handle: Handle,
     path: [:0]const u8,
+    is_handle_owner: bool,
 
     const Handle = switch (builtin.target.os.tag) {
         .windows => std.os.windows.HMODULE,
@@ -34,7 +35,7 @@ pub const DynLib = struct {
                 break :load std.c.dlopen(path_copy, @bitCast(flags)) orelse return error.FileNotFound;
             },
         };
-        return .{ .handle = handle, .path = path_copy };
+        return .{ .handle = handle, .path = path_copy, .is_handle_owner = true };
     }
 
     pub fn openBySymbol(ptr: *const anyopaque) !@This() {
@@ -47,7 +48,7 @@ pub const DynLib = struct {
                 const len = c.GetModuleFileNameA(handle, null, 0);
                 const path_copy = try std.heap.c_allocator.alloc(u8, len + 1);
                 _ = c.GetModuleFileNameA(handle, null, 0);
-                return .{ .handle = @ptrCast(handle), .path = @ptrCast(path_copy) };
+                return .{ .handle = @ptrCast(handle), .path = @ptrCast(path_copy), .is_handle_owner = false };
             },
             else => {
                 var info: c.Dl_info = undefined;
@@ -59,10 +60,12 @@ pub const DynLib = struct {
     }
 
     pub fn close(self: *@This()) void {
-        _ = switch (builtin.target.os.tag) {
-            .windows => std.os.windows.CloseHandle(self.handle),
-            else => std.c.dlclose(self.handle),
-        };
+        if (self.is_handle_owner) {
+            _ = switch (builtin.target.os.tag) {
+                .windows => std.os.windows.CloseHandle(self.handle),
+                else => std.c.dlclose(self.handle),
+            };
+        }
         std.heap.c_allocator.free(self.path);
     }
 
