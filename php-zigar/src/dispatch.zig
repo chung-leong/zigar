@@ -99,14 +99,12 @@ pub const CallDispatcher = struct {
         stream: *Stream,
         path: *String,
         fd_stat: std.os.wasi.fdstat_t,
-        dir_entry: ?*php.DirEntry = null,
-        flags: packed struct {
-            populated: bool = false,
-        } = .{},
+        dir_index: usize = 0,
+        dir_entries: std.ArrayList(php.DirEntry) = .empty,
 
-        pub fn deinit(self: *const @This()) void {
+        pub fn deinit(self: *@This()) void {
             php.release(self.path);
-            if (self.dir_entry) |de| php.allocator.destroy(de);
+            self.dir_entries.deinit(php.allocator);
             const res = php.getStreamResource(self.stream);
             php.release(res);
         }
@@ -584,7 +582,7 @@ pub const CallDispatcher = struct {
 
     fn removeAllStreams(self: *@This()) void {
         var list = self.stream_list;
-        while (list.pop()) |*item| item.deinit();
+        while (list.pop()) |*item| @constCast(item).deinit();
         list.deinit(php.allocator);
     }
 
@@ -703,9 +701,6 @@ pub const CallDispatcher = struct {
         php.addRef(path);
         const res = php.getStreamResource(strm);
         php.addRef(res);
-        if (stat.fs_filetype == .DIRECTORY) {
-            entry.dir_entry = php.allocator.create(php.DirEntry) catch null;
-        }
         return entry;
     }
 
@@ -954,6 +949,17 @@ pub const CallDispatcher = struct {
 
     fn handleSeek(self: *@This(), args: anytype) !E {
         const entry = self.findStream(args.fd) catch return .BADF;
+        if (entry.dir_entries.items.len > 0) {
+            if (args.offset != 0) {
+                if (args.whence != c.SEEK_SET) return .INVAL;
+                entry.dir_index = @intCast(args.offset);
+                return .SUCCESS;
+            } else {
+                // clear cached entries when it's a rewind
+                entry.dir_entries.clearRetainingCapacity();
+                entry.dir_index = 0;
+            }
+        }
         php.seek(entry.stream, args.offset, args.whence) catch return .SPIPE;
         args.position = php.tell(entry.stream) catch return .SPIPE;
         return .SUCCESS;
@@ -1147,16 +1153,19 @@ pub const CallDispatcher = struct {
 
     fn handleGetdents(self: *@This(), args: anytype) !E {
         const entry = self.findStream(args.dirfd) catch return .BADF;
-        const dir_entry = entry.dir_entry orelse return .NOMEM;
         var index: usize = 0;
         var remaining: usize = args.len;
         while (true) {
-            if (!entry.flags.populated) {
-                if (php.readdir(entry.stream, dir_entry)) {
-                    entry.flags.populated = true;
-                } else break;
+            while (entry.dir_index >= entry.dir_entries.items.len) {
+                const new_dir_entry = try entry.dir_entries.addOne(php.allocator);
+                if (!php.readdir(entry.stream, new_dir_entry)) {
+                    _ = entry.dir_entries.pop();
+                    break;
+                }
             }
-            const name_ptr: [*:0]u8 = @ptrCast(&dir_entry.d_name);
+            if (entry.dir_index >= entry.dir_entries.items.len) break;
+            const dir_entry = entry.dir_entries.items[entry.dir_index];
+            const name_ptr: [*:0]const u8 = @ptrCast(&dir_entry.d_name);
             const name = name_ptr[0..std.mem.len(name_ptr)];
             if (name.len + @sizeOf(std.os.wasi.dirent_t) > remaining) {
                 break;
@@ -1170,7 +1179,7 @@ pub const CallDispatcher = struct {
                 info.filetype = .UNKNOWN;
             };
             const out_dirent: *align(1) std.os.wasi.dirent_t = @ptrCast(&args.buffer[index]);
-            out_dirent.next = @intFromPtr(dir_entry);
+            out_dirent.next = entry.dir_index + 1;
             out_dirent.ino = info.ino;
             out_dirent.namlen = @intCast(name.len);
             out_dirent.type = info.filetype;
@@ -1178,7 +1187,7 @@ pub const CallDispatcher = struct {
             const ei = si + name.len;
             const out_name = args.buffer[si..ei];
             @memcpy(out_name, name);
-            entry.flags.populated = false;
+            entry.dir_index += 1;
             index += name.len + @sizeOf(std.os.wasi.dirent_t);
             remaining -= name.len + @sizeOf(std.os.wasi.dirent_t);
         }
