@@ -846,6 +846,8 @@ final class StreamHandlingTest extends ZigarTestCase
         ]);
         VirtualFSStream::add_root_node('test', $dir);
         $this->expectOutput(<<<OUTPUT
+        . (dir)
+        .. (dir)
         hello.txt (file)
         test.txt (file)
         world (dir)

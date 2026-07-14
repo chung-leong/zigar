@@ -108,6 +108,14 @@ pub const CallDispatcher = struct {
             const res = php.getStreamResource(self.stream);
             php.release(res);
         }
+
+        pub fn addRootDirEntries(self: *@This()) !void {
+            inline for (.{ 1, 2 }) |level| {
+                const dir_entry = try self.dir_entries.addOne(php.allocator);
+                inline for (0..level) |i| dir_entry.d_name[i] = '.';
+                dir_entry.d_name[level] = 0;
+            }
+        }
     };
     const ScheduledTask = struct {
         self: *CallDispatcher,
@@ -701,6 +709,7 @@ pub const CallDispatcher = struct {
         php.addRef(path);
         const res = php.getStreamResource(strm);
         php.addRef(res);
+        if (stat.fs_filetype == .DIRECTORY) try entry.addRootDirEntries();
         return entry;
     }
 
@@ -958,6 +967,7 @@ pub const CallDispatcher = struct {
                 // clear cached entries when it's a rewind
                 entry.dir_entries.clearRetainingCapacity();
                 entry.dir_index = 0;
+                try entry.addRootDirEntries();
             }
         }
         php.seek(entry.stream, args.offset, args.whence) catch return .SPIPE;
@@ -1153,6 +1163,7 @@ pub const CallDispatcher = struct {
 
     fn handleGetdents(self: *@This(), args: anytype) !E {
         const entry = self.findStream(args.dirfd) catch return .BADF;
+        const dir_path = php.getStringContent(entry.path);
         var index: usize = 0;
         var remaining: usize = args.len;
         while (true) {
@@ -1170,14 +1181,18 @@ pub const CallDispatcher = struct {
             if (name.len + @sizeOf(std.os.wasi.dirent_t) > remaining) {
                 break;
             }
-            const dir_path = php.getStringContent(entry.path);
-            const path = joinPath(dir_path, name);
-            defer php.release(path);
             var info: std.os.wasi.filestat_t = undefined;
-            php.stat(path, null, .{}, &info) catch {
+            if (entry.dir_index < 2) {
                 info.ino = 0;
-                info.filetype = .UNKNOWN;
-            };
+                info.filetype = .DIRECTORY;
+            } else {
+                const path = joinPath(dir_path, name);
+                defer php.release(path);
+                php.stat(path, null, .{}, &info) catch {
+                    info.ino = 0;
+                    info.filetype = .UNKNOWN;
+                };
+            }
             const out_dirent: *align(1) std.os.wasi.dirent_t = @ptrCast(&args.buffer[index]);
             out_dirent.next = entry.dir_index + 1;
             out_dirent.ino = info.ino;
