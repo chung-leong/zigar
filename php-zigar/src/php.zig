@@ -1944,48 +1944,27 @@ pub fn performOperation(opcode: c_int, op1: *const Value, op2: *const Value) !Va
 }
 
 fn copyStat(in: *c.zend_stat_t, out: *std.os.wasi.filestat_t) void {
+    out.size = convertSize(in.st_size);
     if (@hasField(c.zend_stat_t, "st_atim")) {
-        out.size = convertSize(in.st_size);
         out.atim = convertTimespec(in.st_atim);
         out.ctim = convertTimespec(in.st_ctim);
         out.mtim = convertTimespec(in.st_mtim);
-        out.ino = @intCast(in.st_ino);
-        out.dev = @intCast(in.st_dev);
-        out.filetype = switch (in.st_mode & c.S_IFMT) {
-            c.S_IFSOCK => .SOCKET_STREAM,
-            c.S_IFLNK => .SYMBOLIC_LINK,
-            c.S_IFREG => .REGULAR_FILE,
-            c.S_IFBLK => .BLOCK_DEVICE,
-            c.S_IFDIR => .DIRECTORY,
-            c.S_IFCHR => .CHARACTER_DEVICE,
-            else => .UNKNOWN,
-        };
     } else if (@hasField(c.zend_stat_t, "st_atimespec")) {
         // MacOS
-        out.size = convertSize(in.st_size);
         out.atim = convertTimespec(in.st_atimespec);
         out.ctim = convertTimespec(in.st_ctimespec);
         out.mtim = convertTimespec(in.st_mtimespec);
-        out.ino = @intCast(in.st_ino);
-        out.dev = @intCast(in.st_dev);
-        out.filetype = switch (in.st_mode & c.S_IFMT) {
-            c.S_IFSOCK => .SOCKET_STREAM,
-            c.S_IFLNK => .SYMBOLIC_LINK,
-            c.S_IFREG => .REGULAR_FILE,
-            c.S_IFBLK => .BLOCK_DEVICE,
-            c.S_IFDIR => .DIRECTORY,
-            c.S_IFCHR => .CHARACTER_DEVICE,
-            else => .UNKNOWN,
-        };
     } else if (@hasField(c.zend_stat_t, "st_atime")) {
         // Windows
-        out.size = convertSize(in.st_size);
         out.atim = convertTimespec(in.st_atime);
         out.ctim = convertTimespec(in.st_ctime);
         out.mtim = convertTimespec(in.st_mtime);
-        out.ino = @intCast(in.st_ino);
-        out.dev = @intCast(in.st_dev);
+    } else {
+        @compileError("Unsupported stat struct");
+    }
+    if (@hasDecl(c, "S_IFSOCK")) {
         out.filetype = switch (in.st_mode & c.S_IFMT) {
+            c.S_IFSOCK => .SOCKET_STREAM,
             c.S_IFLNK => .SYMBOLIC_LINK,
             c.S_IFREG => .REGULAR_FILE,
             c.S_IFBLK => .BLOCK_DEVICE,
@@ -1994,8 +1973,19 @@ fn copyStat(in: *c.zend_stat_t, out: *std.os.wasi.filestat_t) void {
             else => .UNKNOWN,
         };
     } else {
-        @compileError("Unsupported stat struct");
+        // Windows
+        out.filetype = switch (in.st_mode & c.S_IFMT) {
+            c.S_IFLNK => .SYMBOLIC_LINK,
+            c.S_IFREG => .REGULAR_FILE,
+            c.S_IFBLK => .BLOCK_DEVICE,
+            c.S_IFDIR => .DIRECTORY,
+            c.S_IFCHR => .CHARACTER_DEVICE,
+            else => .UNKNOWN,
+        };
     }
+    out.ino = @intCast(in.st_ino);
+    out.dev = @intCast(in.st_dev);
+    out.nlink = if (@hasField(c.zend_stat_t, "nlink")) in.nlink else 0;
 }
 
 fn convertSize(value: anytype) usize {

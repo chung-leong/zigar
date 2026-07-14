@@ -848,8 +848,8 @@ final class StreamHandlingTest extends ZigarTestCase
         VirtualFSStream::add_root_node('test', $dir);
         if (PHP_OS_FAMILY === 'Windows') {
             $this->expectOutput(<<<OUTPUT
-            . (dir)
-            .. (dir)
+            . (unknown)
+            .. (unknown)
             hello.txt (unknown)
             test.txt (unknown)
             world (unknown)
