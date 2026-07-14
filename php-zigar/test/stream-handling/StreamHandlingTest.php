@@ -334,14 +334,17 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertTrue($result1);
         $result2 = $m->check($url_path, write: true);
         $this->assertTrue($result2);
-        $result3 = $m->check($url_path, execute: true);
-        $this->assertFalse($result3);
-        $stat = [
-            'mode' => 0o0040000,
-            'size' => 0,
-        ];
-        $result4 = $m->check($url_path, execute: true);
-        $this->assertTrue($result4);
+        if (PHP_OS_FAMILY != 'Windows') {
+            // for Windows, the execute flag is always true
+            $result3 = $m->check($url_path, execute: true);
+            $this->assertFalse($result3);
+            $stat = [
+                'mode' => 0o0040000,
+                'size' => 0,
+            ];
+            $result4 = $m->check($url_path, execute: true);
+            $this->assertTrue($result4);
+        }
     }
 
     /**
@@ -967,7 +970,8 @@ final class StreamHandlingTest extends ZigarTestCase
         $handle = opendir("vfs://test");
         $m->add($handle, 'cow');
         $this->assertArrayHasKey('cow', $dir->children);
-        $this->assertExceptionMessage('path already exists', function() use($handle, $m) {
+        $error_msg = (PHP_OS_FAMILY === 'Windows') ? 'access denied' : 'path already exists';
+        $this->assertExceptionMessage($error_msg, function() use($handle, $m) {
             $m->add($handle, 'world');
         });
     }

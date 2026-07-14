@@ -4029,7 +4029,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
                     // creating a directory
                     var int_result: c_int = undefined;
                     if (redirector.mkdirat(dirfd, path_wtf8, 0, &int_result)) {
-                        if (result < 0) return .ACCESS_DENIED;
+                        if (int_result < 0) return .ACCESS_DENIED;
                         result = int_result;
                         handle.* = createTemporaryHandle(path_wtf8, dirfd, dir_op) catch return .NO_MEMORY;
                         io_status_block.Information = c.FILE_CREATED;
