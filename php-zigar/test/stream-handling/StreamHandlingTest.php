@@ -515,10 +515,10 @@ final class StreamHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/stat-opened-file-with-posix-function.zig');
         $file = new VirtualFile('This is a test and this is only a test');
-        $file->ctime = 123456789000;
+        $file->ctime = (PHP_OS_FAMILY === 'Windows') ? 123456789000 : 123456789;
         $dir = new VirtualDir([ "test.txt" => $file ]);
         VirtualFSStream::add_root_node('hello', $dir);
-        $ctime = (PHP_OS_FAMILY === 'Windows') ? '123' : '123456789000';
+        $ctime = (PHP_OS_FAMILY === 'Windows') ? '123' : '123456789';
         $this->expectOutput(<<<OUTPUT
         size = 38
         ctime = $ctime,0
@@ -549,14 +549,14 @@ final class StreamHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/stat-file-by-path-with-posix-function.zig');
         $file = new VirtualFile('This is a test and this is only a test');
-        $file->ctime = 123400000000;
-        $file->atime = 456700000000;
-        $file->mtime = 888800000000;
+        $file->ctime = (PHP_OS_FAMILY === 'Windows') ? 123400000000 : 1234;
+        $file->atime = (PHP_OS_FAMILY === 'Windows') ? 456700000000 : 4567;
+        $file->mtime = (PHP_OS_FAMILY === 'Windows') ? 888800000000 : 8888;
         $dir = new VirtualDir([ "test.txt" => $file ]);
         VirtualFSStream::add_root_node('hello', $dir);
-        $ctime = (PHP_OS_FAMILY === 'Windows') ? '123' : '123400000000';
-        $atime = (PHP_OS_FAMILY === 'Windows') ? '456' : '456700000000';
-        $mtime = (PHP_OS_FAMILY === 'Windows') ? '888' : '888800000000';
+        $ctime = (PHP_OS_FAMILY === 'Windows') ? '123' : '1234';
+        $atime = (PHP_OS_FAMILY === 'Windows') ? '456' : '4567';
+        $mtime = (PHP_OS_FAMILY === 'Windows') ? '888' : '8888';
         $this->expectOutput(<<<OUTPUT
         size = 38
         ctime = $ctime,0
