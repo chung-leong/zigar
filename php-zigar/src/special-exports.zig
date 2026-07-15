@@ -92,8 +92,9 @@ pub const SpecialExports = struct {
         php.addRef(class.object);
         // initialize the PHP portion
         const obj = self.object();
-        obj.handlers = &self.handlers;
         php.initializeStandardObject(obj, &self.class_entry);
+        // handlers need to be set after zend_object_std_init() due to change in PHP 8.3
+        obj.handlers = &self.handlers;
         return obj;
     }
 
@@ -112,27 +113,19 @@ pub const SpecialExports = struct {
     }
 
     pub fn readProperty(obj: *Object, name: *String, _: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
-        _ = obj;
-        _ = name;
-        _ = cache_slot;
+        _ = .{ obj, name, cache_slot };
         php.throwError(error.Missing);
         retval.* = php.createValueNull();
         return retval;
     }
 
     pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
-        _ = obj;
-        _ = value;
-        _ = name;
-        _ = cache_slot;
+        _ = .{ obj, value, name, cache_slot };
         return error.Missing;
     }
 
     pub fn hasProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque) c_int {
-        _ = prop_type;
-        _ = obj;
-        _ = name;
-        _ = cache_slot;
+        _ = .{ prop_type, obj, name, cache_slot };
         return 0;
     }
 
