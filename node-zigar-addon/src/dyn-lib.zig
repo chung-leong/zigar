@@ -62,7 +62,7 @@ pub const DynLib = struct {
     pub fn close(self: *@This()) void {
         if (self.is_handle_owner) {
             _ = switch (builtin.target.os.tag) {
-                .windows => std.os.windows.CloseHandle(self.handle),
+                .windows => std.os.windows.FreeLibrary(self.handle),
                 else => std.c.dlclose(self.handle),
             };
         }
