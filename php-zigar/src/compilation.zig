@@ -408,7 +408,6 @@ pub const ZigCompiler = struct {
         var stderr: std.ArrayList(u8) = .empty;
         child.collectOutput(al, &stdout, &stderr, max_output) catch {};
         const term = try child.wait();
-
         return switch (term) {
             .Exited => |exit_code| switch (exit_code) {
                 0 => {},

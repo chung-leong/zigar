@@ -81,6 +81,7 @@ pub const ModuleHost = struct {
             .module_path = php.createString(std.mem.sliceTo(module.module_path, 0)),
             .plain_object_table = php.createHashTable(null),
             .exception_table = php.createHashTable(php.getDestructor(.value)),
+            .library = lib,
         };
         prev_cache_mask = cache_mask;
         // install hooks
