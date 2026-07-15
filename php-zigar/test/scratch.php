@@ -3,7 +3,7 @@
 $m = zigar_use(__DIR__ . '/scratch.zig');
 
 $m->hello();
-$m->__zigar->redirect(2, STDERR);
+$m->__zigar->redirect('stderr', STDERR);
 $m->hello();
-$m->__zigar->redirect(2, fopen("php://output"));
+$m->__zigar->redirect('stderr', fopen("php://output", 'w'));
 $m->hello();
