@@ -730,7 +730,7 @@ pub fn getValueString(value: *const Value) !*String {
     };
 }
 
-pub fn getValueStringContent(value: *const Value) ![]const u8 {
+pub fn getValueStringContent(value: *const Value) ![:0]const u8 {
     return switch (value.u1.v.type) {
         c.IS_STRING => getStringContent(value.value.str),
         else => error.NotString,
@@ -866,10 +866,10 @@ pub fn createInternedString(s: []const u8) *String {
     return zend_string_init_interned.?(s.ptr, s.len, false);
 }
 
-pub fn getStringContent(str: *const String) []const u8 {
+pub fn getStringContent(str: *const String) [:0]const u8 {
     const s: [*]const u8 = @ptrCast(&str.*.val[0]);
     const len = str.*.len;
-    return s[0..len];
+    return @ptrCast(s[0..len]);
 }
 
 pub fn compareStrings(s1: *const String, s2: *const String) bool {
@@ -2165,8 +2165,6 @@ fn getStreamWrapper(path: []const u8, comptime name: []const u8) !std.meta.Tuple
     return .{ wrapper, @field(wrapper.*.wops.*, name) };
 }
 
-pub const OnModified = fn (*IniEntry, *String, *anyopaque, *anyopaque, *anyopaque, c_int) c_int;
-
 pub fn createHandlerTable(comptime T: type, comptime offset: comptime_int) ObjectHandlers {
     var handlers: ObjectHandlers = undefined;
     handlers.offset = offset;
@@ -2219,16 +2217,12 @@ pub fn unregisterIniEntries(module_number: c_int) void {
     pc.zend_unregister_ini_entries(module_number);
 }
 
-pub fn onUpdateBool(entry: [*c]IniEntry, new_value: [*c]String, mh_arg1: ?*anyopaque, mh_arg2: ?*anyopaque, mh_arg3: ?*anyopaque, stage: c_int) callconv(.c) c_int {
-    return pc.OnUpdateBool(entry, new_value, mh_arg1, mh_arg2, mh_arg3, stage);
+pub fn parseBool(s: *String) bool {
+    return pc.zend_ini_parse_bool(s);
 }
 
-pub fn onUpdateLong(entry: [*c]IniEntry, new_value: [*c]String, mh_arg1: ?*anyopaque, mh_arg2: ?*anyopaque, mh_arg3: ?*anyopaque, stage: c_int) callconv(.c) c_int {
-    return pc.OnUpdateLong(entry, new_value, mh_arg1, mh_arg2, mh_arg3, stage);
-}
-
-pub fn onUpdateString(entry: [*c]IniEntry, new_value: [*c]String, mh_arg1: ?*anyopaque, mh_arg2: ?*anyopaque, mh_arg3: ?*anyopaque, stage: c_int) callconv(.c) c_int {
-    return pc.OnUpdateString(entry, new_value, mh_arg1, mh_arg2, mh_arg3, stage);
+pub fn parseLong(s: *String) Long {
+    return pc.zend_atol(&s.val[0], s.len);
 }
 
 pub fn infoTableStart() void {

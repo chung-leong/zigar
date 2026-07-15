@@ -2,11 +2,13 @@ const std = @import("std");
 const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
+const AbortSignal = @import("abort-signal.zig").AbortSignal;
 const BufferMap = @import("buffer.zig").BufferMap;
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
 const DynLib = @import("dyn-lib.zig").DynLib;
 const GarbageCollectionBuffer = @import("gc.zig").GarbageCollectionBuffer;
+const js_compat = @import("js-compat.zig");
 const ArgStruct = @import("module/arg-struct.zig").ArgStruct;
 const ModuleGeneric = @import("module/native/interface.zig").Module;
 const ObjectMap = @import("object.zig").ObjectMap;
@@ -45,6 +47,25 @@ pub const ModuleHost = struct {
     const AllocatorMethodId = enum(usize) { alloc = 1, resize, remap, free };
 
     threadlocal var prev_cache_mask: usize = 0;
+
+    pub fn setup() !void {
+        try ZigClassEntry.registerRootClass();
+        errdefer ZigClassEntry.unregisterRootClass();
+        try ZigException.registerClass();
+        errdefer ZigException.unregisterClass();
+        try AbortSignal.registerClass();
+        errdefer AbortSignal.unregisterClass();
+        try js_compat.registerClasses();
+        errdefer js_compat.registerClasses();
+    }
+
+    pub fn shutdown() void {
+        ZigClassEntry.unregisterRootClass();
+        ZigException.unregisterClass();
+        AbortSignal.unregisterClass();
+        js_compat.unregisterClasses();
+        CallDispatcher.uninstallHandlers();
+    }
 
     pub fn load(path: []const u8) !Value {
         var lib: DynLib = try DynLib.open(path);
