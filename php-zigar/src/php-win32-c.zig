@@ -46,6 +46,7 @@ const ZendFastCall = enum {
     convert_to_object,
     gc_possible_root,
     instanceof_function_slow,
+    zend_atol,
     zend_compare,
     zend_hash_del,
     zend_hash_destroy,

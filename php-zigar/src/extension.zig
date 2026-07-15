@@ -56,15 +56,14 @@ export fn php_zigar_mod_init(_: c_int, module_number: c_int) php.Result {
     Options.setup(module_number) catch return php.FAILURE;
     ModuleHost.setup() catch return php.FAILURE;
     options = .init();
+    options_set = true;
+    if (php.use_tsrm) default_options = &options;
     return php.SUCCESS;
 }
 
 export fn php_zigar_mod_shutdown(_: c_int, module_number: c_int) php.Result {
     ModuleHost.shutdown();
     Options.shutdown(module_number);
-    if (php.use_tsrm) {
-        default_options = &options;
-    }
     return php.SUCCESS;
 }
 
