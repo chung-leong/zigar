@@ -217,6 +217,9 @@ foreach ($settings->versions as $version) {
                 '8.5' => "https://downloads.php.net/~windows/releases/php-devel-pack-8.5.8-Win32-vs17-x64.zip",
             ];
             $link = $links[$version];
+            if (!in_array('https', stream_get_wrappers())) {
+                $link = str_replace('https:', 'http:', $link);
+            }
             echo "Downloading $link\n";
             $zip_contents = file_get_contents($link);
             if (!in_array("var", stream_get_wrappers())) {
