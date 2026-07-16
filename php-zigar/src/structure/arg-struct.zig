@@ -172,6 +172,12 @@ pub const ArgStruct = struct {
                 }
             };
         }
+        // initialize fields of optional struct to default values
+        if (static.last_arg_optional and index != static.arg_accessors.len) {
+            const empty_initializer = php.createValueArray(@constCast(php.empty_array));
+            const acc = static.arg_accessors[static.arg_accessors.len - 1];
+            try acc.set(self, &empty_initializer);
+        }
         // initialize special arguments
         inline for (.{ .allocator, .promise, .generator, .abort_signal }) |t| {
             if (@field(static, @tagName(t))) |m| {

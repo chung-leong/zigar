@@ -598,14 +598,6 @@ pub fn createValueClosure(func: *Function, scope: ?*ClassEntry, called_scope: ?*
     return result;
 }
 
-pub fn empty(comptime T: type) *T {
-    return switch (T) {
-        String => pc.zend_empty_string,
-        Array => @constCast(&pc.zend_empty_array),
-        else => @compileError("No empty version: " ++ @typeName(T)),
-    };
-}
-
 pub fn convertValue(value: *Value, desired_type: ValueType) !void {
     switch (desired_type) {
         .boolean => pc.convert_to_boolean(value),
