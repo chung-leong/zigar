@@ -28,7 +28,7 @@ pub fn Module(comptime Value: type) type {
             libc: bool,
             io_redirection: bool,
             debug: bool,
-            _: u28 = 0,
+            _: u27 = 0,
         };
         pub const Imports = extern struct { // vtable that's filled by the addon
             create_bool: *const fn (*Host, bool, *Value) callconv(.c) E,
