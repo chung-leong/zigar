@@ -584,20 +584,6 @@ pub const Struct = struct {
         const class = ZigClassEntry.fromObject(obj);
         const self = fromObject(obj);
         switch (class.purpose) {
-            .file => if (self.getProperty(N("handle"), null) catch null) |handle| {
-                if (getDescriptor(&handle) catch null) |fd| {
-                    if (class.host.dispatcher.isVirtualStream(fd)) {
-                        class.host.dispatcher.removeStream(fd) catch {};
-                    }
-                }
-            },
-            .directory => if (self.getProperty(N("fd"), null) catch null) |handle| {
-                if (getDescriptor(&handle) catch null) |fd| {
-                    if (class.host.dispatcher.isVirtualStream(fd)) {
-                        class.host.dispatcher.removeStream(fd) catch {};
-                    }
-                }
-            },
             inline .promise, .generator, .abort_signal => |t| {
                 if (self.buffer.flags.contains_special_contents and !php.inResourceCleanup()) {
                     const T = switch (t) {

@@ -30,6 +30,8 @@ pub const Resource = c.zend_resource;
 pub const Result = c.zend_result;
 pub const Stream = c.php_stream;
 pub const StreamContext = c.php_stream_context;
+pub const StreamWrapper = c.php_stream_wrapper;
+pub const StreamWrapperOps = c.php_stream_wrapper_ops;
 pub const String = c.zend_string;
 pub const Uchar = c.zend_uchar;
 pub const Ulong = c.zend_ulong;
@@ -1828,6 +1830,8 @@ extern fn get_stream_flags(strm: *Stream) u32;
 extern fn get_stream_handlers(strm: *Stream) *const c.php_stream_ops;
 extern fn get_stream_mode(strm: *Stream) ?[*:0]const u8;
 extern fn get_stream_wrapper_data(strm: *Stream) *Value;
+extern fn get_stream_wrapper(strm: *Stream) *StreamWrapper;
+extern fn set_stream_wrapper(strm: *Stream, wrapper: *StreamWrapper) void;
 extern fn set_stream_no_close(strm: *Stream) void;
 extern fn is_stdio_stream(strm: *Stream) bool;
 
@@ -1850,6 +1854,14 @@ pub fn isStdIOStream(strm: *Stream) bool {
 
 pub fn preserveStream(strm: *Stream) void {
     set_stream_no_close(strm);
+}
+
+pub fn getStreamWrapper(strm: *Stream) *StreamWrapper {
+    return get_stream_wrapper(strm);
+}
+
+pub fn setStreamWrapper(strm: *Stream, wrapper: *StreamWrapper) void {
+    set_stream_wrapper(strm, wrapper);
 }
 
 pub fn openDescriptor(fd: c_int, mode: [*c]const u8) !*Stream {
@@ -2001,7 +2013,7 @@ fn convertTimespec(value: anytype) u64 {
 
 pub fn unlink(path: *const String, context: ?*StreamContext) !void {
     const p = getStringContent(path);
-    const wrapper, const handler = try getStreamWrapper(p, "unlink");
+    const wrapper, const handler = try findStreamWrapper(p, "unlink");
     const result = handler.?(wrapper, p.ptr, 0, context);
     if (result == 0) return error.Failure;
 }
@@ -2009,8 +2021,8 @@ pub fn unlink(path: *const String, context: ?*StreamContext) !void {
 pub fn rename(path: *const String, new_path: *const String, context: ?*StreamContext) !void {
     const p = getStringContent(path);
     const np = getStringContent(new_path);
-    const wrapper, const handler = try getStreamWrapper(p, "rename");
-    const new_wrapper, _ = try getStreamWrapper(np, "rename");
+    const wrapper, const handler = try findStreamWrapper(p, "rename");
+    const new_wrapper, _ = try findStreamWrapper(np, "rename");
     if (wrapper != new_wrapper) return error.Failure;
     if (handler.?(wrapper, p.ptr, np.ptr, 0, context) == 0) return error.Failure;
 }
@@ -2142,11 +2154,11 @@ pub fn touch(path: *String, timebuf: *const c.utimbuf, context: ?*StreamContext)
 
 fn setMetadata(path: *String, op: c_int, param_ptr: ?*const anyopaque, context: ?*StreamContext) !void {
     const p = getStringContent(path);
-    const wrapper, const handler = try getStreamWrapper(p, "stream_metadata");
+    const wrapper, const handler = try findStreamWrapper(p, "stream_metadata");
     if (handler.?(wrapper, p.ptr, op, @constCast(param_ptr), context) == 0) return error.Failure;
 }
 
-fn getStreamWrapper(path: []const u8, comptime name: []const u8) !std.meta.Tuple(&.{
+fn findStreamWrapper(path: []const u8, comptime name: []const u8) !std.meta.Tuple(&.{
     *c.php_stream_wrapper,
     @FieldType(c.php_stream_wrapper_ops, name),
 }) {

@@ -22,6 +22,8 @@ const Long = php.Long;
 const Object = php.Object;
 const Stream = php.Stream;
 const StreamContext = php.StreamContext;
+const StreamWrapper = php.StreamWrapper;
+const StreamWrapperOps = php.StreamWrapperOps;
 const String = php.String;
 const Value = php.Value;
 const redirection = @import("redirection.zig");
@@ -47,6 +49,7 @@ pub const CallDispatcher = struct {
     function_list: std.ArrayList(CallbackEntry) = .empty,
     next_function_id: usize = 5, // 1-4 are reserve for the methods of the host allocator
     stream_list: std.ArrayList(StreamEntry) = .empty,
+    stream_wrapper_surrogate_list: std.ArrayList(*StreamWrapperSurrogate) = .empty,
     host: *ModuleHost,
     hooks_installed: bool = false,
     syscall_trap_installed: bool = false,
@@ -105,8 +108,6 @@ pub const CallDispatcher = struct {
         pub fn deinit(self: *@This()) void {
             php.release(self.path);
             self.dir_entries.deinit(php.allocator);
-            const res = php.getStreamResource(self.stream);
-            php.release(res);
         }
 
         pub fn addRootDirEntries(self: *@This()) !void {
@@ -115,6 +116,44 @@ pub const CallDispatcher = struct {
                 inline for (0..level) |i| dir_entry.d_name[i] = '.';
                 dir_entry.d_name[level] = 0;
             }
+        }
+    };
+    const StreamWrapperSurrogate = struct {
+        original: *StreamWrapper,
+        wrapper: StreamWrapper,
+        dispatcher: *CallDispatcher,
+
+        pub fn init(original: *StreamWrapper, dispatcher: *CallDispatcher) !*@This() {
+            const wops = try php.allocator.create(StreamWrapperOps);
+            errdefer php.allocator.destroy(wops);
+            wops.* = original.wops.*;
+            const self = try php.allocator.create(@This());
+            self.* = .{
+                .original = original,
+                .wrapper = original.*,
+                .dispatcher = dispatcher,
+            };
+            // replace closer with hook function
+            wops.stream_closer = close;
+            self.wrapper.wops = wops;
+            return self;
+        }
+
+        pub fn deinit(self: *@This()) void {
+            const wops: *StreamWrapperOps = @ptrCast(@constCast(self.wrapper.wops));
+            php.allocator.destroy(wops);
+            php.allocator.destroy(self);
+        }
+
+        pub fn close(wrapper: [*c]StreamWrapper, strm: ?*Stream) callconv(.c) c_int {
+            // get pointer to dispatcher
+            const w: *StreamWrapper = @ptrCast(wrapper);
+            const s = strm.?;
+            const self: *@This() = @fieldParentPtr("wrapper", w);
+            self.dispatcher.removeStream(s);
+            php.setStreamWrapper(s, self.original);
+            const func = self.original.wops.*.stream_closer orelse return php.SUCCESS;
+            return func(wrapper, s);
         }
     };
     const ScheduledTask = struct {
@@ -569,29 +608,72 @@ pub const CallDispatcher = struct {
     }
 
     pub fn addStream(self: *@This(), strm: *Stream, is_dir: bool) !Long {
-        const fd = try self.createDescriptor();
-        const path = try getStreamPath(strm);
-        defer php.release(path);
-        const fdstat = getStreamStat(strm, is_dir);
-        _ = try self.addStreamEntry(fd, path, strm, &fdstat);
-        return fd;
+        return for (self.stream_list.items) |*item| {
+            if (item.stream == strm) break item.fd;
+        } else create: {
+            const fd = try self.createDescriptor();
+            const path = try getStreamPath(strm);
+            defer php.release(path);
+            const fdstat = getStreamStat(strm, is_dir);
+            // the surrogate wrapper's stream_closer will call removeStream() to close the file
+            // descriptor then call the original function
+            const org_wrapper = php.getStreamWrapper(strm);
+            const new_wrapper = try self.getSurrogateWrapper(org_wrapper);
+            php.setStreamWrapper(strm, new_wrapper);
+            _ = try self.addStreamEntry(fd, path, strm, &fdstat);
+            break :create fd;
+        };
     }
 
-    pub fn removeStream(self: *@This(), fd: Long) !void {
-        if (fd == -1) self.redirecting_root = false;
+    fn addStreamEntry(self: *@This(), fd: Long, path: *String, strm: *Stream, stat: *const std.os.wasi.fdstat_t) !*StreamEntry {
+        const entry = try self.stream_list.addOne(php.allocator);
+        entry.* = .{
+            .fd = fd,
+            .path = path,
+            .stream = strm,
+            .fd_stat = stat.*,
+        };
+        php.addRef(path);
+        if (stat.fs_filetype == .DIRECTORY) try entry.addRootDirEntries();
+        return entry;
+    }
+
+    pub fn removeStream(self: *@This(), strm: *Stream) void {
         for (self.stream_list.items, 0..) |*item, i| {
-            if (item.fd == fd) {
+            if (item.stream == strm) {
                 item.deinit();
                 _ = self.stream_list.swapRemove(i);
                 break;
             }
+        }
+    }
+
+    pub fn closeDescriptor(self: *@This(), fd: Long) !void {
+        if (fd == -1) self.redirecting_root = false;
+        for (self.stream_list.items) |*item| {
+            if (item.fd == fd) {
+                php.close(item.stream);
+                break;
+            }
         } else return error.Unexpected;
+    }
+
+    fn getSurrogateWrapper(self: *@This(), wrapper: *StreamWrapper) !*StreamWrapper {
+        return for (self.stream_wrapper_surrogate_list.items) |item| {
+            if (item.original == wrapper) break &item.wrapper;
+        } else create: {
+            const surrogate: *StreamWrapperSurrogate = try .init(wrapper, self);
+            try self.stream_wrapper_surrogate_list.append(php.allocator, surrogate);
+            break :create &surrogate.wrapper;
+        };
     }
 
     fn removeAllStreams(self: *@This()) void {
         var list = self.stream_list;
         while (list.pop()) |*item| @constCast(item).deinit();
         list.deinit(php.allocator);
+        for (self.stream_wrapper_surrogate_list.items) |item| item.deinit();
+        self.stream_wrapper_surrogate_list.deinit(php.allocator);
     }
 
     pub fn getStreamPath(strm: *Stream) !*String {
@@ -646,7 +728,7 @@ pub const CallDispatcher = struct {
                 self.redirection_cb = php.reuse(arg).*;
                 self.redirection_cache = cache;
                 self.redirecting_root = true;
-                self.removeStream(fd) catch {};
+                self.closeDescriptor(fd) catch {};
                 return;
             }
         }
@@ -654,7 +736,7 @@ pub const CallDispatcher = struct {
         const path = try getStreamPath(strm);
         defer php.release(path);
         const fdstat = getStreamStat(strm, fd == -1);
-        self.removeStream(fd) catch {};
+        self.closeDescriptor(fd) catch {};
         _ = try self.addStreamEntry(fd, path, strm, &fdstat);
         if (fd == -1) self.redirecting_root = true;
     }
@@ -696,21 +778,6 @@ pub const CallDispatcher = struct {
                 return .{ strm, true };
             },
         }
-    }
-
-    fn addStreamEntry(self: *@This(), fd: Long, path: *String, strm: *Stream, stat: *const std.os.wasi.fdstat_t) !*StreamEntry {
-        const entry = try self.stream_list.addOne(php.allocator);
-        entry.* = .{
-            .fd = fd,
-            .path = path,
-            .stream = strm,
-            .fd_stat = stat.*,
-        };
-        php.addRef(path);
-        const res = php.getStreamResource(strm);
-        php.addRef(res);
-        if (stat.fs_filetype == .DIRECTORY) try entry.addRootDirEntries();
-        return entry;
     }
 
     fn createDescriptor(self: *@This()) !Long {
@@ -858,7 +925,7 @@ pub const CallDispatcher = struct {
     }
 
     fn handleClose(self: *@This(), args: anytype) !E {
-        self.removeStream(args.fd) catch return .BADF;
+        self.closeDescriptor(args.fd) catch return .BADF;
         return .SUCCESS;
     }
 

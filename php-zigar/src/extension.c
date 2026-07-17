@@ -68,6 +68,14 @@ const php_stream_ops* get_stream_handlers(php_stream* strm) {
     return strm->ops;
 }
 
+php_stream_wrapper* get_stream_wrapper(php_stream* strm) {
+    return strm->wrapper;
+}
+
+void set_stream_wrapper(php_stream* strm, php_stream_wrapper* wrapper) {
+    strm->wrapper = wrapper;
+}
+
 void set_stream_no_close(php_stream* strm) {
     strm->flags |= PHP_STREAM_FLAG_NO_CLOSE;
 }
