@@ -19,6 +19,7 @@ const ExecuteData = php.ExecuteData;
 const FunctionCallCache = php.FunctionCallCache;
 const HashTable = php.HashTable;
 const Long = php.Long;
+const N = php.getStaticString;
 const Object = php.Object;
 const Stream = php.Stream;
 const StreamContext = php.StreamContext;
@@ -679,8 +680,9 @@ pub const CallDispatcher = struct {
     pub fn getStreamPath(strm: *Stream) !*String {
         if (php.getStreamPath(strm)) |path_sc| {
             return php.createString(path_sc);
-        } else if (php.getStreamWrapperProperty(strm, "path") catch null) |path_v| {
-            if (php.getValueString(path_v) catch null) |path| return php.reuse(path);
+        } else if (php.getStreamWrapperProperty(strm, N("path"))) |value| {
+            defer php.release(&value);
+            if (php.getValueString(&value) catch null) |path| return php.reuse(path);
         }
         return failure.report("stream wrapper does not have the property 'path'", .{});
     }

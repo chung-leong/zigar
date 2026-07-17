@@ -1565,12 +1565,6 @@ pub fn unregisterInternalClass(ce: *ClassEntry) void {
 
 pub const unregisterInternalInterface = unregisterInternalClass;
 
-pub fn getObjectProperty(obj: *Object, name: *String) ?Value {
-    var retval: Value = undefined;
-    _ = pc.zend_std_read_property(obj, name, BP_VAR_R, null, &retval);
-    return retval;
-}
-
 pub fn getObjectPropertySize(ce: *ClassEntry) isize {
     return @bitCast(c.zend_object_properties_size(ce));
 }
@@ -2130,9 +2124,13 @@ pub fn getStreamResource(strm: *Stream) *Resource {
     return get_stream_resource(strm);
 }
 
-pub fn getStreamWrapperProperty(strm: *Stream, name: []const u8) !*Value {
+pub fn getStreamWrapperProperty(strm: *Stream, name: *String) ?Value {
     const wrapper = get_stream_wrapper_data(strm);
-    return try getProperty(wrapper, name);
+    const wrapper_obj = getValueObject(wrapper) catch return null;
+    var retval: Value = undefined;
+    const value_ptr: *Value = pc.zend_std_read_property(wrapper_obj, name, BP_VAR_IS, null, &retval) orelse return null;
+    addRef(value_ptr);
+    return value_ptr.*;
 }
 
 pub fn setBlocking(strm: *Stream, set: bool) !void {
