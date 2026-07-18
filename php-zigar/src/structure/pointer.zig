@@ -155,7 +155,6 @@ pub const Pointer = struct {
             if (!php.isValueNull(value)) return self.reportInaccessiblePointer();
         }
         if (transform == .none) {
-            if (try Super.copySelf(self, value)) return;
             const class = ZigClassEntry.fromStructure(self);
             const read_only = class.flags.pointer.is_const;
             const static = class.getStaticData(@This());
