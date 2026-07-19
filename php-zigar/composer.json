@@ -1,4 +1,5 @@
 {
+    "version": "0.15.3",
     "require-dev": {
         "phpunit/phpunit": "^10"
     },

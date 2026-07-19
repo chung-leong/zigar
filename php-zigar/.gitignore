@@ -29,3 +29,4 @@ composer.phar
 *.so
 *.node
 *.bak
+*.zip
