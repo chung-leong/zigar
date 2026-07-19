@@ -34,10 +34,12 @@ pub const SpecialExports = struct {
         typeOf: Function,
         import: Function,
         unimport: Function,
+        set: Function,
 
-        pub const Cache = cache.IdCache(.{ .alignOf, .redirect, .sizeOf, .typeOf, .import, .unimport }, "", .{});
+        pub const Cache = cache.IdCache(.{ .alignOf, .redirect, .sizeOf, .typeOf, .import, .unimport, .set }, "", .{});
     };
     pub const StreamNameCache = cache.IdCache(.{ .root, .stderr, .stdin, .stdout }, "", .{});
+    pub const SystemObjectNameCache = cache.IdCache(.{.env}, "", .{});
 
     pub inline fn object(self: *@This()) *Object {
         return &self.php_portion;
@@ -86,6 +88,7 @@ pub const SpecialExports = struct {
                 .typeOf = php.createTransformedFunction(handleTypeOf, "typeOf", 1, false),
                 .import = php.createTransformedFunction(handleImport, "import", 1, false),
                 .unimport = php.createTransformedFunction(handleUnimport, "unimport", 0, false),
+                .set = php.createTransformedFunction(handleSet, "set", 2, false),
             },
         };
         class.host.addRef();
@@ -228,6 +231,28 @@ pub const SpecialExports = struct {
         try arg_iter.verifyCount(0, 0, "unimport");
         const root_static = try getRootStaticData(&arg_iter);
         try root_static.removeSymbolsFromGlobalNamespace();
+    }
+
+    pub fn handleSet(ed: *ExecuteData, _: *Value) !void {
+        var arg_iter: ArgumentIterator = .init(ed);
+        try arg_iter.verifyCount(2, 2, "set");
+        const obj = try php.getValueObject(arg_iter.this);
+        const self = fromObject(obj);
+        const arg0 = arg_iter.next() orelse return error.NotString;
+        const name = try php.getValueString(arg0);
+        const name_cache: SystemObjectNameCache = .{ .mask = self.host.cache_mask };
+        const sys_obj_id = name_cache.idFromString(name, null) orelse {
+            return failure.report("expecting 'env', received: {s}", .{
+                php.getStringContent(name),
+            });
+        };
+        switch (sys_obj_id) {
+            .env => {
+                const arg1 = arg_iter.next() orelse return error.NotArrayOrObject;
+                const ht = try php.getValueHashTable(arg1);
+                try self.host.dispatcher.setEnvironmentVariables(ht);
+            },
+        }
     }
 
     fn getRootStaticData(arg_iter: *ArgumentIterator) !*structure.Struct.Static {

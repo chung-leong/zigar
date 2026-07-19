@@ -1,4 +1,5 @@
 const std = @import("std");
+const c_allocator = std.heap.c_allocator;
 const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
@@ -18,6 +19,7 @@ const ArgumentIterator = php.ArgumentIterator;
 const ExecuteData = php.ExecuteData;
 const FunctionCallCache = php.FunctionCallCache;
 const HashTable = php.HashTable;
+const HashTableIterator = php.HashTableIterator;
 const Long = php.Long;
 const N = php.getStaticString;
 const Object = php.Object;
@@ -66,7 +68,7 @@ pub const CallDispatcher = struct {
     pipe_ptr: [*]c_int,
     release_resources_called: bool = false,
 
-    pub threadlocal var trapping_syscalls: bool = true;
+    pub threadlocal var trapping_syscalls: bool = false;
     pub threadlocal var event_loop: EventLoop(runScheduledTask) = .{};
 
     threadlocal var thread_initialized: bool = false;
@@ -223,6 +225,8 @@ pub const CallDispatcher = struct {
         }
         extension.removeRequestShutdownCallback(self, onRequestShutdown);
         self.releaseResources();
+        if (self.env_variable_list) |list| c_allocator.free(list);
+        if (self.env_variable_bytes) |bytes| c_allocator.free(bytes);
         php.allocator.destroy(self);
     }
 
@@ -602,6 +606,60 @@ pub const CallDispatcher = struct {
             } else return;
             _ = self.thread_syscall_trap_list.swapRemove(index);
         }
+    }
+
+    pub fn setEnvironmentVariables(self: *@This(), ht: *HashTable) !void {
+        if (self.env_variable_list) |list| {
+            c_allocator.free(list);
+            self.env_variable_list = null;
+        }
+        if (self.env_variable_bytes) |bytes| {
+            c_allocator.free(bytes);
+            self.env_variable_bytes = null;
+        }
+        const deferred = &self.env_variable_deferred;
+        const count = php.getHashLength(ht);
+        var len: usize = 0;
+        var iter: HashTableIterator = .init(ht, .{});
+        while (iter.next()) |value| {
+            const name = iter.currentName() orelse return error.NotString;
+            const value_str = try php.getValueString(value);
+            len += name.len + 1 + value_str.len + 1;
+        }
+        const list = try c_allocator.alloc(?[*:0]const u8, count + 1);
+        errdefer c_allocator.free(list);
+        const bytes = try c_allocator.alloc(u8, len + 1);
+        errdefer c_allocator.free(bytes);
+        iter.reset();
+        var offset: usize = 0;
+        var index: usize = 0;
+        while (iter.next()) |value| {
+            list[index] = @ptrCast(bytes.ptr + offset);
+            const name = iter.currentName() orelse return error.NotString;
+            const value_str = try php.getValueString(value);
+            const name_sc = php.getStringContent(name);
+            @memcpy(bytes[offset .. offset + name_sc.len], name_sc);
+            bytes[offset + name.len] = '=';
+            offset += name.len + 1;
+            const value_sc = php.getStringContent(value_str);
+            @memcpy(bytes[offset .. offset + value_str.len], value_sc);
+            bytes[offset + value_str.len] = 0;
+            offset += value_str.len + 1;
+            index += 1;
+        }
+        list[count] = null;
+        bytes[len] = 0;
+        self.env_variable_ptr = @ptrCast(list.ptr);
+        if (deferred.address != 0 and !deferred.installed) {
+            const hook: HookEntry = .{
+                .handler = @ptrCast(&self.env_variable_ptr),
+                .original = @ptrCast(&self.env_variable_original),
+            };
+            try redirection_controller.installHook(hook, deferred.address, deferred.read_only);
+            deferred.installed = true;
+        }
+        self.env_variable_list = list;
+        self.env_variable_bytes = bytes;
     }
 
     pub fn isVirtualStream(_: *@This(), fd: Long) bool {
