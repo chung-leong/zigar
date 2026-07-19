@@ -33,6 +33,7 @@ pub const ZigException = struct {
 
     var class_entry: *ClassEntry = undefined;
     var handlers: ObjectHandlers = undefined;
+    var original_cast_object_handler: *const fn (obj: [*c]Object, retval: [*c]Value, type_id: c_int) callconv(.c) c_int = undefined;
 
     const class_name = "ZigException";
     const PropCache = cache.IdCache(.{ .message, .string, .code, .file, .line, .trace, .previous }, "", .{});
@@ -115,13 +116,11 @@ pub const ZigException = struct {
     pub fn castObject(obj: *Object, retval: *Value, type_id: c_int) !c_int {
         const desired_type = try php.ValueType.fromInt(type_id);
         const self = fromObject(obj);
-        retval.* = switch (desired_type) {
-            .string => php.reuse(&self.message).*,
-            .long => self.code,
-            .boolean => php.createValueBool(true),
-            else => return php.FAILURE,
-        };
-        return php.SUCCESS;
+        if (desired_type == .long) {
+            retval.* = self.code;
+            return php.SUCCESS;
+        }
+        return original_cast_object_handler(obj, retval, type_id);
     }
 
     pub fn readProperty(obj: *Object, name: *String, _: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
@@ -195,6 +194,8 @@ pub const ZigException = struct {
         const parent_ce = php.getClassEntry(.exception);
         class_entry = try php.registerInternalClass(&ce, parent_ce);
         handlers = php.createHandlerTable(@This(), @offsetOf(@This(), "php_portion"));
+        const std_object_handlers = php.getStandardHandlers();
+        original_cast_object_handler = std_object_handlers.cast_object.?;
     }
 
     pub fn unregisterClass() void {

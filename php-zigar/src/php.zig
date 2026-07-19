@@ -2167,10 +2167,14 @@ fn findStreamWrapper(path: []const u8, comptime name: []const u8) !std.meta.Tupl
     return .{ wrapper, @field(wrapper.*.wops.*, name) };
 }
 
+pub fn getStandardHandlers() *const c.zend_object_handlers {
+    return deref(&pc.std_object_handlers);
+}
+
 pub fn createHandlerTable(comptime T: type, comptime offset: comptime_int) ObjectHandlers {
     var handlers: ObjectHandlers = undefined;
     handlers.offset = offset;
-    const std_object_handlers = deref(&pc.std_object_handlers);
+    const std_object_handlers = getStandardHandlers();
     inline for (comptime std.meta.fields(@TypeOf(object_handler_mapping))) |field| {
         const func_name = @field(object_handler_mapping, field.name);
         @field(handlers, field.name) = if (@hasDecl(T, func_name))
