@@ -52,12 +52,14 @@ pub const Generator = struct {
     }
 
     pub fn release(self: *@This()) void {
-        if (self.status != .finished and self.status != .unused) {
-            // preserve the generator until the content source has been informed
-            self.status = .released;
-            return;
-        }
         if (self.buffer.ref_count == 1) {
+            if (self.status != .finished and self.status != .unused) {
+                // preserve the generator until the content source has been informed
+                self.status = .released;
+                // wait for resolution
+                CallDispatcher.event_loop.suspendFiber(&self.fiber) catch {};
+                return;
+            }
             if (self.callback) |*cb| {
                 php.release(cb);
                 self.callback_cache.deinit();
@@ -98,6 +100,7 @@ pub const Generator = struct {
             .released => {
                 self.status = .finished;
                 self.release();
+                CallDispatcher.event_loop.resumeFiberAfterward(&self.fiber);
                 return false;
             },
             .waiting => CallDispatcher.event_loop.resumeFiberAfterward(&self.fiber),

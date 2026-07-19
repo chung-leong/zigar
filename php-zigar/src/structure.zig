@@ -479,6 +479,9 @@ pub fn Parent(comptime S: type) type {
             if (@hasField(S, "table")) {
                 try gc_buffer.add(&self.table);
             }
+            if (@hasDecl(S, "addSpecialDependencies")) {
+                try self.addSpecialDependencies(gc_buffer);
+            }
             gc_buffer.use(table, n);
             return null;
         }

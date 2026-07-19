@@ -10,6 +10,7 @@ const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const extension = @import("../extension.zig");
 const failure = @import("../failure.zig");
 const Error = failure.Error;
+const GarbageCollectionBuffer = @import("../gc.zig").GarbageCollectionBuffer;
 const gd = @import("../gd.zig");
 const Generator = @import("../generator.zig").Generator;
 const GeneratorStatic = @import("../generator.zig").GeneratorStatic;
@@ -580,12 +581,23 @@ pub const Struct = struct {
         return context;
     }
 
+    pub fn addSpecialDependencies(self: *@This(), gc_buffer: *GarbageCollectionBuffer) !void {
+        const class = ZigClassEntry.fromStructure(self);
+        if (class.purpose == .abort_signal) {
+            if (self.buffer.flags.contains_special_contents) {
+                if (self.getSpecialContext(AbortSignal) catch null) |ctx| {
+                    try gc_buffer.addObject(ctx.object());
+                }
+            }
+        }
+    }
+
     pub fn freeObject(obj: *Object) void {
         const class = ZigClassEntry.fromObject(obj);
         const self = fromObject(obj);
         switch (class.purpose) {
             inline .promise, .generator, .abort_signal => |t| {
-                if (self.buffer.flags.contains_special_contents and !php.inResourceCleanup()) {
+                if (self.buffer.flags.contains_special_contents) {
                     const T = switch (t) {
                         .promise => Promise,
                         .generator => Generator,
