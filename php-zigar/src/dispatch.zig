@@ -995,9 +995,9 @@ pub const CallDispatcher = struct {
                     defer php.release(&retval);
                     switch (php.getValueType(&retval)) {
                         .null, .false => return null,
-                        .string => {
-                            const parent_path = php.getValueStringContent(&retval) catch unreachable;
-                            break :find joinPath(parent_path, path);
+                        .string => break :find {
+                            const string = php.getValueString(&retval) catch unreachable;
+                            break :find php.reuse(string);
                         },
                         .resource => {
                             const strm = try php.getValueStream(&retval);
@@ -1007,7 +1007,13 @@ pub const CallDispatcher = struct {
                             context = php.getStreamContext(strm);
                             break :find joinPath(parent_path, path);
                         },
-                        else => return error.InvalidReturnValueFromCallback,
+                        else => |t| {
+                            const err = failure.report("invalid return value from root redirection callback: {s}", .{
+                                @tagName(t),
+                            });
+                            php.triggerWarning(err);
+                            return error.InvalidReturnValueFromCallback;
+                        },
                     }
                 }
                 // don't bother lookup the root stream if the root descriptor hasn't been redirected
