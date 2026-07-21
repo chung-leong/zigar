@@ -68,7 +68,7 @@ pub const CallDispatcher = struct {
     pipe_ptr: [*]c_int,
     release_resources_called: bool = false,
 
-    pub threadlocal var trapping_syscalls: bool = false;
+    pub threadlocal var trapping_syscalls: bool = true;
     pub threadlocal var event_loop: EventLoop(runScheduledTask) = .{};
 
     threadlocal var thread_initialized: bool = false;
@@ -100,25 +100,78 @@ pub const CallDispatcher = struct {
             self.cache.deinit();
         }
     };
+    const DirEntryIterator = struct {
+        ref_count: usize = 1,
+        index: usize = std.math.maxInt(usize),
+        entries: std.ArrayList(php.DirEntry) = .empty,
+
+        pub fn create() !*@This() {
+            const self = try php.allocator.create(@This());
+            self.* = .{};
+            try self.addRootDirEntries();
+            return self;
+        }
+
+        fn addRootDirEntries(self: *@This()) !void {
+            inline for (.{ 1, 2 }) |level| {
+                const entry = try self.entries.addOne(php.allocator);
+                inline for (0..level) |i| entry.d_name[i] = '.';
+                entry.d_name[level] = 0;
+            }
+        }
+
+        pub fn next(self: *@This(), stream: *Stream) !?*php.DirEntry {
+            if (self.index == std.math.maxInt(usize)) {
+                self.index = 0;
+            } else {
+                self.index += 1;
+            }
+            while (self.index >= self.entries.items.len) {
+                const new_entry = try self.entries.addOne(php.allocator);
+                if (!php.readdir(stream, new_entry)) {
+                    _ = self.entries.pop();
+                    return null;
+                }
+            }
+            return &self.entries.items[self.index];
+        }
+
+        pub fn seek(self: *@This(), index: usize) void {
+            self.index = if (index == 0) std.math.maxInt(usize) else index - 1;
+        }
+
+        pub fn reset(self: *@This()) void {
+            if (self.index == std.math.maxInt(usize)) return;
+            self.entries.clearRetainingCapacity();
+            self.index = std.math.maxInt(usize);
+            self.addRootDirEntries() catch unreachable;
+        }
+
+        pub fn addRef(self: *@This()) void {
+            self.ref_count += 1;
+        }
+
+        pub fn release(self: *@This()) void {
+            self.ref_count -= 1;
+            if (self.ref_count == 0) {
+                self.entries.deinit(php.allocator);
+                php.allocator.destroy(self);
+            }
+        }
+    };
     const StreamEntry = struct {
         fd: Long,
         stream: *Stream,
         path: *String,
         fd_stat: std.os.wasi.fdstat_t,
-        dir_index: usize = 0,
-        dir_entries: std.ArrayList(php.DirEntry) = .empty,
+        dir_iter: ?*DirEntryIterator = null,
+        flags: packed struct {
+            has_alias: bool = false,
+        } = .{},
 
         pub fn deinit(self: *@This()) void {
             php.release(self.path);
-            self.dir_entries.deinit(php.allocator);
-        }
-
-        pub fn addRootDirEntries(self: *@This()) !void {
-            inline for (.{ 1, 2 }) |level| {
-                const dir_entry = try self.dir_entries.addOne(php.allocator);
-                inline for (0..level) |i| dir_entry.d_name[i] = '.';
-                dir_entry.d_name[level] = 0;
-            }
+            if (self.dir_iter) |iter| iter.release();
         }
     };
     const StreamWrapperSurrogate = struct {
@@ -693,7 +746,9 @@ pub const CallDispatcher = struct {
             .fd_stat = stat.*,
         };
         php.addRef(path);
-        if (stat.fs_filetype == .DIRECTORY) try entry.addRootDirEntries();
+        if (stat.fs_filetype == .DIRECTORY) {
+            entry.dir_iter = try DirEntryIterator.create();
+        }
         return entry;
     }
 
@@ -709,12 +764,51 @@ pub const CallDispatcher = struct {
 
     pub fn closeDescriptor(self: *@This(), fd: Long) !void {
         if (fd == -1) self.redirecting_root = false;
-        for (self.stream_list.items) |*item| {
+        for (self.stream_list.items, 0..) |*item, i| {
             if (item.fd == fd) {
-                php.close(item.stream);
+                const has_alias_still = item.flags.has_alias and for (self.stream_list.items) |*other| {
+                    if (other.fd != fd and other.stream == item.stream) break true;
+                } else false;
+                if (has_alias_still) {
+                    // just remove entry
+                    item.deinit();
+                    _ = self.stream_list.swapRemove(i);
+                } else {
+                    // close the stream--the stream's close handler will call removeStream()
+                    php.close(item.stream);
+                }
                 break;
             }
         } else return error.Unexpected;
+    }
+
+    fn duplicateStreamEntry(self: *@This(), entry: *StreamEntry) !*StreamEntry {
+        entry.flags.has_alias = true;
+        const new_fd = try self.createDescriptor();
+        const new_entry = try self.addStreamEntry(new_fd, entry.path, entry.stream, &entry.fd_stat);
+        new_entry.flags.has_alias = true;
+        if (entry.dir_iter) |iter| {
+            new_entry.dir_iter = iter;
+            iter.addRef();
+        }
+        return new_entry;
+    }
+
+    fn findStreamEntryWithFdPath(self: *@This(), path: [*:0]const u8) ?*StreamEntry {
+        // look for stream entry that match php://fd/$fd URL where $fd is a virtual file descriptor
+        const prefix = "/php://fd/";
+        const slice = std.mem.sliceTo(path, 0);
+        if (slice.len > prefix.len and std.mem.eql(u8, slice[0..prefix.len], prefix)) {
+            const num_str = slice[prefix.len..];
+            if (std.fmt.parseInt(Long, num_str, 10) catch null) |fd| {
+                if (self.isVirtualStream(fd)) {
+                    for (self.stream_list.items) |*item| {
+                        if (item.fd == fd) return item;
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     fn getSurrogateWrapper(self: *@This(), wrapper: *StreamWrapper) !*StreamWrapper {
@@ -946,6 +1040,11 @@ pub const CallDispatcher = struct {
     }
 
     fn handleOpen(self: *@This(), args: anytype) !E {
+        if (self.findStreamEntryWithFdPath(args.path)) |entry| {
+            const new_entry = self.duplicateStreamEntry(entry) catch return .MFILE;
+            args.fd = @intCast(new_entry.fd);
+            return .SUCCESS;
+        }
         const loc = (self.resolvePath(args.dirfd, args.path) catch return .NOENT) orelse return .OPNOTSUPP;
         defer loc.deinit();
         const strm, const file_type: std.os.wasi.filetype_t = open: {
@@ -1085,16 +1184,14 @@ pub const CallDispatcher = struct {
 
     fn handleSeek(self: *@This(), args: anytype) !E {
         const entry = self.findStream(args.fd) catch return .BADF;
-        if (entry.dir_entries.items.len > 0) {
+        if (entry.dir_iter) |iter| {
             if (args.offset != 0) {
                 if (args.whence != c.SEEK_SET) return .INVAL;
-                entry.dir_index = @intCast(args.offset);
+                iter.seek(@intCast(args.offset));
                 return .SUCCESS;
             } else {
                 // clear cached entries when it's a rewind
-                entry.dir_entries.clearRetainingCapacity();
-                entry.dir_index = 0;
-                try entry.addRootDirEntries();
+                iter.reset();
             }
         }
         php.seek(entry.stream, args.offset, args.whence) catch return .SPIPE;
@@ -1135,9 +1232,13 @@ pub const CallDispatcher = struct {
             const entry = self.findStream(args.fd) catch return .BADF;
             php.fstat(entry.stream, &args.stat) catch return .INVAL;
         } else {
-            const loc = (self.resolvePath(args.dirfd, args.path) catch return .NOENT) orelse return .OPNOTSUPP;
-            defer loc.deinit();
-            php.stat(loc.url, loc.context, args.lookup_flags, &args.stat) catch return .NOENT;
+            if (self.findStreamEntryWithFdPath(args.path)) |entry| {
+                php.fstat(entry.stream, &args.stat) catch return .INVAL;
+            } else {
+                const loc = (self.resolvePath(args.dirfd, args.path) catch return .NOENT) orelse return .OPNOTSUPP;
+                defer loc.deinit();
+                php.stat(loc.url, loc.context, args.lookup_flags, &args.stat) catch return .NOENT;
+            }
         }
         return .SUCCESS;
     }
@@ -1151,11 +1252,15 @@ pub const CallDispatcher = struct {
             };
             php.truncate(entry.stream, len) catch return .FBIG;
         } else {
-            const loc = (self.resolvePath(args.dirfd, args.path) catch return .NOENT) orelse return .OPNOTSUPP;
-            defer loc.deinit();
-            const strm = php.open(loc.url, "x", loc.context, 0) catch return .NOENT;
-            defer php.close(strm);
-            php.truncate(strm, args.len) catch return .FBIG;
+            if (self.findStreamEntryWithFdPath(args.path)) |entry| {
+                php.truncate(entry.stream, args.len) catch return .FBIG;
+            } else {
+                const loc = (self.resolvePath(args.dirfd, args.path) catch return .NOENT) orelse return .OPNOTSUPP;
+                defer loc.deinit();
+                const strm = php.open(loc.url, "x", loc.context, 0) catch return .NOENT;
+                defer php.close(strm);
+                php.truncate(strm, args.len) catch return .FBIG;
+            }
         }
         return .SUCCESS;
     }
@@ -1293,23 +1398,16 @@ pub const CallDispatcher = struct {
         const dir_path = php.getStringContent(entry.path);
         var index: usize = 0;
         var remaining: usize = args.len;
-        while (true) {
-            while (entry.dir_index >= entry.dir_entries.items.len) {
-                const new_dir_entry = try entry.dir_entries.addOne(php.allocator);
-                if (!php.readdir(entry.stream, new_dir_entry)) {
-                    _ = entry.dir_entries.pop();
-                    break;
-                }
-            }
-            if (entry.dir_index >= entry.dir_entries.items.len) break;
-            const dir_entry = entry.dir_entries.items[entry.dir_index];
+        const iter = entry.dir_iter orelse return .NOTDIR;
+        while (try iter.next(entry.stream)) |dir_entry| {
             const name_ptr: [*:0]const u8 = @ptrCast(&dir_entry.d_name);
             const name = name_ptr[0..std.mem.len(name_ptr)];
             if (name.len + @sizeOf(std.os.wasi.dirent_t) > remaining) {
+                iter.seek(iter.index);
                 break;
             }
             var info: std.os.wasi.filestat_t = undefined;
-            if (entry.dir_index < 2) {
+            if (iter.index < 2) {
                 info.ino = 0;
                 info.filetype = .DIRECTORY;
             } else {
@@ -1321,7 +1419,7 @@ pub const CallDispatcher = struct {
                 };
             }
             const out_dirent: *align(1) std.os.wasi.dirent_t = @ptrCast(&args.buffer[index]);
-            out_dirent.next = entry.dir_index + 1;
+            out_dirent.next = iter.index + 1;
             out_dirent.ino = info.ino;
             out_dirent.namlen = @intCast(name.len);
             out_dirent.type = info.filetype;
@@ -1329,7 +1427,6 @@ pub const CallDispatcher = struct {
             const ei = si + name.len;
             const out_name = args.buffer[si..ei];
             @memcpy(out_name, name);
-            entry.dir_index += 1;
             index += name.len + @sizeOf(std.os.wasi.dirent_t);
             remaining -= name.len + @sizeOf(std.os.wasi.dirent_t);
         }

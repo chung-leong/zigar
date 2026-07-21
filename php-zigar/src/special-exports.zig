@@ -17,7 +17,6 @@ const String = php.String;
 const Value = php.Value;
 const structure = @import("structure.zig");
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
-const ZigObject = @import("object.zig").ZigObject;
 
 pub const SpecialExports = struct {
     host: *ModuleHost,
@@ -35,8 +34,18 @@ pub const SpecialExports = struct {
         import: Function,
         unimport: Function,
         set: Function,
+        describe: Function,
 
-        pub const Cache = cache.IdCache(.{ .alignOf, .redirect, .sizeOf, .typeOf, .import, .unimport, .set }, "", .{});
+        pub const Cache = cache.IdCache(.{
+            .alignOf,
+            .redirect,
+            .sizeOf,
+            .typeOf,
+            .import,
+            .unimport,
+            .set,
+            .describe,
+        }, "", .{});
     };
     pub const StreamNameCache = cache.IdCache(.{ .root, .stderr, .stdin, .stdout }, "", .{});
     pub const SystemObjectNameCache = cache.IdCache(.{.env}, "", .{});
@@ -86,9 +95,10 @@ pub const SpecialExports = struct {
                 .redirect = php.createTransformedFunction(handleRedirect, "redirect", 2, false),
                 .sizeOf = php.createTransformedFunction(handleSizeOf, "sizeOf", 1, false),
                 .typeOf = php.createTransformedFunction(handleTypeOf, "typeOf", 1, false),
-                .import = php.createTransformedFunction(handleImport, "import", 1, false),
+                .import = php.createTransformedFunction(handleImport, "import", 0, false),
                 .unimport = php.createTransformedFunction(handleUnimport, "unimport", 0, false),
                 .set = php.createTransformedFunction(handleSet, "set", 2, false),
+                .describe = php.createTransformedFunction(handleDescribe, "describe", 1, false),
             },
         };
         class.host.addRef();
@@ -221,9 +231,9 @@ pub const SpecialExports = struct {
     pub fn handleImport(ed: *ExecuteData, retval: *Value) !void {
         var arg_iter: ArgumentIterator = .init(ed);
         try arg_iter.verifyCount(0, 1, "import");
-        const callback = arg_iter.next();
+        const arg0 = arg_iter.next();
         const root_static = try getRootStaticData(&arg_iter);
-        retval.* = try root_static.exportSymbolsToGlobalNamespace(callback);
+        retval.* = try root_static.exportSymbolsToGlobalNamespace(arg0);
     }
 
     pub fn handleUnimport(ed: *ExecuteData, _: *Value) !void {
@@ -253,6 +263,18 @@ pub const SpecialExports = struct {
                 try self.host.dispatcher.setEnvironmentVariables(ht);
             },
         }
+    }
+
+    pub fn handleDescribe(ed: *ExecuteData, retval: *Value) !void {
+        var arg_iter: ArgumentIterator = .init(ed);
+        try arg_iter.verifyCount(1, 2, "describe");
+        const obj = try php.getValueObject(arg_iter.this);
+        const self = fromObject(obj);
+        const arg0 = arg_iter.next().?;
+        const strm = try php.getValueStream(arg0);
+        const is_dir = if (arg_iter.next()) |arg1| try php.getValueBool(arg1) else false;
+        const fd = try self.host.dispatcher.addStream(strm, is_dir);
+        retval.* = php.createValueLong(fd);
     }
 
     fn getRootStaticData(arg_iter: *ArgumentIterator) !*structure.Struct.Static {
