@@ -120,7 +120,7 @@ const functions = struct {
         pub fn run(ed: *ExecuteData, retval: *Value) !void {
             var arg_iter = ArgumentIterator.init(ed);
             try arg_iter.verifyCount(required.len, required.len + optional.len, "zigar_compile");
-            if (!options.compile) {
+            if (!options.recompile) {
                 retval.* = php.createValueBool(false);
                 return;
             }
@@ -171,7 +171,7 @@ const functions = struct {
             defer php.allocator.free(mod_path);
             const params = if (arg_iter.next()) |arg1| try php.getValueHashTable(arg1) else null;
             if (src_path) |path| {
-                if (options.compile) try ZigCompiler.compile(path, mod_path, params);
+                if (options.recompile) try ZigCompiler.compile(path, mod_path, params);
             }
             const so_path = try getSharedLibraryPath(php.allocator, mod_path, .this, .this);
             defer php.allocator.free(so_path);
@@ -221,7 +221,7 @@ const functions = struct {
             } else null;
             const params = if (arg_iter.next()) |arg2| try php.getValueHashTable(arg2) else null;
             if (src_path) |path| {
-                if (options.compile) try ZigCompiler.compile(path, mod_path, params);
+                if (options.recompile) try ZigCompiler.compile(path, mod_path, params);
             }
             const so_path = try getSharedLibraryPath(php.allocator, mod_path, .this, .this);
             defer php.allocator.free(so_path);

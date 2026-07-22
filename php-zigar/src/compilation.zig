@@ -327,6 +327,7 @@ pub const ZigCompiler = struct {
     }
 
     fn showProgress(self: *@This(), finished: *std.atomic.Value(u32)) !void {
+        if (self.options.quiet) return;
         // don't print anything if stderr isn't a tty or doesn't support ANSI sequences
         if (!std.fs.File.stderr().getOrEnableAnsiEscapeSupport()) return;
         if (builtin.target.os.tag != .windows) {

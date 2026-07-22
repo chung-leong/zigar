@@ -16,7 +16,7 @@ const String = php.String;
 const Value = php.Value;
 
 pub const Options = struct {
-    compile: bool = true,
+    recompile: bool = true,
     clean: bool = false,
     event_loop: LoopType = .temporary,
     module_rel_path: [:0]const u8 = "../lib",
@@ -26,9 +26,11 @@ pub const Options = struct {
     optimize: Optimize = .Debug,
     arch: Arch = .this,
     platform: Platform = .this,
+    quiet: bool = false,
     ignore_build_file: bool = false,
     omit_functions: bool = false,
     omit_variables: bool = false,
+    multithreaded: bool = true,
     use_libc: bool = true,
     use_llvm: ?bool = null,
     use_redirection: bool = true,
@@ -38,7 +40,6 @@ pub const Options = struct {
     // the same config file as on the JavaScript side
     is_wasm: bool = false,
     max_memory: ?Long = null,
-    multithreaded: bool = true,
     stack_size: Long = 256 * 1024,
     use_pthread_emulation: bool = false,
 
@@ -202,7 +203,7 @@ pub const Options = struct {
                 .value = default_value,
                 .value_length = @intCast(std.mem.len(default_value)),
                 .modifiable = switch (field_enum) {
-                    .compile => php.INI_SYSTEM,
+                    .recompile => php.INI_SYSTEM,
                     else => php.INI_ALL,
                 },
                 .on_modify = switch (field.type) {
@@ -260,8 +261,9 @@ pub const Options = struct {
         var iter: HashTableIterator = .init(ht, .{});
         while (iter.next()) |value| {
             inline for (comptime std.meta.fields(@This())) |field| {
+                const field_enum = @field(std.meta.FieldEnum(@This()), field.name);
                 const name = iter.currentName() orelse return error.UnexpectedIntegerKey;
-                if (php.matchString(name, field.name)) {
+                if (php.matchString(name, field.name) and field_enum != .recompile) {
                     const T = @FieldType(@This(), field.name);
                     const vt = php.getValueType(value);
                     @field(self, field.name) = extractValue(T, value) catch |err| {
