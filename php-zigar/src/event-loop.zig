@@ -13,6 +13,11 @@ const ExecuteData = php.ExecuteData;
 const Value = php.Value;
 const ArgumentIterator = php.ArgumentIterator;
 
+pub const LoopType = enum {
+    temporary,
+    revolt,
+};
+
 pub fn EventLoop(comptime cb: fn () void) type {
     const Temporary = struct {
         fiber: Value,
@@ -250,11 +255,10 @@ pub fn EventLoop(comptime cb: fn () void) type {
         ready: bool = false,
         pendingFiber: ?*const Value = null,
 
-        const Loop = union(enum) {
+        const Loop = union(LoopType) {
             temporary: Temporary,
             revolt: Revolt,
         };
-        const LoopType = @typeInfo(Loop).@"union".tag_type.?;
 
         pub fn reset(self: *@This()) void {
             self.deinit();

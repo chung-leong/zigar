@@ -3,159 +3,10 @@ const builtin = @import("builtin");
 
 const extension = @import("extension.zig");
 const failure = @import("failure.zig");
+const Options = @import("options.zig").Options;
 const php = @import("php.zig");
 const HashTable = php.HashTable;
 const Value = php.Value;
-
-pub const Arch = enum {
-    arm,
-    arm64,
-    ia32,
-    loong64,
-    mips,
-    mipsel,
-    ppc64,
-    riscv64,
-    s390x,
-    x64,
-    other,
-
-    pub fn name(self: @This()) []const u8 {
-        return @tagName(self);
-    }
-
-    pub fn zigName(self: @This()) []const u8 {
-        return switch (self) {
-            .arm => "arm",
-            .arm64 => "aarch64",
-            .ia32 => "x86",
-            .loong64 => "loong64",
-            .mips => "mips",
-            .mipsel => "mipsel",
-            .ppc64 => "powerpc64le",
-            .riscv64 => "riscv64",
-            .s390x => "s390x",
-            .x64 => "x86_64",
-            .other => "other",
-        };
-    }
-
-    pub fn names() []const u8 {
-        return comptime implode: {
-            const fields = std.meta.fields(@This());
-            var items: [fields.len - 1]@This() = undefined;
-            for (fields[0 .. fields.len - 1], 0..) |field, i|
-                items[i] = @field(@This(), field.name);
-            break :implode comptimeImplode(", ", items, name);
-        };
-    }
-
-    pub const default = this;
-    pub const this: @This() = switch (builtin.target.cpu.arch) {
-        .arm => .arm,
-        .aarch64 => .arm64,
-        .x86 => .ia32,
-        .loongarch64 => .loong64,
-        .mips => .mips,
-        .mipsel => .mipsel,
-        .powerpc => .ppc,
-        .powerpc64 => .ppc64,
-        .powerpc64le => .ppc64,
-        .riscv64 => .riscv64,
-        .s390x => .s390x,
-        .x86_64 => .x64,
-        else => .other,
-    };
-};
-pub const Platform = enum {
-    aix,
-    darwin,
-    freebsd,
-    linux,
-    @"linux-musl",
-    openbsd,
-    sunos,
-    win32,
-    other,
-
-    pub fn name(self: @This()) []const u8 {
-        return @tagName(self);
-    }
-
-    pub fn zigName(self: @This()) []const u8 {
-        return switch (self) {
-            .aix => "aix",
-            .darwin => "macos",
-            .freebsd => "freebsd",
-            .linux => "linux-gnu",
-            .@"linux-musl" => "linux-musl",
-            .openbsd => "openbsd",
-            .sunos => "solaris",
-            .win32 => "windows",
-            else => "other",
-        };
-    }
-
-    pub fn names() []const u8 {
-        return comptime implode: {
-            const fields = std.meta.fields(@This());
-            var items: [fields.len - 1]@This() = undefined;
-            for (fields[0 .. fields.len - 1], 0..) |field, i|
-                items[i] = @field(@This(), field.name);
-            break :implode comptimeImplode(", ", items, name);
-        };
-    }
-
-    pub fn ext(self: @This()) []const u8 {
-        return switch (self) {
-            .darwin => "dynlib",
-            .win32 => "dll",
-            else => "so",
-        };
-    }
-
-    pub const default = this;
-    pub const this: @This() = switch (builtin.target.os.tag) {
-        .aix => .aix,
-        .macos, .ios, .tvos, .visionos, .watchos => .darwin,
-        .freebsd => .freebsd,
-        .linux => switch (builtin.target.isMuslLibC()) {
-            true => .@"linux-musl",
-            false => .linux,
-        },
-        .openbsd => .openbsd,
-        .solaris => .sunos,
-        .windows => .win32,
-        else => .other,
-    };
-};
-pub const Optimize = enum {
-    debug,
-    release_safe,
-    release_small,
-    release_fast,
-
-    pub fn name(self: @This()) []const u8 {
-        return switch (self) {
-            .debug => "Debug",
-            .release_safe => "ReleaseSafe",
-            .release_small => "ReleaseSmall",
-            .release_fast => "ReleaseFast",
-        };
-    }
-
-    pub fn names() []const u8 {
-        return comptime implode: {
-            const fields = std.meta.fields(@This());
-            var items: [fields.len]@This() = undefined;
-            for (fields, 0..) |field, i|
-                items[i] = @field(@This(), field.name);
-            break :implode comptimeImplode(", ", items, name);
-        };
-    }
-
-    pub const default = .debug;
-};
 
 pub const ZigCompiler = struct {
     arena: std.heap.ArenaAllocator,
@@ -198,7 +49,10 @@ pub const ZigCompiler = struct {
 
     fn acquireConfig(self: *@This(), src_path: []const u8, mod_path: []const u8, options: ?*HashTable) !void {
         const al = self.allocator();
-        self.options = try .init(options);
+        self.options = extension.options;
+        if (options) |ht| {
+            try self.options.override(ht);
+        }
         const mod_name = std.fs.path.stem(mod_path);
         self.module_name = mod_name;
         self.module_path = src_path;
@@ -502,99 +356,11 @@ pub const ZigCompiler = struct {
     pub extern "c" var __environ: [*:null]?[*:0]u8;
 };
 
-pub fn getSharedLibraryPath(allocator: std.mem.Allocator, mod_path: []const u8, platform: Platform, arch: Arch) ![]const u8 {
+pub fn getSharedLibraryPath(allocator: std.mem.Allocator, mod_path: []const u8, platform: Options.Platform, arch: Options.Arch) ![]const u8 {
     var buffer: [1024]u8 = undefined;
     const so_filename = try std.fmt.bufPrint(&buffer, "{s}.{s}.{s}", .{ platform.name(), arch.name(), platform.ext() });
     return try std.fs.path.resolve(allocator, &.{ mod_path, so_filename });
 }
-
-pub const Options = struct {
-    zig_path: []const u8,
-    zig_args: []const u8,
-    build_dir: []const u8,
-    build_dir_size: u64,
-    clean: bool,
-    arch: Arch = .default,
-    platform: Platform = .default,
-    optimize: Optimize = .default,
-    use_libc: bool = true,
-    use_llvm: ?bool = null,
-    use_redirection: bool = true,
-    use_pthread_emulation: bool = false,
-    is_wasm: bool = false,
-    multithreaded: bool = true,
-    omit_functions: bool = false,
-    omit_variables: bool = false,
-    ignore_build_file: bool = false,
-    stack_size: usize = 256 * 1024,
-    max_memory: ?usize = null,
-    eval_branch_quota: usize = 2000000,
-
-    pub fn init(options: ?*HashTable) !@This() {
-        var self: @This() = .{
-            .zig_path = std.mem.sliceTo(extension.options.zig_path, 0),
-            .zig_args = std.mem.sliceTo(extension.options.zig_args, 0),
-            .build_dir = std.mem.sliceTo(extension.options.build_dir, 0),
-            .build_dir_size = @intCast(@max(0, extension.options.build_dir_size)),
-            .clean = extension.options.clean,
-            .optimize = init: {
-                const name = std.mem.sliceTo(extension.options.optimize, 0);
-                break :init inline for (std.meta.fields(Optimize)) |field| {
-                    if (std.mem.eql(u8, @field(Optimize, field.name).name(), name)) break @field(Optimize, field.name);
-                } else .default;
-            },
-        };
-        const ht = options orelse return self;
-        inline for (comptime std.meta.fields(@This())) |field| {
-            if (php.getHashEntry(ht, field.name) catch null) |value| {
-                const T = @FieldType(@This(), field.name);
-                @field(self, field.name) = extract(T, value) catch |err| {
-                    const vt = php.getValueType(value);
-                    return switch (err) {
-                        error.NotBoolean => failure.report("option '{s}' is a boolean, received {}", .{ field.name, vt }),
-                        error.NotInteger => failure.report("option '{s}' is an integer, received {}", .{ field.name, vt }),
-                        error.NotString => failure.report("option '{s}' is a string, received {}", .{ field.name, vt }),
-                        error.NegativeValue => failure.report("option '{s}' is a positive integer, received {}", .{
-                            field.name,
-                            php.getValueLong(value) catch unreachable,
-                        }),
-                        error.NoMatching => failure.report("'{s}' is not a valid option for '{s}'; it should be one of the following: {s}", .{
-                            php.getValueStringContent(value) catch unreachable,
-                            field.name,
-                            if (@typeInfo(T) == .@"enum") T.names() else unreachable,
-                        }),
-                    };
-                };
-            }
-        }
-        return self;
-    }
-
-    const ExtractionError = error{
-        NotBoolean,
-        NotInteger,
-        NotString,
-        NegativeValue,
-        NoMatching,
-    };
-
-    pub fn extract(comptime T: type, value: *Value) ExtractionError!T {
-        return switch (@typeInfo(T)) {
-            .bool => try php.getValueBool(value),
-            .int => try php.getValueUlong(value),
-            .pointer => try php.getValueStringContent(value),
-            .optional => |opt| try extract(opt.child, value),
-            .@"enum" => |en| get: {
-                const s = try php.getValueStringContent(value);
-                break :get inline for (comptime en.fields) |field| {
-                    const item = @field(T, field.name);
-                    if (std.mem.eql(u8, s, item.name())) break @field(T, field.name);
-                } else error.NoMatching;
-            },
-            else => unreachable,
-        };
-    }
-};
 
 fn comptimeImplode(comptime delim: []const u8, items: anytype, stringify: anytype) []const u8 {
     return comptime join: {

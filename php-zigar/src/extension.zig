@@ -6,16 +6,14 @@ const dyn_lib = @import("dyn-lib.zig");
 const failure = @import("failure.zig");
 const getSharedLibraryPath = @import("compilation.zig").getSharedLibraryPath;
 const ModuleHost = @import("host.zig").ModuleHost;
+const Options = @import("options.zig").Options;
 const php = @import("php.zig");
 const ArgumentIterator = php.ArgumentIterator;
 const FunctionInfo = php.FunctionInfo;
 const ExecuteData = php.ExecuteData;
 const FunctionEntry = php.FunctionEntry;
-const IniEntry = php.IniEntry;
-const InteralArgInfo = php.InternalArgInfo;
+const InternalArgInfo = php.InternalArgInfo;
 const ModuleEntry = php.ModuleEntry;
-const Long = php.Long;
-const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
 const structure = @import("structure.zig");
@@ -103,140 +101,6 @@ export fn php_zigar_info(module: *ModuleEntry) void {
     php.displayIniEntries(module);
 }
 
-const Options = extern struct {
-    compilation: bool = true,
-    module_rel_path: [*:0]const u8 = "../lib",
-    event_loop: [*:0]const u8 = "temporary",
-    zig_path: [*:0]const u8 = "zig",
-    zig_args: [*:0]const u8 = "",
-    build_dir: [*:0]const u8, // default value can only be determined at runtime
-    build_dir_size: php.Long = 4294967296,
-    optimize: [*:0]const u8 = "Debug",
-    clean: bool = false,
-
-    var default_build_dir: [:0]const u8 = undefined;
-    var ini_entries: [std.meta.fields(Options).len]php.IniEntryDef = undefined;
-
-    pub fn init() @This() {
-        return .{ .build_dir = default_build_dir };
-    }
-
-    pub fn setup(module_number: c_int) !void {
-        // get default build directory
-        const al = std.heap.c_allocator;
-        const tmp = try getTempDir(al);
-        defer al.free(tmp);
-        const path = try std.fs.path.resolve(al, &.{ tmp, "zigar-build" });
-        defer al.free(path);
-        default_build_dir = try al.dupeZ(u8, path);
-        // register init entries
-        const template: @This() = .{ .build_dir = undefined };
-        inline for (std.meta.fields(@This()), 0..) |field, index| {
-            const field_enum = @field(std.meta.FieldEnum(@This()), field.name);
-            const name = "zigar." ++ field.name;
-            const default_value: [*:0]const u8 = switch (field_enum) {
-                .build_dir => default_build_dir,
-                else => switch (field.type) {
-                    bool => if (@field(template, field.name)) "On" else "Off",
-                    Long => std.fmt.comptimePrint("{d}", .{@field(template, field.name)}),
-                    [*:0]const u8 => @field(template, field.name),
-                    else => @compileError("Unrecognized type: " ++ @typeName(field.type)),
-                },
-            };
-            ini_entries[index] = .{
-                .name = name.ptr,
-                .name_length = name.len,
-                .value = default_value,
-                .value_length = @intCast(std.mem.len(default_value)),
-                .modifiable = switch (field_enum) {
-                    .compilation => php.INI_SYSTEM,
-                    else => php.INI_ALL,
-                },
-                .on_modify = switch (field.type) {
-                    bool => onUpdateBool,
-                    Long => onUpdateLong,
-                    [*:0]const u8 => onUpdateString,
-                    else => unreachable,
-                },
-                .displayer = null,
-                .mh_arg1 = @ptrCast(@constCast(field.name)),
-                .mh_arg2 = @ptrFromInt(@offsetOf(@This(), field.name)),
-                .mh_arg3 = null,
-            };
-        }
-        const result = php.registerIniEntries(&ini_entries, module_number);
-        if (result != php.SUCCESS) return error.Failure;
-    }
-
-    fn getTempDir(allocator: std.mem.Allocator) ![]const u8 {
-        switch (builtin.target.os.tag) {
-            .windows => {
-                const win32 = struct {
-                    const DWORD = std.os.windows.DWORD;
-                    const LPSTR = std.os.windows.LPSTR;
-                    extern fn GetTempPathA(DWORD, LPSTR) callconv(.winapi) DWORD;
-                };
-                var buffer: [std.os.windows.MAX_PATH + 1]u8 = undefined;
-                const len = win32.GetTempPathA(buffer.len, @ptrCast(&buffer));
-                if (len == 0) return error.CannotGetTempDirectory;
-                return try allocator.dupe(u8, buffer[0..len]);
-            },
-            else => {
-                const names: []const [:0]const u8 = &.{ "TMPDIR", "TMP", "TEMP", "TEMPDIR" };
-                const tmpdir = for (names) |name| {
-                    // std.posix.getenv() crashes for some reason
-                    if (std.posix.getenvZ(name)) |value| break value;
-                } else "/tmp";
-                return try allocator.dupe(u8, tmpdir);
-            },
-        }
-    }
-
-    pub fn shutdown(module_number: c_int) void {
-        php.unregisterIniEntries(module_number);
-        std.heap.c_allocator.free(default_build_dir);
-    }
-
-    pub fn onUpdateBool(_: [*c]IniEntry, new_value: [*c]String, _: ?*anyopaque, mh_arg2: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
-        const address = @intFromPtr(&options) + @intFromPtr(mh_arg2);
-        const ptr: *bool = @ptrFromInt(address);
-        ptr.* = php.parseBool(new_value);
-        return php.SUCCESS;
-    }
-
-    pub fn onUpdateLong(_: [*c]IniEntry, new_value: [*c]String, _: ?*anyopaque, mh_arg2: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
-        const address = @intFromPtr(&options) + @intFromPtr(mh_arg2);
-        const ptr: *Long = @ptrFromInt(address);
-        ptr.* = php.parseLong(new_value);
-        return php.SUCCESS;
-    }
-
-    pub fn onUpdateString(_: [*c]IniEntry, new_value: [*c]String, mh_arg1: ?*anyopaque, mh_arg2: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
-        const text = php.getStringContent(new_value);
-        const field_enum = inline for (std.meta.fields(@This())) |field| {
-            if (mh_arg1 == @as(*anyopaque, @ptrCast(@constCast(field.name)))) {
-                break @field(std.meta.FieldEnum(@This()), field.name);
-            }
-        } else return php.FAILURE;
-        switch (field_enum) {
-            .event_loop => CallDispatcher.event_loop.use(text) catch return php.FAILURE,
-            .optimize => inline for (.{
-                "Debug",
-                "ReleaseSafe",
-                "ReleaseSmall",
-                "ReleaseFast",
-            }) |name| {
-                if (std.mem.eql(u8, name, text)) break;
-            } else return php.FAILURE,
-            else => {},
-        }
-        const address = @intFromPtr(&options) + @intFromPtr(mh_arg2);
-        const ptr: *[*]const u8 = @ptrFromInt(address);
-        ptr.* = text.ptr;
-        return php.SUCCESS;
-    }
-};
-
 pub threadlocal var options: Options = undefined;
 var default_options = switch (php.use_tsrm) {
     true => @as(*Options, undefined),
@@ -256,7 +120,7 @@ const functions = struct {
         pub fn run(ed: *ExecuteData, retval: *Value) !void {
             var arg_iter = ArgumentIterator.init(ed);
             try arg_iter.verifyCount(required.len, required.len + optional.len, "zigar_compile");
-            if (!options.compilation) {
+            if (!options.compile) {
                 retval.* = php.createValueBool(false);
                 return;
             }
@@ -307,7 +171,7 @@ const functions = struct {
             defer php.allocator.free(mod_path);
             const params = if (arg_iter.next()) |arg1| try php.getValueHashTable(arg1) else null;
             if (src_path) |path| {
-                if (options.compilation) try ZigCompiler.compile(path, mod_path, params);
+                if (options.compile) try ZigCompiler.compile(path, mod_path, params);
             }
             const so_path = try getSharedLibraryPath(php.allocator, mod_path, .this, .this);
             defer php.allocator.free(so_path);
@@ -357,7 +221,7 @@ const functions = struct {
             } else null;
             const params = if (arg_iter.next()) |arg2| try php.getValueHashTable(arg2) else null;
             if (src_path) |path| {
-                if (options.compilation) try ZigCompiler.compile(path, mod_path, params);
+                if (options.compile) try ZigCompiler.compile(path, mod_path, params);
             }
             const so_path = try getSharedLibraryPath(php.allocator, mod_path, .this, .this);
             defer php.allocator.free(so_path);
@@ -400,7 +264,7 @@ comptime {
         const arg_info = init: {
             var len = function.required.len + function.optional.len;
             if (function.variadic) len += 1;
-            var buffer: [1 + len]InteralArgInfo = undefined;
+            var buffer: [1 + len]InternalArgInfo = undefined;
             for (&buffer, 0..) |*ptr, j| {
                 if (j == 0) {
                     // the first array entry is actually used to store a FuntionInfo
