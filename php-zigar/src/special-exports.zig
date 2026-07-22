@@ -95,10 +95,10 @@ pub const SpecialExports = struct {
                 .redirect = php.createTransformedFunction(handleRedirect, "redirect", 2, false),
                 .sizeOf = php.createTransformedFunction(handleSizeOf, "sizeOf", 1, false),
                 .typeOf = php.createTransformedFunction(handleTypeOf, "typeOf", 1, false),
-                .import = php.createTransformedFunction(handleImport, "import", 0, false),
+                .import = php.createTransformedFunction(handleImport, "import", 0, true),
                 .unimport = php.createTransformedFunction(handleUnimport, "unimport", 0, false),
                 .set = php.createTransformedFunction(handleSet, "set", 2, false),
-                .describe = php.createTransformedFunction(handleDescribe, "describe", 1, false),
+                .describe = php.createTransformedFunction(handleDescribe, "describe", 1, true),
             },
         };
         class.host.addRef();
