@@ -1,0 +1,21 @@
+{
+  "name": "image",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node src/index.js"
+  },  
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "node-zigar": "^0.15.2"
+  },
+  "dependencies": {
+    "fastify": "^5.10.0",
+    "sharp": "^0.35.3"
+  }
+}
