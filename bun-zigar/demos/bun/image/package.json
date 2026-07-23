@@ -1,0 +1,20 @@
+{
+  "name": "image",
+  "module": "index.ts",
+  "type": "module",
+  "scripts": {
+    "start": "bun src/index.js"
+  },
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest",
+    "bun-zigar": "^0.15.2"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "fastify": "^5.10.0",
+    "sharp": "^0.35.3"
+  }
+}
