@@ -1,8 +1,8 @@
 <?php
 
 $m = zigar_import(__DIR__ . '/scratch.zig', function($name, $type) {
-    if ($type === 'class') return false;
     return $name;
 });
 
-hello();
+$point = new Point(x: 123, y: 456);
+print_r($point);
