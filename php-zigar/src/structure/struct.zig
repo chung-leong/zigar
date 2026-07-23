@@ -161,6 +161,7 @@ pub const Struct = struct {
             const root = self.root.?;
             if (root.symbol_names != null) return error.CalledAlready;
             var call_cache: FunctionCallCache = if (callback) |cb| try .init(cb) else undefined;
+            defer call_cache.deinit();
             // add a callback so we can remove the imports prior to request shutdown
             try extension.addRequestShutdownCallback(self, onRequestShutdown);
             // bump the refcount of the class object so exported items don't get gc'ed

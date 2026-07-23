@@ -1,7 +1,8 @@
 <?php
 
-$m = zigar_use(__DIR__ . '/scratch.zig');
+$m = zigar_import(__DIR__ . '/scratch.zig', function($name, $type) {
+    if ($type === 'class') return false;
+    return $name;
+});
 
-echo $m->Error->ItIsAGoodDayToDie;
-
-echo (int) $m->Error->ItIsAGoodDayToDie;
+hello();

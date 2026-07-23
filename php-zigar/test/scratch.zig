@@ -1,3 +1,5 @@
 const std = @import("std");
 
-pub const Error = error{ItIsAGoodDayToDie};
+pub fn hello() void {
+    std.debug.print("Hello world\n", .{});
+}
