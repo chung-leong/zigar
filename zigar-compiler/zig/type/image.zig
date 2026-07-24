@@ -9,13 +9,11 @@ const runtime_safety = builtin.mode == .Debug or builtin.mode == .ReleaseSafe;
 pub const Access = enum { ro, rw };
 pub const Format = enum {
     web,
-    web_hdr,
     gd,
 
     pub fn Type(self: @This(), acc: Access) type {
         return switch (self) {
             .web => WebImage(acc, .@"rgba-unorm8"),
-            .web_hdr => WebImage(acc, .@"rgba-float16"),
             .gd => if (!is_wasm) GdImage(acc) else void,
         };
     }
@@ -41,7 +39,7 @@ pub const formats = init: {
 pub fn AnyImage(acc: Access) type {
     return union(Format) {
         web: Format.web.Type(acc),
-        web_hdr: Format.web_hdr.Type(acc),
+        // web_hdr: Format.web_hdr.Type(acc),
         gd: Format.gd.Type(acc),
 
         pub const internal_type: util.InternalType = .any_image;
@@ -52,7 +50,7 @@ pub fn AnyImage(acc: Access) type {
     };
 }
 
-const PixelFormat = enum { @"rgba-unorm8", @"rgba-float16" };
+const PixelFormat = enum { @"rgba-unorm8" };
 
 pub fn WebImage(acc: Access, format: PixelFormat) type {
     return struct {
@@ -68,7 +66,6 @@ pub fn WebImage(acc: Access, format: PixelFormat) type {
         pub const pixel_format = format;
         pub const Pixel = switch (format) {
             .@"rgba-unorm8" => [4]u8,
-            .@"rgba-float16" => [4]f16,
         };
 
         pub fn getWidth(self: *const @This()) usize {
@@ -110,17 +107,6 @@ pub fn WebImage(acc: Access, format: PixelFormat) type {
                     };
                     break :convert float_vec * multiplier;
                 },
-                .@"rgba-float16" => convert: {
-                    const src_vec: @Vector(4, f16) = self.data[index];
-                    const dst_vec: T = switch (len) {
-                        1 => @floatCast(@shuffle(f16, src_vec, undefined, @Vector(1, i32){0})),
-                        2 => @floatCast(@shuffle(f16, src_vec, undefined, @Vector(2, i32){ 0, 3 })),
-                        3 => @floatCast(@shuffle(f16, src_vec, undefined, @Vector(3, i32){ 0, 1, 2 })),
-                        4 => @floatCast(src_vec),
-                        else => unreachable,
-                    };
-                    break :convert dst_vec;
-                },
             };
         }
 
@@ -150,17 +136,6 @@ pub fn WebImage(acc: Access, format: PixelFormat) type {
                         else => unreachable,
                     };
                     break :convert int_vec;
-                },
-                .@"rgba-float16" => convert: {
-                    const max: T = @splat(1.0);
-                    const dst_vec: @Vector(4, f16) = switch (len) {
-                        1 => @floatCast(@shuffle(E, pixel, max, @Vector(4, i32){ 0, 0, 0, -1 })),
-                        2 => @floatCast(@shuffle(E, pixel, undefined, @Vector(4, i32){ 0, 0, 0, 1 })),
-                        3 => @floatCast(@shuffle(E, pixel, max, @Vector(4, i32){ 0, 1, 2, -1 })),
-                        4 => @floatCast(pixel),
-                        else => unreachable,
-                    };
-                    break :convert dst_vec;
                 },
             };
             self.data[index] = im_pixel;
