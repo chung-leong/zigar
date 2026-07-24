@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Image processing</title>
+</head>
+  <body>
+    <p>
+      <h3>Original</h3>
+      <img id="srcImage" src="./sample.png">
+    </p>
+    <p>
+      <h3>Result</h3>
+      <canvas id="dstCanvas"></canvas>
+    </p>
+    <p>
+      Intensity: <input id="intensityInput" type="range" min="0" max="1" step="0.0001" value="0.3">
+    </p>
+  </body>
+  <script src="./sepia.js"></script>
+  <script>
+    const srcImage = document.getElementById('srcImage');
+    const dstCanvas = document.getElementById('dstCanvas');
+    const intensityInput = document.getElementById('intensityInput');
+
+    if (srcImage.complete) {
+        apply();
+    } else {
+        srcImage.onload = apply;
+    }
+    intensityInput.oninput = apply;
+
+    async function apply() {
+        const srcCanvas = document.createElement('CANVAS');
+        srcCanvas.width = srcImage.naturalWidth;
+        srcCanvas.height = srcImage.naturalHeight;
+        const srcCTX = srcCanvas.getContext('2d');
+        srcCTX.drawImage(srcImage, 0, 0);
+        const srcImageData = srcCTX.getImageData(0, 0, srcCanvas.width, srcCanvas.height);
+        const dstImageData = new ImageData(srcCanvas.width, srcCanvas.height);
+        const intensity = parseFloat(intensityInput.value);
+        await Sepia.apply(srcImageData, dstImageData, intensity);
+        dstCanvas.width = dstImageData.width;
+        dstCanvas.height = dstImageData.height;
+        const dstCTX = dstCanvas.getContext('2d');
+        dstCTX.putImageData(dstImageData, 0, 0);
+    }
+  </script>
+</html>

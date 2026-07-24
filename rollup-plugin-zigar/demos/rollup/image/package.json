@@ -1,0 +1,22 @@
+{
+  "name": "image",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "build": "rollup -c rollup.config.js",
+    "preview": "http-server ./src -H 'Cross-Origin-Opener-Policy: same-origin' -H 'Cross-Origin-Embedder-Policy: require-corp'"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@rollup/plugin-terser": "^1.0.0",
+    "rollup": "^4.62.2",
+    "rollup-plugin-zigar": "^0.15.2"
+  },
+  "dependencies": {
+    "http-server": "^14.1.1"
+  }
+}

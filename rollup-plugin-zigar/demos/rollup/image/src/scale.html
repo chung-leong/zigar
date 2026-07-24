@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Image processing</title>
+</head>
+  <body>
+    <p>
+      <h3>Original</h3>
+      <img id="srcImage" src="./sample.png">
+    </p>
+    <p>
+      <h3>Result</h3>
+      <canvas id="dstCanvas"></canvas>
+    </p>
+    <p>
+      Width: <input id="widthInput" type="text" value="400">
+    </p>
+    <p>
+      Height: <input id="heightInput" type="text" value="300">
+    </p>
+  </body>
+  <script src="./scale.js"></script>
+  <script>
+    const srcImage = document.getElementById('srcImage');
+    const dstCanvas = document.getElementById('dstCanvas');
+    const widthInput = document.getElementById('widthInput');
+    const heightInput = document.getElementById('heightInput');
+
+    if (srcImage.complete) {
+        apply();
+    } else {
+        srcImage.onload = apply;
+    }
+    widthInput.oninput = apply;
+    heightInput.oninput = apply;
+
+    async function apply() {
+        // copy source image into a canvas
+        const srcCanvas = document.createElement('CANVAS');
+        srcCanvas.width = srcImage.naturalWidth;
+        srcCanvas.height = srcImage.naturalHeight;
+        const srcCTX = srcCanvas.getContext('2d');
+        srcCTX.drawImage(srcImage, 0, 0);
+        // obtain the bitmap
+        const srcImageData = srcCTX.getImageData(0, 0, srcCanvas.width, srcCanvas.height);
+        // create destination image data object
+        const dstImageData = new ImageData(widthInput.value, heightInput.value);
+        // call the Zig function
+        await Scale.scale(srcImageData, dstImageData);
+        // paint resulting image onto the destination canvas
+        dstCanvas.width = dstImageData.width;
+        dstCanvas.height = dstImageData.height;
+        const dstCTX = dstCanvas.getContext('2d');
+        dstCTX.putImageData(dstImageData, 0, 0);
+    }
+  </script>
+</html>
