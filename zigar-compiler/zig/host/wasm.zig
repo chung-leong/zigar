@@ -41,7 +41,9 @@ pub fn createString(initializer: []const u8) !Value {
     return _createString(initializer.ptr, initializer.len);
 }
 
-pub fn createView(bytes: ?[*]const u8, len: usize, copying: bool, _: @TypeOf(null)) !Value {
+pub fn createView(bytes: ?[*]const u8, len: usize, copying: bool, read_only: bool, _: @TypeOf(null), byte_align: usize) !Value {
+    _ = read_only;
+    _ = byte_align;
     return _createView(bytes, len, copying);
 }
 
