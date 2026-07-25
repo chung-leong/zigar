@@ -635,7 +635,8 @@ const ModuleHost = struct {
     fn getFileHandle(self: *@This(), fd: Value) !Value {
         const env = self.env;
         if (builtin.target.os.tag == .windows) {
-            const uv_get_osfhandle: *const fn (c_int) callconv(.c) usize = @ptrCast(napi.getProcAddress("uv_get_osfhandle"));
+            const uv_get_osfhandle_ptr = napi.getProcAddress("uv_get_osfhandle");
+            const uv_get_osfhandle: *const fn (c_int) callconv(.c) usize = @ptrCast(@alignCast(uv_get_osfhandle_ptr));
             const fd_value = try env.getValueInt32(fd);
             const handle_value = uv_get_osfhandle(fd_value);
             return env.createUsize(handle_value);
