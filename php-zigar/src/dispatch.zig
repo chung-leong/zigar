@@ -421,6 +421,7 @@ pub const CallDispatcher = struct {
     }
 
     fn scheduleTask(self: *@This(), operation: ScheduledTask.Operation) !void {
+        if (self.multithread_count == 0) return error.Disabled;
         const fd = self.pipe_ptr[1];
         const task: ScheduledTask = .{ .self = self, .operation = operation };
         if (builtin.target.os.tag == .windows) {
@@ -449,7 +450,12 @@ pub const CallDispatcher = struct {
         } else {
             var futex: Futex = undefined;
             call.futex_handle = futex.init();
-            try self.scheduleTask(.{ .jscall = call });
+            self.scheduleTask(.{ .jscall = call }) catch |err| {
+                return switch (err) {
+                    error.Disabled => .PERM,
+                    else => .FAULT,
+                };
+            };
             return futex.wait();
         }
     }
@@ -485,7 +491,12 @@ pub const CallDispatcher = struct {
         } else {
             var futex: Futex = undefined;
             call.futex_handle = futex.init();
-            self.scheduleTask(.{ .syscall = call }) catch return .FAULT;
+            self.scheduleTask(.{ .syscall = call }) catch |err| {
+                return switch (err) {
+                    error.Disabled => .PERM,
+                    else => .FAULT,
+                };
+            };
             return futex.wait();
         }
     }
