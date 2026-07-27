@@ -136,11 +136,11 @@ pub const StructureFlags = packed union {
     @"comptime": Comptime,
 
     pub const Common = packed struct(u32) {
-        has_value: bool = true,
-        has_object: bool = false,
-        has_pointer: bool = false,
-        has_slot: bool = false,
-        has_proxy: bool = false,
+        has_value: bool,
+        has_object: bool,
+        has_pointer: bool,
+        has_slot: bool,
+        has_proxy: bool,
         _: u27 = 0,
     };
     pub const Primitive = packed struct(u32) {
@@ -189,7 +189,14 @@ pub const StructureFlags = packed union {
         is_packed: bool = false,
         _: u22 = 0,
     };
-    pub const ErrorUnion = Common;
+    pub const ErrorUnion = packed struct(u32) {
+        has_value: bool = true,
+        has_object: bool = false,
+        has_pointer: bool = false,
+        has_slot: bool = false,
+        has_proxy: bool = false,
+        _: u27 = 0,
+    };
     pub const ErrorSet = packed struct(u32) {
         has_value: bool = true,
         has_object: bool = false,
@@ -253,7 +260,14 @@ pub const StructureFlags = packed union {
         is_clamped_array: bool = false,
         _: u25 = 0,
     };
-    pub const Opaque = Common;
+    pub const Opaque = packed struct(u32) {
+        has_value: bool = false,
+        has_object: bool = false,
+        has_pointer: bool = false,
+        has_slot: bool = false,
+        has_proxy: bool = false,
+        _: u27 = 0,
+    };
     pub const ArgStruct = packed struct(u32) {
         has_value: bool = false,
         has_object: bool = false,
@@ -284,7 +298,14 @@ pub const StructureFlags = packed union {
         has_proxy: bool = false,
         _: u27 = 0,
     };
-    pub const Comptime = Common;
+    pub const Comptime = packed struct(u32) {
+        has_value: bool = true,
+        has_object: bool = false,
+        has_pointer: bool = false,
+        has_slot: bool = false,
+        has_proxy: bool = false,
+        _: u27 = 0,
+    };
 };
 
 pub const MemberType = enum {
