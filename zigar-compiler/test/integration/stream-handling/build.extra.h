@@ -1,9 +1,9 @@
 #define _GNU_SOURCE
 #include <stdio.h>
+#include <utime.h>
 
 #ifdef _WIN32
     #include <windows.h>
-    #include <utime.h>
 #else
     #include <unistd.h>
     #include <dirent.h>
