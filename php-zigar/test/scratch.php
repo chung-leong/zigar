@@ -1,8 +1,5 @@
 <?php
 
-$m = zigar_import(__DIR__ . '/scratch.zig', function($name, $type) {
-    return $name;
-});
+$m = zigar_use(__DIR__ . '/scratch.zig');
 
-$point = new Point(x: 123, y: 456);
-print_r($point);
+$m->fail();

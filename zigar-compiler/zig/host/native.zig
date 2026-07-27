@@ -3,6 +3,8 @@ const expectEqual = std.testing.expectEqual;
 const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
+const c = @import("c");
+
 const exporter = @import("../export.zig");
 const Value = exporter.Value;
 const js_fn = @import("../thunk/js-fn.zig");
@@ -222,6 +224,18 @@ pub fn getInstance() *anyopaque {
 }
 
 pub fn setHostInstance(ptr: *Module.Host) callconv(.c) E {
+    if (builtin.link_libc and builtin.target.os.tag != .windows) {
+        if (@hasDecl(c, "RTLD_DEEPBIND")) {
+            // fix missing environ due to RTLD_DEEPBIND option given to dlopen()
+            if (std.c.dlopen(null, .{ .LAZY = true, .NOLOAD = true })) |handle| {
+                defer _ = std.c.dlclose(handle);
+                if (std.c.dlsym(handle, "environ")) |symbol| {
+                    const environ_ptr: @TypeOf(&std.c.environ) = @ptrCast(@alignCast(symbol));
+                    std.c.environ = environ_ptr.*;
+                }
+            }
+        }
+    }
     instance = ptr;
     initialized = true;
     return E.SUCCESS;

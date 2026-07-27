@@ -1,13 +1,25 @@
 const std = @import("std");
-pub const pi = std.math.pi;
 
-pub var number: i32 = 123;
+const Error = error{some_error};
 
-pub const Point = struct {
-    x: f64,
-    y: f64,
-};
+pub fn fail() void {
+    @call(.never_inline, a, .{}) catch {};
+    const trace = @errorReturnTrace() orelse return;
+    std.debug.dumpStackTrace(trace.*);
+}
 
-pub fn hello() void {
-    std.debug.print("Hello world\n", .{});
+fn a() !void {
+    try @call(.never_inline, b, .{});
+}
+
+fn b() !void {
+    try @call(.never_inline, c, .{});
+}
+
+fn c() !void {
+    try @call(.never_inline, d, .{});
+}
+
+fn d() !void {
+    return error.HomerSimpson;
 }
