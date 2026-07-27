@@ -2,6 +2,16 @@
 
 final class FunctionCallingTest extends ZigarTestCase
 {   
+    public function testAllowOmissionOfOptionalStruct(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/accept-optional-struct.zig');
+        $this->expectOutput(<<<OUTPUT
+        .{ .a = true, .b = false, .c = true }
+        
+        OUTPUT);
+        $m->call();
+    }
+
     public function testThrowWhenFunctionReturnsAnError(): void
     {
         $m = ZigImporter::load(__DIR__ . '/throw-error.zig');

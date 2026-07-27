@@ -1,4 +1,4 @@
-import { ArgStructFlag, StructureFlag } from '../constants.js';
+import { ArgStructFlag, StructureType, MemberFlag, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArgumentCountMismatch } from '../errors.js';
 import { THROWING, VIVIFICATE, VISIT, RETURN, ALLOCATOR, UPDATE, MEMORY, SLOTS, FINALIZE } from '../symbols.js';
@@ -15,6 +15,22 @@ var argStruct = mixin({
     } = structure;
     const thisEnv = this;
     const argMembers = members.slice(1);
+    let lastArgOptional = false;
+    if (argMembers.length > 0) {
+      const lastArgMember = argMembers[argMembers.length - 1];
+      if (lastArgMember.structure?.type == StructureType.Struct) {
+        let isOptional = true;
+        for (const member of lastArgMember.structure.instance.members) {
+          if (member.flags & MemberFlag.IsRequired) {
+            isOptional = false;
+            break;
+          }
+        }
+        if (isOptional) {
+          lastArgOptional = true;
+        }
+      }
+    }
     const constructor = function(args, argAlloc) {
       const creating = this instanceof constructor;
       let self, dv;
@@ -38,7 +54,11 @@ var argStruct = mixin({
         }
         // length holds the minimum number of arguments
         if (args.length !== length) {
-          throw new ArgumentCountMismatch(length, args.length);
+          if (args.length === length - 1 && lastArgOptional) {
+            args = [ ...args, {} ];
+          } else {
+            throw new ArgumentCountMismatch(length, args.length);
+          }
         }
         if (flags & ArgStructFlag.IsAsync) {
           self[FINALIZE] = null;

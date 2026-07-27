@@ -13,6 +13,11 @@ export function addTests(importModule, options) {
   };
   describe('Function calling', function() {
     this.timeout(0);
+    it('should allow omission of optional struct', async function() {
+      const { call } = await importTest('accept-optional-struct');
+      const [ line ] = await capture(() => call());
+      expect(line).to.equal('.{ .a = true, .b = false, .c = true }');
+    })
     it('should throw when function returns an error', async function() {
       const { returnNumber } = await importTest('throw-error');
       const result = returnNumber(1234);
