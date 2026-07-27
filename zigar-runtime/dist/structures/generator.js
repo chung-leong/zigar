@@ -59,7 +59,7 @@ var generator = mixin({
     }
     args[RETURN] = result => callback(ptr, result);
     const generator = { ptr, callback };
-    const allocatorMember = members.find(m => m.purpose === StructurePurpose.Allocator);
+    const allocatorMember = members.find(m => m.structure?.purpose === StructurePurpose.Allocator);
     if (allocatorMember) {
       const { structure } = allocatorMember;     
       generator.allocator = this.createJsAllocator(args, structure, true);
