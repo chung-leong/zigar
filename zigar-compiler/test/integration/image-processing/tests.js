@@ -31,6 +31,16 @@ export function addTests(importModule, options) {
       const refImage = await loadImage(absolute('images/resized.png'));
       expect(compareImages(outputImage, refImage)).to.be.true;
     })
+    it('should greyscale image', async function() {
+      const { greyscale } = await importTest('greyscale');
+      const path = absolute('images/malgorzata-socha.png');
+      const { data, info } = await Sharp(path).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      greyscale({ data, width: info.width, height: info.height });
+      const outputPath = getOutputPath('greyscale.png');
+      await Sharp(data, { raw: info }).png().toFile(outputPath);
+      const refImage = await loadImage(absolute('images/greyscale.png'));
+      expect(compareImages({ data, width: info.width, height: info.height }, refImage)).to.be.true;
+    })
     it('should apply sepia filter', async function() {
       const { apply } = await importTest('sepia');
       const inputImage = await loadImage(absolute('images/malgorzata-socha.png'));

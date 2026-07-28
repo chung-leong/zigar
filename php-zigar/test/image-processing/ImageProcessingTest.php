@@ -61,6 +61,19 @@ final class ImageProcessingTest extends ZigarTestCase
         $this->assertSame($ref_data, $data);
     }
 
+    public function testRunGreyscaleFilter(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/greyscale.zig');
+        $image = imagecreatefrompng(__DIR__ . '/images/malgorzata-socha.png');
+        $m->greyscale($image);
+        $filename = 'greyscale.png';
+        $path = get_output_path($filename);
+        imagepng($image, $path);
+        $ref_data = file_get_contents(__DIR__ . "/images/$filename");
+        $data = file_get_contents($path);
+        $this->assertSame($ref_data, $data);
+    }
+
     public function testRunSepiaFilter(): void
     {
         $m = ZigImporter::load(__DIR__ . '/sepia.zig');

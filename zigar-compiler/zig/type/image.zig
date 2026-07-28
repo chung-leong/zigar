@@ -50,7 +50,7 @@ pub fn AnyImage(acc: Access) type {
     };
 }
 
-const PixelFormat = enum { @"rgba-unorm8" };
+pub const PixelFormat = enum { @"rgba-unorm8" };
 
 pub fn WebImage(acc: Access, format: PixelFormat) type {
     return struct {
