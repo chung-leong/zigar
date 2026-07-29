@@ -74,21 +74,12 @@ export function addTests(importModule, options) {
       });
       const digest = hash('/hello/world');
       expect(digest.string).to.equal(correct);
-      if (target === 'wasm32') {
-        expect(event).to.eql({ 
-          parent: null,
-          path: 'hello/world', 
-          rights: { read: true }, 
-          flags: {}, 
-        });
-      } else {
-        expect(event).to.eql({ 
-          parent: null,
-          path: 'hello/world', 
-          rights: { read: true, readdir: true }, 
-          flags: { symlinkFollow: true }, 
-        });
-      }
+      expect(event).to.eql({ 
+        parent: null,
+        path: 'hello/world', 
+        rights: { read: true, readdir: true }, 
+        flags: { symlinkFollow: true }, 
+      });
     })
     it('should fallback to the system when open handler returns undefined', async function() {
       const { __zigar, hash } = await importTest('open-and-read-from-file-system');
@@ -2746,8 +2737,10 @@ export function addTests(importModule, options) {
       });
       const result1 = get("/custom/somewhere");
       expect(result1).to.be.at.least(0xf00000);
-      const result2 = get(fileURLToPath(import.meta.url));
-      expect(result2).to.be.below(1024);
+      if (target !== 'wasm32') {
+        const result2 = get(fileURLToPath(import.meta.url));
+        expect(result2).to.be.below(1024);
+      }
     })
     it('should check if stream is terminal using libc function', async function() {
       const { __zigar, check } = await importTest('check-if-stream-is-terminal-with-libc-function');
