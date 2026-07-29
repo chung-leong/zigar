@@ -5686,7 +5686,7 @@ var generator = mixin({
     }
     args[RETURN] = result => callback(ptr, result);
     const generator = { ptr, callback };
-    const allocatorMember = members.find(m => m.purpose === StructurePurpose.Allocator);
+    const allocatorMember = members.find(m => m.structure?.purpose === StructurePurpose.Allocator);
     if (allocatorMember) {
       const { structure } = allocatorMember;     
       generator.allocator = this.createJsAllocator(args, structure, true);
@@ -9044,6 +9044,22 @@ var argStruct = mixin({
     } = structure;
     const thisEnv = this;
     const argMembers = members.slice(1);
+    let lastArgOptional = false;
+    if (argMembers.length > 0) {
+      const lastArgMember = argMembers[argMembers.length - 1];
+      if (lastArgMember.structure?.type == StructureType.Struct) {
+        let isOptional = true;
+        for (const member of lastArgMember.structure.instance.members) {
+          if (member.flags & MemberFlag.IsRequired) {
+            isOptional = false;
+            break;
+          }
+        }
+        if (isOptional) {
+          lastArgOptional = true;
+        }
+      }
+    }
     const constructor = function(args, argAlloc) {
       const creating = this instanceof constructor;
       let self, dv;
@@ -9067,7 +9083,11 @@ var argStruct = mixin({
         }
         // length holds the minimum number of arguments
         if (args.length !== length) {
-          throw new ArgumentCountMismatch(length, args.length);
+          if (args.length === length - 1 && lastArgOptional) {
+            args = [ ...args, {} ];
+          } else {
+            throw new ArgumentCountMismatch(length, args.length);
+          }
         }
         if (flags & ArgStructFlag.IsAsync) {
           self[FINALIZE] = null;
@@ -9158,7 +9178,10 @@ var arrayLike = mixin({
       case StructureType.Optional:
       case StructureType.ErrorUnion:
       case StructureType.Pointer:
-        return this.hasStringProperty(structure.instance.members[0].structure);
+        const childStructure = structure.instance.members?.[0]?.structure;
+        if (childStructure) {
+          return this.hasStringProperty(childStructure);
+        }
     }  
     return false;
   }  
@@ -10537,11 +10560,13 @@ var union = mixin({
     const propApplier = this.createApplier(structure);
     const initializer = this.createInitializer(function(arg, allocator) {      
       if (purpose == StructurePurpose.AnyImage && typeof(arg) === 'object') {
-        if (arg.data instanceof Uint8Array || arg.data instanceof Uint8ClampedArray) {
-          arg = { web: arg };
-        } else if (typeof(Float16Array) === 'function' && arg.data instanceof Float16Array) {
-          arg = { web_hdr: arg };
-        } 
+        // not using instanceof just in case we're getting objects created in other contexts
+        switch (arg.data?.[Symbol.toStringTag]) {
+          case 'Uint8Array':
+          case 'Uint8ClampedArray':
+            arg = { web: arg };
+            break;
+        }
       }      
       if (isCompatibleInstanceOf(arg, constructor)) {
         copyObject(this, arg);
