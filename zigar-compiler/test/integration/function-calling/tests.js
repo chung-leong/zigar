@@ -526,8 +526,7 @@ export function addTests(importModule, options) {
     })
     // VaList is "disabled due to miscompilations" on 64-bits Windows
     // and ARM64 Linux currently
-    skip.if(platform() === 'win32').
-    or(platform() === 'linux' && arch() === 'aarch64').
+    skip.if(platform() === 'win32').or(platform() === 'linux').
     it('should call variadic functions', async function() {
       const {
         Int8, Int16, Int32, Int64, Int128, printIntegers,
@@ -689,7 +688,7 @@ export function addTests(importModule, options) {
       expect(String.fromCharCode(...buffer2)).to.equal('abi');
     })
     it('should call printf correctly', async function() {
-      const { printf, Int, Double, StrPtr } = await importTest('call-printf', { useLibc: true });
+      const { printf, Int, Double, StrPtr } = await importTest('call-printf', { useLibc: true, useLLVM: true });
       await capture(() => {
         const result = printf(
           'Hello world %d!\n',
