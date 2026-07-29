@@ -79,8 +79,8 @@ const ModuleHost = struct {
         fd_fdstat_get: ?Ref = null,
         fd_fdstat_set_flags: ?Ref = null,
         fd_fdstat_set_rights: ?Ref = null,
-        fd_fdstat_set_size: ?Ref = null,
         fd_filestat_get: ?Ref = null,
+        fd_filestat_set_size: ?Ref = null,
         fd_filestat_set_times: ?Ref = null,
         fd_lock_get: ?Ref = null,
         fd_lock_set: ?Ref = null,
@@ -1337,7 +1337,7 @@ const ModuleHost = struct {
     fn handleTruncate(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
         if (@hasField(@TypeOf(args.*), "fd")) {
-            return try self.callPosixFunction(self.js.fd_fdstat_set_size, &.{
+            return try self.callPosixFunction(self.js.fd_filestat_set_size, &.{
                 try env.createInt32(args.fd),
                 try env.createBigintUint64(args.len),
                 futex,

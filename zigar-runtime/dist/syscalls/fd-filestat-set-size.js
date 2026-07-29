@@ -3,8 +3,8 @@ import { mixin } from '../environment.js';
 import { catchPosixError, checkStreamMethod } from '../errors.js';
 import { safeInt } from '../utils.js';
 
-var fdFdstatSetSize = mixin({
-  fdFdstatSetSize(fd, newSize, canWait) {
+var fdFilestatSetSize = mixin({
+  fdFilestatSetSize(fd, newSize, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
       const entry = this.getStream(fd);
       const [ stream ] = entry;
@@ -14,4 +14,4 @@ var fdFdstatSetSize = mixin({
   },
 });
 
-export { fdFdstatSetSize as default };
+export { fdFilestatSetSize as default };

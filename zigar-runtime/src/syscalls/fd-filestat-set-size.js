@@ -4,7 +4,7 @@ import { catchPosixError, checkStreamMethod } from '../errors.js';
 import { safeInt } from '../utils.js';
 
 export default mixin({
-  fdFdstatSetSize(fd, newSize, canWait) {
+  fdFilestatSetSize(fd, newSize, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
       const entry = this.getStream(fd);
       const [ stream ] = entry;
@@ -14,7 +14,7 @@ export default mixin({
   },
   ...(process.env.TARGET === 'node' ? {
     exports: {
-      fdFdstatSetSize: { async: true },
+      fdFilestatSetSize: { async: true },
     },
     /* c8 ignore next */
   } : undefined),

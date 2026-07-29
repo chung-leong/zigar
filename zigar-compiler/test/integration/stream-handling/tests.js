@@ -2756,6 +2756,7 @@ export function addTests(importModule, options) {
       const result2 = check(process.stdin);
       expect(result1).to.be.false;
     })
+    skip.entirely.if(target === 'wasm32').
     it('should get terminal name using libc function', async function() {
       const { __zigar, get1, get2 } = await importTest('get-terminal-name-with-libc-function');
       const result1 = get1(new Uint8Array(8));

@@ -6082,17 +6082,6 @@ var fdFdstatSetRights = mixin({
   },
 });
 
-var fdFdstatSetSize = mixin({
-  fdFdstatSetSize(fd, newSize, canWait) {
-    return catchPosixError(canWait, PosixError.EBADF, () => {
-      const entry = this.getStream(fd);
-      const [ stream ] = entry;
-      checkStreamMethod(stream, 'truncate', PosixError.EINVAL);
-      return stream.truncate(safeInt(newSize));
-    });    
-  },
-});
-
 var copyStat = mixin({
   copyStat(bufAddress, stat) {
     if (stat === false) {
@@ -6139,6 +6128,17 @@ var fdFilestatGet = mixin({
         return this.inferStat(stream);
       }
     }, (stat) => this.copyStat(bufAddress, stat));
+  },
+});
+
+var fdFileStatSetSize = mixin({
+  fdFilestatSetSize(fd, newSize, canWait) {
+    return catchPosixError(canWait, PosixError.EBADF, () => {
+      const entry = this.getStream(fd);
+      const [ stream ] = entry;
+      checkStreamMethod(stream, 'truncate', PosixError.EINVAL);
+      return stream.truncate(safeInt(newSize));
+    });    
   },
 });
 
@@ -7143,8 +7143,8 @@ var structureAcquisition = mixin({
             case 'fd_fdstat_get': this.use(fdFdstatGet); break;
             case 'fd_fdstat_set_flags': this.use(fdFdstatSetFlags); break;
             case 'fd_fdstat_set_rights': this.use(fdFdstatSetRights); break;
-            case 'fd_fdstat_set_size': this.use(fdFdstatSetSize); break;
             case 'fd_filestat_get':this.use(fdFilestatGet); break;
+            case 'fd_filestat_set_size': this.use(fdFileStatSetSize); break;
             case 'fd_filestat_set_times': this.use(fdFileStatSetTimes); break;
             case 'fd_pread': this.use(fdPread); break;
             case 'fd_prestat_get': this.use(fdPrestatGet); break;
@@ -11260,8 +11260,8 @@ var mixins = /*#__PURE__*/Object.freeze({
   SyscallFdFdstatGet: fdFdstatGet,
   SyscallFdFdstatSetFlags: fdFdstatSetFlags,
   SyscallFdFdstatSetRights: fdFdstatSetRights,
-  SyscallFdFdstatSetSize: fdFdstatSetSize,
   SyscallFdFilestatGet: fdFilestatGet,
+  SyscallFdFilestatSetSize: fdFileStatSetSize,
   SyscallFdFilestatSetTimes: fdFileStatSetTimes,
   SyscallFdLockGet: fdLockGet,
   SyscallFdLockSet: fdLockSet,
