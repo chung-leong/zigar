@@ -130,6 +130,10 @@ pub fn startMultithread() !void {}
 
 pub fn stopMultithread() void {}
 
+pub fn getLanguageName() []const u8 {
+    return "JavaScript";
+}
+
 pub fn redirectIO(_: *const anyopaque) !void {
     return error.NoSupport;
 }
