@@ -64,8 +64,14 @@ export function addTests(importModule, options) {
       const [ after ] = await capture(() => print());
       expect(after).to.equal('1234 4567');
     })
-    it('should not compile code with opaque pointer in packed struct', async function() {
-      await expect(importTest('in-packed-struct')).to.eventually.be.rejected;
+    it('should handle opaque pointer in packed struct', async function() {
+      const { default: module, init, print } = await importTest('in-packed-struct');      
+      init();
+      expect(() => module.struct_a.opaque1['*']).to.not.throw();
+      expect(() => module.struct_a.opaque2['*']).to.not.throw();
+      expect(() => module.struct_a.opaque3['*']).to.throw(Error)
+        .with.property('message').that.contains('byte boundary');
+      expect(module.struct_a.number).to.equal(100);
     });
     it('should handle opaque pointer as comptime field', async function() {
       const { default: module, StructA, Opaque, print } = await importTest('as-comptime-field');
