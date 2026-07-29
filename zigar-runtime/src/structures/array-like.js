@@ -47,7 +47,10 @@ export default mixin({
       case StructureType.Optional:
       case StructureType.ErrorUnion:
       case StructureType.Pointer:
-        return this.hasStringProperty(structure.instance.members[0].structure);
+        const childStructure = structure.instance.members?.[0]?.structure;
+        if (childStructure) {
+          return this.hasStringProperty(childStructure);
+        }
     }  
     return false;
   }  
