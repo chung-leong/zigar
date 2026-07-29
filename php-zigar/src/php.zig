@@ -108,8 +108,6 @@ pub const PURPOSE_VAR_EXPORT = 3;
 pub const PURPOSE_JSON = 4;
 pub const PURPOSE_NON_EXHAUSTIVE_ENUM = 5;
 
-pub const empty_array = &c.zend_empty_array;
-
 pub const empty_value: Value = .{ .u1 = .{ .type_info = c.IS_NULL } };
 
 pub const use_tsrm = @hasDecl(c, "ZTS");
