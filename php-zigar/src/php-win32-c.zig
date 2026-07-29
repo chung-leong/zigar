@@ -222,6 +222,7 @@ pub var zend_register_ini_entries: Ptr("zend_register_ini_entries") = undefined;
 pub var zend_register_internal_class_ex: Ptr("zend_register_internal_class_ex") = undefined;
 pub var zend_register_internal_interface: Ptr("zend_register_internal_interface") = undefined;
 pub var zend_standard_class_def: Ptr("zend_standard_class_def") = undefined;
+pub var zend_std_read_property: Ptr("zend_std_read_property") = undefined;
 pub var zend_str_tolower: Ptr("zend_str_tolower") = undefined;
 pub var zend_string_init_interned: Ptr("zend_string_init_interned") = undefined;
 pub var zend_string_tolower_ex: Ptr("zend_string_tolower_ex") = undefined;

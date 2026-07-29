@@ -2,6 +2,8 @@
 
 require __DIR__ . '/../vendor/autoload.php';
 
+ini_set('zigar.module_rel_path', './lib');
+
 final class ZigImporter 
 {
     static $optimize = 'Debug';
