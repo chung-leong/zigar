@@ -11,7 +11,7 @@
          failOnPhpunitDeprecation="true"
          failOnRisky="true"
          failOnWarning="true"
-         processIsolation="true">
+         processIsolation="false">
     <testsuites>
         <testsuite name="default">
             <directory>tests</directory>
