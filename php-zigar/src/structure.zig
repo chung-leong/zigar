@@ -112,8 +112,15 @@ pub fn Parent(comptime S: type) type {
             }
             if (@hasField(S, "buffer")) {
                 const class = ZigClassEntry.fromStructure(self);
-                if (S != Struct or !class.flags.@"struct".is_packed) {
-                    if (buffer.bit_offset != 0) return error.NotByteAligned;
+                if (buffer.bit_offset != 0) {
+                    const supported = switch (S) {
+                        Struct => class.flags.@"struct".is_packed,
+                        Vector => true,
+                        else => false,
+                    };
+                    if (!supported) {
+                        return error.NotByteAligned;
+                    }
                 }
             }
         }
