@@ -8,10 +8,11 @@
 
 #ifdef ZEND_WIN32
     #include <imagehlp.h>
+#else
+    #include <fcntl.h>
 #endif
 
 #ifdef linux
     #include <ucontext.h>
     #include <sys/prctl.h>
-    #include <fcntl.h>
 #endif
