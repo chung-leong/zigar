@@ -166,6 +166,7 @@ pub const CallDispatcher = struct {
         fd_stat: std.os.wasi.fdstat_t,
         dir_iter: ?*DirEntryIterator = null,
         flags: packed struct {
+            is_owner: bool = false,
             has_alias: bool = false,
         } = .{},
 
@@ -618,8 +619,7 @@ pub const CallDispatcher = struct {
             total_multithread_count += 1;
             if (total_multithread_count > 1) return;
             const strm_obj = try php.openDescriptor(pipes[0], "r");
-            php.preserveStream(strm_obj);
-            errdefer php.close(strm_obj);
+            errdefer php.close(strm_obj, true);
             if (builtin.target.os.tag != .windows) {
                 try php.setBlocking(strm_obj, false);
             }
@@ -803,7 +803,7 @@ pub const CallDispatcher = struct {
                     _ = self.stream_list.swapRemove(i);
                 } else {
                     // close the stream--the stream's close handler will call removeStream()
-                    php.close(item.stream);
+                    php.close(item.stream, item.flags.is_owner);
                 }
                 break;
             }
@@ -815,6 +815,7 @@ pub const CallDispatcher = struct {
         const new_fd = try self.createDescriptor();
         const new_entry = try self.addStreamEntry(new_fd, entry.path, entry.stream, &entry.fd_stat);
         new_entry.flags.has_alias = true;
+        new_entry.flags.is_owner = entry.flags.is_owner;
         if (entry.dir_iter) |iter| {
             new_entry.dir_iter = iter;
             iter.addRef();
@@ -936,7 +937,7 @@ pub const CallDispatcher = struct {
             const path = php.createString(path_sc);
             defer php.release(path);
             const strm = php.open(path, mode, null, 0) catch return error.Unexpected;
-            errdefer php.close(strm);
+            errdefer php.close(strm, true);
             const fdstat: std.os.wasi.fdstat_t = .{
                 .fs_filetype = .CHARACTER_DEVICE,
                 .fs_flags = .{},
@@ -946,7 +947,9 @@ pub const CallDispatcher = struct {
                 },
                 .fs_rights_inheriting = .{},
             };
-            return try self.addStreamEntry(fd, path, strm, &fdstat);
+            const entry = try self.addStreamEntry(fd, path, strm, &fdstat);
+            entry.flags.is_owner = true;
+            return entry;
         }
     }
 
@@ -1105,7 +1108,7 @@ pub const CallDispatcher = struct {
             const strm = php.open(loc.url, mode, loc.context, 0) catch return .NOENT;
             break :open .{ strm, .REGULAR_FILE };
         };
-        errdefer php.close(strm);
+        errdefer php.close(strm, true);
         const stat: std.os.wasi.fdstat_t = .{
             .fs_filetype = file_type,
             .fs_flags = args.descriptor_flags,
@@ -1113,7 +1116,8 @@ pub const CallDispatcher = struct {
             .fs_rights_inheriting = .{},
         };
         const fd = self.createDescriptor() catch return .MFILE;
-        _ = self.addStreamEntry(fd, loc.url, strm, &stat) catch return .MFILE;
+        const entry = self.addStreamEntry(fd, loc.url, strm, &stat) catch return .MFILE;
+        entry.flags.is_owner = true;
         args.fd = @intCast(fd);
         return .SUCCESS;
     }
@@ -1293,7 +1297,7 @@ pub const CallDispatcher = struct {
                 const loc = (self.resolvePath(args.dirfd, args.path) catch return .NOENT) orelse return .OPNOTSUPP;
                 defer loc.deinit();
                 const strm = php.open(loc.url, "x", loc.context, 0) catch return .NOENT;
-                defer php.close(strm);
+                defer php.close(strm, true);
                 php.truncate(strm, args.len) catch return .FBIG;
             }
         }
@@ -1475,9 +1479,9 @@ pub const CallDispatcher = struct {
 
     fn handleCopyFileRange(self: *@This(), args: anytype) !E {
         const out_strm, const close_out_strm = self.useStream(args.out_fd, "w") catch return .BADF;
-        defer if (close_out_strm) php.closeCasted(out_strm);
+        defer if (close_out_strm) php.close(out_strm, true);
         const in_strm, const close_in_strm = self.useStream(args.in_fd, "r") catch return .BADF;
-        defer if (close_in_strm) php.closeCasted(in_strm);
+        defer if (close_in_strm) php.close(in_strm, true);
         args.copied = php.copyFileRange(in_strm, out_strm, args.in_offset, args.out_offset, args.len) catch |err| {
             return switch (err) {
                 error.InvalidOffset => .INVAL,

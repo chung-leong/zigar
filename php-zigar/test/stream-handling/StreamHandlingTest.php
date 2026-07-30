@@ -1510,7 +1510,7 @@ final class StreamHandlingTest extends ZigarTestCase
         $m->scan($file);
     }
 
-    public function testScanVariablesFromFileUsingScanf(): void 
+    public function testScanVariablesFromStdinUsingScanf(): void 
     {
         global $input;
         $m = ZigImporter::load(__DIR__ . '/c/scan-stdin-with-scanf.zig');
@@ -1888,7 +1888,11 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertFalse($result1);
         $stdin = fopen("php://stdin", "r");
         $result2 = $m->check($stdin);
-        $this->assertFalse($result2);
+        if (PHP_OS_FAMILY === 'Darwin') {
+            $this->assertTrue($result2);        
+        } else {
+            $this->assertFalse($result2);
+        }
     }
 
     /**
@@ -1904,9 +1908,17 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertNull($result2);
         $stdin = fopen("php://stdin", "r");
         $result3 = $m->get1($stdin);
-        $this->assertNull($result3);
+        if (PHP_OS_FAMILY === 'Darwin') {
+            $this->assertSame('/dev/tty', "$result3");
+        } else {
+            $this->assertNull($result3);
+        }
         $result4 = $m->get2($stdin);
-        $this->assertNull($result4);
+        if (PHP_OS_FAMILY === 'Darwin') {
+            $this->assertSame('/dev/tty', "$result4");
+        } else {
+            $this->assertNull($result4);
+        }
     }
 
     public function testTruncateFileUsingPosixFunction(): void

@@ -1844,10 +1844,6 @@ pub fn isStdIOStream(strm: *Stream) bool {
     return ops == deref(&pc.php_stream_stdio_ops);
 }
 
-pub fn preserveStream(strm: *Stream) void {
-    set_stream_no_close(strm);
-}
-
 pub fn getStreamWrapper(strm: *Stream) *StreamWrapper {
     return get_stream_wrapper(strm);
 }
@@ -1859,13 +1855,15 @@ pub fn setStreamWrapper(strm: *Stream, wrapper: *StreamWrapper) void {
 pub fn openDescriptor(fd: c_int, mode: [*c]const u8) !*Stream {
     const src = @src();
     // arg count varies depending on PHP version and whether debug is enabled
-    return switch (comptime argCount(@TypeOf(pc._php_stream_fopen_from_fd))) {
+    const strm = switch (comptime argCount(@TypeOf(pc._php_stream_fopen_from_fd))) {
         3 => pc._php_stream_fopen_from_fd(fd, mode, null), // function in PHP 8.1 doesn't have zero_position
         4 => pc._php_stream_fopen_from_fd(fd, mode, null, false),
         8 => pc._php_stream_fopen_from_fd(fd, mode, null, 1, src.file, src.line, src.file, src.line),
         9 => pc._php_stream_fopen_from_fd(fd, mode, null, false, 1, src.file, src.line, src.file, src.line),
         else => @compileError("Unexpected _php_stream_fopen_from_fd argument count"),
-    } orelse error.Failure;
+    } orelse return error.Failure;
+    set_stream_no_close(strm);
+    return strm;
 }
 
 pub fn getDescriptor(strm: *Stream) ?c_int {
@@ -1878,12 +1876,12 @@ pub fn getDescriptor(strm: *Stream) ?c_int {
     } else null;
 }
 
-pub fn close(strm: *Stream) void {
-    _ = pc._php_stream_free(strm, c.PHP_STREAM_FREE_CLOSE);
-}
-
-pub fn closeCasted(strm: *Stream) void {
-    _ = pc._php_stream_free(strm, c.PHP_STREAM_FREE_CLOSE_CASTED);
+pub fn close(strm: *Stream, destroy: bool) void {
+    const options = switch (destroy) {
+        true => c.PHP_STREAM_FREE_CLOSE,
+        false => c.PHP_STREAM_FREE_KEEP_RSRC,
+    };
+    _ = pc._php_stream_free(strm, options);
 }
 
 pub fn flush(strm: *Stream) void {
