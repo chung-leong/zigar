@@ -177,28 +177,43 @@ pub const CallDispatcher = struct {
     const StreamWrapperSurrogate = struct {
         original: *StreamWrapper,
         wrapper: StreamWrapper,
+        wops: StreamWrapperOps,
         dispatcher: *CallDispatcher,
+        ref_count: usize = 0,
 
         pub fn init(original: *StreamWrapper, dispatcher: *CallDispatcher) !*@This() {
-            const wops = try php.allocator.create(StreamWrapperOps);
-            errdefer php.allocator.destroy(wops);
-            wops.* = original.wops.*;
             const self = try php.allocator.create(@This());
             self.* = .{
                 .original = original,
                 .wrapper = original.*,
                 .dispatcher = dispatcher,
+                .wops = original.wops.*,
             };
             // replace closer with hook function
-            wops.stream_closer = close;
-            self.wrapper.wops = wops;
+            self.wops.stream_closer = close;
+            self.wrapper.wops = &self.wops;
+            // keep a ref on the host so the dispatch doesn't disappear while the surrogate is in use
+            dispatcher.host.addRef();
             return self;
         }
 
-        pub fn deinit(self: *@This()) void {
-            const wops: *StreamWrapperOps = @ptrCast(@constCast(self.wrapper.wops));
-            php.allocator.destroy(wops);
-            php.allocator.destroy(self);
+        pub fn addRef(self: *@This()) void {
+            self.ref_count += 1;
+        }
+
+        pub fn release(self: *@This()) void {
+            self.ref_count -= 1;
+            if (self.ref_count == 0) {
+                // remove this one from the list
+                for (self.dispatcher.stream_wrapper_surrogate_list.items, 0..) |item, i| {
+                    if (item == self) {
+                        _ = self.dispatcher.stream_wrapper_surrogate_list.swapRemove(i);
+                    }
+                }
+                // release the hhost
+                self.dispatcher.host.release();
+                php.allocator.destroy(self);
+            }
         }
 
         pub fn close(wrapper: [*c]StreamWrapper, strm: ?*Stream) callconv(.c) c_int {
@@ -206,6 +221,7 @@ pub const CallDispatcher = struct {
             const w: *StreamWrapper = @ptrCast(wrapper);
             const s = strm.?;
             const self: *@This() = @fieldParentPtr("wrapper", w);
+            defer self.release();
             self.dispatcher.removeStream(s);
             php.setStreamWrapper(s, self.original);
             const func = self.original.wops.*.stream_closer orelse return php.SUCCESS;
@@ -280,6 +296,7 @@ pub const CallDispatcher = struct {
         self.releaseResources();
         if (self.env_variable_list) |list| c_allocator.free(list);
         if (self.env_variable_bytes) |bytes| c_allocator.free(bytes);
+        self.stream_wrapper_surrogate_list.deinit(php.allocator);
         php.allocator.destroy(self);
     }
 
@@ -824,7 +841,10 @@ pub const CallDispatcher = struct {
 
     fn getSurrogateWrapper(self: *@This(), wrapper: *StreamWrapper) !*StreamWrapper {
         return for (self.stream_wrapper_surrogate_list.items) |item| {
-            if (item.original == wrapper) break &item.wrapper;
+            if (item.original == wrapper) {
+                item.addRef();
+                break &item.wrapper;
+            }
         } else create: {
             const surrogate: *StreamWrapperSurrogate = try .init(wrapper, self);
             try self.stream_wrapper_surrogate_list.append(php.allocator, surrogate);
@@ -836,8 +856,6 @@ pub const CallDispatcher = struct {
         var list = self.stream_list;
         while (list.pop()) |*item| @constCast(item).deinit();
         list.deinit(php.allocator);
-        for (self.stream_wrapper_surrogate_list.items) |item| item.deinit();
-        self.stream_wrapper_surrogate_list.deinit(php.allocator);
     }
 
     pub fn getStreamPath(strm: *Stream) !*String {
