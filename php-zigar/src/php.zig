@@ -1879,7 +1879,7 @@ pub fn getDescriptor(strm: *Stream) ?c_int {
 pub fn close(strm: *Stream, destroy: bool) void {
     const options = switch (destroy) {
         true => c.PHP_STREAM_FREE_CLOSE,
-        false => c.PHP_STREAM_FREE_KEEP_RSRC,
+        false => c.PHP_STREAM_FREE_KEEP_RSRC | c.PHP_STREAM_FREE_CALL_DTOR | c.PHP_STREAM_FREE_RELEASE_STREAM,
     };
     _ = pc._php_stream_free(strm, options);
 }
