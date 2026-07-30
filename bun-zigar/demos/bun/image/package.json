@@ -8,7 +8,7 @@
   "private": true,
   "devDependencies": {
     "@types/bun": "latest",
-    "bun-zigar": "^0.15.2"
+    "bun-zigar": "^0.15.3-alpha.2"
   },
   "peerDependencies": {
     "typescript": "^5"
