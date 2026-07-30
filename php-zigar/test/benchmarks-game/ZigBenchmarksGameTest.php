@@ -154,8 +154,14 @@ final class ZigBenchmarksGameTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/reverse-complement.zig');
         $n = 250000;
-        $ref_buf = new ArrayBuffer(file_get_contents(__DIR__ . "/data/reverse-complement-$n.txt"), true);
-        $buf = new ArrayBuffer(file_get_contents(__DIR__ . "/data/fasta-$n.txt"));
+        $ref_contents = file_get_contents(__DIR__ . "/data/reverse-complement-$n.txt");
+        $contents = file_get_contents(__DIR__ . "/data/fasta-$n.txt");
+        if (PHP_OS_FAMILY === 'Windows') {
+            $ref_contents = str_replace("\r\n", "\n", $ref_contents);
+            $contents = str_replace("\r\n", "\n", $contents);
+        }
+        $ref_buf = new ArrayBuffer($ref_contents, true);
+        $buf = new ArrayBuffer($contents);
         $m->reverseComplement($buf);
         $ref_bytes = new Uint8Array($ref_buf);
         $bytes = new Uint8Array($buf);
