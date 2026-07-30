@@ -1888,7 +1888,7 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertFalse($result1);
         $stdin = fopen("php://stdin", "r");
         $result2 = $m->check($stdin);
-        if (PHP_OS_FAMILY === 'Darwin') {
+        if (PHP_OS_FAMILY === 'Darwin' || PHP_OS_FAMILY === 'Linux') {
             $this->assertTrue($result2);        
         } else {
             $this->assertFalse($result2);
@@ -1908,13 +1908,13 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertNull($result2);
         $stdin = fopen("php://stdin", "r");
         $result3 = $m->get1($stdin);
-        if (PHP_OS_FAMILY === 'Darwin') {
+        if (PHP_OS_FAMILY === 'Darwin' || PHP_OS_FAMILY === 'Linux') {
             $this->assertSame('/dev/tty', "$result3");
         } else {
             $this->assertNull($result3);
         }
         $result4 = $m->get2($stdin);
-        if (PHP_OS_FAMILY === 'Darwin') {
+        if (PHP_OS_FAMILY === 'Darwin' || PHP_OS_FAMILY === 'Linux') {
             $this->assertSame('/dev/tty', "$result4");
         } else {
             $this->assertNull($result4);
