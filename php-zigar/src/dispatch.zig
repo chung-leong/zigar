@@ -179,7 +179,7 @@ pub const CallDispatcher = struct {
         wrapper: StreamWrapper,
         wops: StreamWrapperOps,
         dispatcher: *CallDispatcher,
-        ref_count: usize = 0,
+        ref_count: usize = 1,
 
         pub fn init(original: *StreamWrapper, dispatcher: *CallDispatcher) !*@This() {
             const self = try php.allocator.create(@This());
