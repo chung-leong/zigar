@@ -970,7 +970,7 @@ function generateCode(definition, params) {
     envVariables = {},
     standaloneLoader,
   } = params;
-  const exports$1 = getExports(structures);
+  const exports = getExports(structures);
   const lines = [];
   const type = standaloneLoader?.type ?? 'esm';
   const add = manageIndentation(lines);
@@ -1041,9 +1041,9 @@ function generateCode(definition, params) {
     add(`const { constructor: v0 } = root;`);
     add(`const v1 = env.getSpecialExports();`);
     specialVarName = 'v1';
-    if (exports$1.length > 2) {
+    if (exports.length > 2) {
       add(`const {`);
-      for (const [ index, name ] of exports$1.entries()) {
+      for (const [ index, name ] of exports.entries()) {
         if (index >= 2) {
           add(`${name}: v${index},`);
         }
@@ -1052,13 +1052,13 @@ function generateCode(definition, params) {
     }
     if (type == 'esm') {
       add(`export {`);
-      for (const [ index, name ] of exports$1.entries()) {
+      for (const [ index, name ] of exports.entries()) {
         add(`v${index} as ${name},`);
       }
       add(`};`);
     } else {
       add(`module.exports = {`);
-      for (const [ index, name ] of exports$1.entries()) {
+      for (const [ index, name ] of exports.entries()) {
         add(`${name}: v${index},`);
       }
       add(`};`);
@@ -1077,7 +1077,7 @@ function generateCode(definition, params) {
     add(`\n${getLibraryExt}`);
   }
   const code = lines.join('\n');
-  return { code, exports: exports$1, structures };
+  return { code, exports, structures };
 }
 
 function addStructureDefinitions(lines, definition) {
@@ -4724,12 +4724,12 @@ var moduleLoading = mixin({
       }
       return imports;
     },
-    importFunctions(exports$1) {
+    importFunctions(exports) {
       if (!this.memory) {
-        this.memory = exports$1.memory;
+        this.memory = exports.memory;
       }
       for (const [ name, { argType, returnType } ] of Object.entries(this.imports)) {
-        const fn = exports$1[name];
+        const fn = exports[name];
         if (fn) {
           defineProperty(this, name, defineValue(this.importFunction(fn, argType, returnType)));
           this.destructors.push(() => this[name] = throwError$1);
@@ -4749,7 +4749,7 @@ var moduleLoading = mixin({
       const executable = this.executable = await f(res);
       const functions = this.exportFunctions();
       const env = {}, wasi = {}, wasiPreview = {};
-      const exports$1 = this.exportedModules = { env, wasi, wasi_snapshot_preview1: wasiPreview };
+      const exports = this.exportedModules = { env, wasi, wasi_snapshot_preview1: wasiPreview };
       for (const { module, name, kind } of WA.Module.imports(executable)) {
         if (kind === 'function') {
           if (module === 'env') {
@@ -4779,7 +4779,7 @@ var moduleLoading = mixin({
         });
       }
       this.initialTableLength = tableInitial;
-      return WA.instantiate(executable, exports$1);
+      return WA.instantiate(executable, exports);
     },
     loadModule(source, options) {
       return this.initPromise = (async () => {
@@ -5380,8 +5380,8 @@ var thunkAllocation = mixin({
         initial: tableInitial,
         element: 'anyfunc',
       });
-      const { exports: exports$1 } = new w.Instance(this.executable, imports);
-      const { createJsThunk, destroyJsThunk, identifyJsThunk } = exports$1;
+      const { exports } = new w.Instance(this.executable, imports);
+      const { createJsThunk, destroyJsThunk, identifyJsThunk } = exports;
       const source = {
         thunkCount: 0,
         createJsThunk,
@@ -11703,13 +11703,13 @@ function parseBinary(binary) {
         return { type, imports };
       }
       case SectionType.Export: {
-        const exports$1 = readArray(() => {
+        const exports = readArray(() => {
           const name = readString();
           const type = readU8();
           const index = readU32Leb128();
           return { name, type, index };
         });
-        return { type, exports: exports$1 };
+        return { type, exports };
       }
       case SectionType.Function: {
         const types = readArray(readU32Leb128);
@@ -12748,7 +12748,7 @@ async function transpile(srcPath, options) {
       binarySource = await wasmLoader(srcPath, dv);
     }
   }
-  const { code, exports: exports$1, structures } = generateCode(definition, {
+  const { code, exports, structures } = generateCode(definition, {
     runtimeURL,
     binarySource,
     topLevelAwait,
@@ -12756,7 +12756,7 @@ async function transpile(srcPath, options) {
     moduleOptions,
     mixinPaths,
   });
-  return { code, exports: exports$1, structures, sourcePaths };
+  return { code, exports, structures, sourcePaths };
 }
 
 function embed(path, dv) {

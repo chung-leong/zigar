@@ -359,7 +359,7 @@ function generateCode(definition, params) {
     envVariables = {},
     standaloneLoader,
   } = params;
-  const exports$1 = getExports(structures);
+  const exports = getExports(structures);
   const lines = [];
   const type = standaloneLoader?.type ?? 'esm';
   const add = manageIndentation(lines);
@@ -430,9 +430,9 @@ function generateCode(definition, params) {
     add(`const { constructor: v0 } = root;`);
     add(`const v1 = env.getSpecialExports();`);
     specialVarName = 'v1';
-    if (exports$1.length > 2) {
+    if (exports.length > 2) {
       add(`const {`);
-      for (const [ index, name ] of exports$1.entries()) {
+      for (const [ index, name ] of exports.entries()) {
         if (index >= 2) {
           add(`${name}: v${index},`);
         }
@@ -441,13 +441,13 @@ function generateCode(definition, params) {
     }
     if (type == 'esm') {
       add(`export {`);
-      for (const [ index, name ] of exports$1.entries()) {
+      for (const [ index, name ] of exports.entries()) {
         add(`v${index} as ${name},`);
       }
       add(`};`);
     } else {
       add(`module.exports = {`);
-      for (const [ index, name ] of exports$1.entries()) {
+      for (const [ index, name ] of exports.entries()) {
         add(`${name}: v${index},`);
       }
       add(`};`);
@@ -466,7 +466,7 @@ function generateCode(definition, params) {
     add(`\n${getLibraryExt}`);
   }
   const code = lines.join('\n');
-  return { code, exports: exports$1, structures };
+  return { code, exports, structures };
 }
 
 function addStructureDefinitions(lines, definition) {
