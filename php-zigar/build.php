@@ -286,7 +286,13 @@ foreach ($settings->versions as $version) {
             // renaming is possible on the other hand
             @rename($so_path, $so_path . ".prev");
         }
-        $zig = proc_open($cmd, [ STDIN, STDOUT, STDERR ], $pipes, null, null, [
+        // workaround for XCode 26.4 incompatibility
+        $env = null;
+        if (PHP_OS_FAMILY == 'Darwin') {
+            $env = getenv();
+            $env['DEVELOPER_DIR'] = '/dev/null';
+        }
+        $zig = proc_open($cmd, [ STDIN, STDOUT, STDERR ], $pipes, null, $env, [
             'bypass_shell' => true,
         ]);
         if (proc_close($zig) == 0) {
