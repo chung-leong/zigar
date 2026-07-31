@@ -83,11 +83,13 @@ pub const ModuleHost = struct {
             .exception_table = php.createHashTable(php.getDestructor(.value)),
             .library = lib,
         };
+        // bump ref count to prevent release() from activating when we error out of this function
+        self.addRef();
         prev_cache_mask = cache_mask;
         // install hooks
         self.dispatcher = try .init(self);
         errdefer self.dispatcher.deinit();
-        try self.dispatcher.installHooks(&lib, module.attributes.io_redirection);
+        try self.dispatcher.installHooks(&lib, module.attributes.io_redirection and false);
         _ = module.exports.set_host_instance(@ptrCast(self));
         _ = module.exports.set_language_name("PHP");
         self.importer = try .init(self);
@@ -99,6 +101,8 @@ pub const ModuleHost = struct {
         // activate acquired structures and get the root
         const root_class_obj = try self.importer.activateStructures();
         errdefer php.release(root_class_obj);
+        // release the ref added above
+        self.release();
         return php.createValueObject(root_class_obj);
     }
 
@@ -109,7 +113,7 @@ pub const ModuleHost = struct {
     pub fn release(self: *@This()) void {
         self.ref_count -= 1;
         if (self.ref_count == 0) {
-            // std.debug.print("freeing host\n", .{});
+            std.debug.print("freeing host\n", .{});
             php.destroyHashTable(&self.plain_object_table);
             php.destroyHashTable(&self.exception_table);
             php.release(self.module_path);

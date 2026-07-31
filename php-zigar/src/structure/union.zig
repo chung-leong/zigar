@@ -225,7 +225,10 @@ pub const Union = struct {
         const class = ZigClassEntry.fromStructure(self);
         if (class.flags.common.has_pointer) {
             const static = class.getStaticData(@This());
-            const selector = static.selector orelse return error.Unexpected;
+            const selector = static.selector orelse switch (options.ignore_inactive) {
+                true => return error.Unexpected,
+                false => undefined,
+            };
             const active_sel_value = switch (options.ignore_inactive) {
                 true => try selector.accessors.get(self),
                 false => php.createValueNull(),
