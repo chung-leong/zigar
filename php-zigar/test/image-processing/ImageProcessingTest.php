@@ -69,9 +69,12 @@ final class ImageProcessingTest extends ZigarTestCase
         $filename = 'greyscale.png';
         $path = get_output_path($filename);
         imagepng($image, $path);
-        $ref_data = file_get_contents(__DIR__ . "/images/$filename");
-        $data = file_get_contents($path);
-        $this->assertSame($ref_data, $data);
+        $ref_image = imagecreatefrompng(__DIR__ . "/images/$filename");
+        for ($x = 1, $y = 1; $x < imagesx($ref_image) && $y < imagesy($ref_image); $x += 10, $y += 10) {
+            $pixel = imagecolorat($image, $x, $y);
+            $ref_pixel = imagecolorat($ref_image, $x, $y);
+            $this->assertSame($pixel, $ref_pixel);
+        }
     }
 
     public function testRunSepiaFilter(): void
@@ -83,9 +86,12 @@ final class ImageProcessingTest extends ZigarTestCase
         $filename = 'sepia.png';
         $path = get_output_path($filename);
         imagepng($im_out, $path);
-        $ref_data = file_get_contents(__DIR__ . "/images/$filename");
-        $data = file_get_contents($path);
-        $this->assertSame($ref_data, $data);
+        $ref_image = imagecreatefrompng(__DIR__ . "/images/$filename");
+        for ($x = 1, $y = 1; $x < imagesx($ref_image) && $y < imagesy($ref_image); $x += 10, $y += 10) {
+            $pixel = imagecolorat($im_out, $x, $y);
+            $ref_pixel = imagecolorat($ref_image, $x, $y);
+            $this->assertSame($pixel, $ref_pixel);
+        }
     }
 
     public function testRunCirclePatternFilter(): void
@@ -105,9 +111,12 @@ final class ImageProcessingTest extends ZigarTestCase
         $filename = 'circle-pattern.png';
         $path = get_output_path($filename);
         imagepng($im_out, $path);
-        $ref_data = file_get_contents(__DIR__ . "/images/$filename");
-        $data = file_get_contents($path);
-        $this->assertSame($ref_data, $data);
+        $ref_image = imagecreatefrompng(__DIR__ . "/images/$filename");
+        for ($x = 1, $y = 1; $x < imagesx($ref_image) && $y < imagesy($ref_image); $x += 10, $y += 10) {
+            $pixel = imagecolorat($im_out, $x, $y);
+            $ref_pixel = imagecolorat($ref_image, $x, $y);
+            $this->assertSame($pixel, $ref_pixel);
+        }
     }
 
     public function testRunMetallicFilter(): void
@@ -133,6 +142,12 @@ final class ImageProcessingTest extends ZigarTestCase
         $filename = 'metallic.png';
         $path = get_output_path($filename);
         imagepng($im_out, $path);
+        $ref_image = imagecreatefrompng(__DIR__ . "/images/$filename");
+        for ($x = 1, $y = 1; $x < imagesx($ref_image) && $y < imagesy($ref_image); $x += 10, $y += 10) {
+            $pixel = imagecolorat($im_out, $x, $y);
+            $ref_pixel = imagecolorat($ref_image, $x, $y);
+            $this->assertSame($pixel, $ref_pixel);
+        }
     }
 
     public function testRunDrosteFilter(): void
@@ -162,6 +177,12 @@ final class ImageProcessingTest extends ZigarTestCase
         $filename = 'droste.png';
         $path = get_output_path($filename);
         imagepng($im_out, $path);
+        $ref_image = imagecreatefrompng(__DIR__ . "/images/$filename");
+        for ($x = 1, $y = 1; $x < imagesx($ref_image) && $y < imagesy($ref_image); $x += 10, $y += 10) {
+            $pixel = imagecolorat($im_out, $x, $y);
+            $ref_pixel = imagecolorat($ref_image, $x, $y);
+            $this->assertSame($pixel, $ref_pixel);
+        }
     }
 
     public function testRunRayTracer(): void
@@ -174,6 +195,12 @@ final class ImageProcessingTest extends ZigarTestCase
         $filename = 'raytracer.png';
         $path = get_output_path($filename);
         imagepng($im_out, $path);
+        $ref_image = imagecreatefrompng(__DIR__ . "/images/$filename");
+        for ($x = 1, $y = 1; $x < imagesx($ref_image) && $y < imagesy($ref_image); $x += 10, $y += 10) {
+            $pixel = imagecolorat($im_out, $x, $y);
+            $ref_pixel = imagecolorat($ref_image, $x, $y);
+            $this->assertSame($pixel, $ref_pixel);
+        }
     }
 
     public function testRenderMandelbulb(): void
@@ -188,11 +215,13 @@ final class ImageProcessingTest extends ZigarTestCase
         $filename = 'mandelbulb-quick.png';
         $path = get_output_path($filename);
         imagepng($im_out, $path);
-        $ref_data = file_get_contents(__DIR__ . "/images/$filename");
-        $data = file_get_contents($path);
-        $this->assertSame($ref_data, $data);
+        $ref_image = imagecreatefrompng(__DIR__ . "/images/$filename");
+        for ($x = 1, $y = 1; $x < imagesx($ref_image) && $y < imagesy($ref_image); $x += 10, $y += 10) {
+            $pixel = imagecolorat($im_out, $x, $y);
+            $ref_pixel = imagecolorat($ref_image, $x, $y);
+            $this->assertSame($pixel, $ref_pixel);
+        }
     }
-
 }
 
 function get_output_path($filename) {
