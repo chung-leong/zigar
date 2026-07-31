@@ -219,14 +219,14 @@ pub fn Controller(comptime Host: type) type {
                             std.macho.BIND_OPCODE_ADD_ADDR_ULEB => {
                                 const skip, const width = try extractUleb128(bytes, index);
                                 index += width;
-                                offset += skip;
+                                offset +%= skip;
                             },
                             std.macho.BIND_OPCODE_DO_BIND_ULEB_TIMES_SKIPPING_ULEB => {
                                 const count, const width1 = try extractUleb128(bytes, index);
                                 index += width1;
                                 const skip, const width2 = try extractUleb128(bytes, index);
                                 index += width2;
-                                offset += count * (@sizeOf(usize) + skip);
+                                offset +%= count * (@sizeOf(usize) + skip);
                             },
                             std.macho.BIND_OPCODE_DO_BIND,
                             std.macho.BIND_OPCODE_DO_BIND_ADD_ADDR_ULEB,
@@ -243,7 +243,7 @@ pub fn Controller(comptime Host: type) type {
                                     std.macho.BIND_OPCODE_DO_BIND_ADD_ADDR_IMM_SCALED => (immediate + 1) * @sizeOf(usize),
                                     else => unreachable,
                                 };
-                                offset += @sizeOf(usize) + extra;
+                                offset +%= @sizeOf(usize) + extra;
                                 // here's where we do the lookup
                                 const name = symbol_name orelse continue;
                                 defer symbol_name = null;
@@ -628,8 +628,8 @@ pub fn Controller(comptime Host: type) type {
             var shift: u6 = 0;
             return for (bytes[index..], 0..) |byte, i| {
                 value |= (@as(isize, byte) & 0x7f) << shift;
-                shift += 7;
                 if ((byte & 0x80) == 0) break .{ @bitCast(value), i + 1 };
+                shift += 7;
             } else error.Unexpected;
         }
 
