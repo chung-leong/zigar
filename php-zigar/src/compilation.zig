@@ -246,9 +246,22 @@ pub const ZigCompiler = struct {
     fn runCompiler(self: *@This()) !void {
         const al = self.allocator();
         var child: std.process.Child = .init(self.compiler_args, al);
+        var env: std.process.EnvMap = undefined;
         child.cwd = self.module_build_dir;
         child.stderr_behavior = .Pipe;
         child.stdout_behavior = .Pipe;
+        if (builtin.target.os.tag.isDarwin()) {
+            // work around for XCode 26.4 incompatibility
+            env = try std.process.getEnvMap(php.allocator);
+            errdefer env.deinit();
+            try env.put("DEVELOPER_DIR", "/dev/null");
+            child.env_map = &env;
+        }
+        defer {
+            if (builtin.target.os.tag.isDarwin()) {
+                env.deinit();
+            }
+        }
         try child.spawn();
         try child.waitForSpawn();
         const max_output = 8 * 1024 * 1024;
