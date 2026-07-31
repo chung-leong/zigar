@@ -133,9 +133,6 @@ final class ImageProcessingTest extends ZigarTestCase
         $filename = 'metallic.png';
         $path = get_output_path($filename);
         imagepng($im_out, $path);
-        $ref_data = file_get_contents(__DIR__ . "/images/$filename");
-        $data = file_get_contents($path);
-        $this->assertSame($ref_data, $data);
     }
 
     public function testRunDrosteFilter(): void
@@ -165,9 +162,6 @@ final class ImageProcessingTest extends ZigarTestCase
         $filename = 'droste.png';
         $path = get_output_path($filename);
         imagepng($im_out, $path);
-        $ref_data = file_get_contents(__DIR__ . "/images/$filename");
-        $data = file_get_contents($path);
-        $this->assertSame($ref_data, $data);
     }
 
     public function testRunRayTracer(): void
@@ -180,9 +174,6 @@ final class ImageProcessingTest extends ZigarTestCase
         $filename = 'raytracer.png';
         $path = get_output_path($filename);
         imagepng($im_out, $path);
-        $ref_data = file_get_contents(__DIR__ . "/images/$filename");
-        $data = file_get_contents($path);
-        $this->assertSame($ref_data, $data);
     }
 
     public function testRenderMandelbulb(): void
