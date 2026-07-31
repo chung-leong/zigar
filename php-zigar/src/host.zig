@@ -113,7 +113,7 @@ pub const ModuleHost = struct {
     pub fn release(self: *@This()) void {
         self.ref_count -= 1;
         if (self.ref_count == 0) {
-            std.debug.print("freeing host\n", .{});
+            // std.debug.print("freeing host\n", .{});
             php.destroyHashTable(&self.plain_object_table);
             php.destroyHashTable(&self.exception_table);
             php.release(self.module_path);

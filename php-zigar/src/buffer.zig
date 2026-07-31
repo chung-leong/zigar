@@ -356,10 +356,14 @@ pub const ByteBuffer = struct {
     }
 
     pub fn compareReadOnly(a: *const @This(), b: anytype) ?RelativePosition {
-        if (comptime hasField(@TypeOf(b), "flags")) {
-            if (a.flags.read_only and !b.flags.read_only) return .ab;
-            if (!a.flags.read_only and b.flags.read_only) return .ba;
-        }
+        const b_read_only = if (comptime hasField(@TypeOf(b), "flags"))
+            b.flags.read_only
+        else if (comptime hasField(@TypeOf(b), "read_only"))
+            b.read_only
+        else
+            return null;
+        if (a.flags.read_only and !b_read_only) return .ab;
+        if (!a.flags.read_only and b_read_only) return .ba;
         return null;
     }
 
