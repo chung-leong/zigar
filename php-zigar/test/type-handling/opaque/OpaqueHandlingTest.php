@@ -114,7 +114,7 @@ final class OpaqueHandlingTest extends ZigarTestCase
             });
         } else {
             $this->assertExceptionMessage("untagged union", function() use($m, $b) {
-                $x = $b->ptr;
+                $x = $b->ptr->{'*'};
             });
         }
 
@@ -126,7 +126,7 @@ final class OpaqueHandlingTest extends ZigarTestCase
             });
         } else {
             $this->assertExceptionMessage("untagged union", function() use($m) {
-                $x = $m->union_a->ptr;
+                $x = $m->union_a->ptr->{'*'};
             });
         }
     }
