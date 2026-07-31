@@ -223,31 +223,31 @@ pub const Union = struct {
 
     pub fn visitPointers(self: *@This(), cb: anytype, args: anytype, comptime options: structure.VisitOptions) Error!void {
         const class = ZigClassEntry.fromStructure(self);
-        if (class.flags.common.has_pointer) {
+        if (!class.flags.common.has_pointer) return;
+        var iter = class.getMemberIterator(.instance);
+        if (options.ignore_inactive) {
             const static = class.getStaticData(@This());
-            const selector = static.selector orelse switch (options.ignore_inactive) {
-                true => return error.Unexpected,
-                false => undefined,
-            };
-            const active_sel_value = switch (options.ignore_inactive) {
-                true => try selector.accessors.get(self),
-                false => php.createValueNull(),
-            };
+            const selector = static.selector orelse return error.Unexpected;
+            const active_sel_value = try selector.accessors.get(self);
             defer php.release(&active_sel_value);
-            var iter = class.getMemberIterator(.instance);
             while (iter.next()) |member| {
                 if (iter.currentName()) |name| {
                     if (member.class.flags.common.has_pointer) {
-                        const run = !options.ignore_inactive or match: {
-                            const sel_value = try php.getHashEntry(&selector.possible_values, name);
-                            break :match compareSelectors(sel_value, &active_sel_value);
-                        };
-                        if (run) {
+                        const sel_value = try php.getHashEntry(&selector.possible_values, name);
+                        if (compareSelectors(sel_value, &active_sel_value)) {
                             if (try member.accessors.getObject(self, !options.ignore_uncreated)) |obj| {
                                 try structure.invokeMethod(obj, "visitPointers", .{ cb, args, options });
                             }
-                            if (options.ignore_inactive) break;
+                            break;
                         }
+                    }
+                }
+            }
+        } else {
+            while (iter.next()) |member| {
+                if (member.class.flags.common.has_pointer) {
+                    if (try member.accessors.getObject(self, !options.ignore_uncreated)) |obj| {
+                        try structure.invokeMethod(obj, "visitPointers", .{ cb, args, options });
                     }
                 }
             }

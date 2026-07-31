@@ -123,7 +123,7 @@ final class PointerHandlingTest extends ZigarTestCase
             });
         } else {
             $this->assertExceptionMessage("untagged union", function() use($b) {
-                $x = $b->text;
+                $x = $b->text->__string;
             });
         }
 
@@ -135,7 +135,7 @@ final class PointerHandlingTest extends ZigarTestCase
             });
         } else {
             $this->assertExceptionMessage("untagged union", function() use($m) {
-                $x = $m->union_a->text;
+                $x = $m->union_a->text->__string;
             });
         }
     }

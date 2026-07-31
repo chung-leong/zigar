@@ -216,7 +216,7 @@ pub fn stopMultithread() void {
 }
 
 pub fn redirectIO(fn_ptr: *const anyopaque) !void {
-    if (imports.redirect_syscalls(instance, fn_ptr) != .SUCCESS) return error.UnableToRedirectIO;
+    if (imports.redirect_syscalls(instance, fn_ptr) != .SUCCESS) return error.UnableToRedirectIo;
 }
 
 pub fn getInstance() *anyopaque {
