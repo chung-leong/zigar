@@ -196,6 +196,7 @@ if (!$build) exit(0);
 
 $settings->save();
 $results = [];
+$links = [];
 foreach ($settings->versions as $version) {
     foreach ($settings->targets as $target) {
         if (str_ends_with($target, '-ts')) {
@@ -209,19 +210,28 @@ foreach ($settings->versions as $version) {
         echo "Building extension at optimization level \"$settings->optimize\" for PHP $version $debug($platform/$arch$ts)\n";
         $devel_path = join(DIRECTORY_SEPARATOR, [ __DIR__, 'php-devel', $version ]);
         if (!file_exists($devel_path)) {
-            $links = [
-                '8.1' => "https://downloads.php.net/~windows/releases/php-devel-pack-8.1.34-Win32-vs16-x64.zip",
-                '8.2' => "https://downloads.php.net/~windows/releases/php-devel-pack-8.2.32-Win32-vs16-x64.zip",
-                '8.3' => "https://downloads.php.net/~windows/releases/php-devel-pack-8.3.32-Win32-vs16-x64.zip",
-                '8.4' => "https://downloads.php.net/~windows/releases/php-devel-pack-8.4.23-Win32-vs17-x64.zip",
-                '8.5' => "https://downloads.php.net/~windows/releases/php-devel-pack-8.5.8-Win32-vs17-x64.zip",
-            ];
+            if (count($links) === 0) {
+                $dir_url = "https://downloads.php.net/~windows/releases/";
+                $dir_contents = file_get_contents($dir_url);
+                if (preg_match_all('/href="(php-devel\-pack\-(8\.\d)\.\d+-nts\-.*?\-x64\.zip)"/', $dir_contents, $matches, PREG_SET_ORDER)) {
+                    foreach ($matches as $m) {
+                        $links[$m[2]] = $dir_url . $m[1];
+                    }
+                } else {
+                    echo "Unable to scan PHP download directory\n";
+                    exit(1);
+                }
+            }
             $link = $links[$version];
             if (!in_array('https', stream_get_wrappers())) {
                 $link = str_replace('https:', 'http:', $link);
             }
             echo "Downloading $link\n";
             $zip_contents = file_get_contents($link);
+            if ($zip_contents === false) {
+                echo "Unable to download PHP development package: $link\n";
+                exit(1);
+            }
             if (!in_array("var", stream_get_wrappers())) {
                 stream_wrapper_register("var", "VariableStream");
             }
