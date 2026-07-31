@@ -182,8 +182,11 @@ switch ($action) {
         $build = true; 
         break;
     case 'menu': 
-        if (!is_callable('posix_isatty') or !posix_isatty(STDIN)) {
-            echo "Unable to show menu\n";
+        if (!is_callable('posix_isatty')) {
+            echo "Unable to show menu: posix extension is not installed\n";
+            exit(1);
+        } else if (!posix_isatty(STDIN)) {
+            echo "Unable to show menu: stdin is not a TTY\n";
             exit(1);
         }
         $menu->open();
