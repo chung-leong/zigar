@@ -159,6 +159,7 @@ const PosixError = { // values mirror std.os.wasi.errno_t
   EMFILE: 34,
   ENOENT: 44,
   ENOSPC: 51,
+  ENOSYS: 52,
   ENOTSUP: 58,
   EPERM: 63,
   ESPIPE: 70,
@@ -4764,6 +4765,7 @@ var moduleLoading = mixin({
           }
         }
       }
+      debugger;
       if (memoryInitial) {
         this.memory = env.memory = new WA.Memory({
           initial: memoryInitial,
@@ -5372,7 +5374,7 @@ var thunkAllocation = mixin({
         }
       }
       env.memory = new w.Memory({
-        initial: memoryInitial,
+        initial: memoryInitial ?? this.memory.buffer.byteLength / 65536,
         maximum: memoryMax,
         shared: multithreaded,
       });
@@ -10943,25 +10945,19 @@ var pathFilestatSetSize = mixin({
         exclusive: true,
         sync: true,
       };
-      const truncate = (arg) => {
-        if (arg === undefined) {
+      return this.triggerEvent('open', { ...loc, rights, flags });
+    }, (openResult) => {
+        if (openResult === undefined) {
           return PosixError.ENOTSUP;
-        } else if (arg === false) {
+        } else if (openResult === false) {
           return PosixError.ENOENT;
         }
-        const stream = this.convertWriter(arg);
+        const stream = this.convertWriter(openResult);
         if (!stream) {
-          throw new InvalidStream(PosixDescriptorRight.write, arg);
+          throw new InvalidStream(PosixDescriptorRight.fd_write, openResult);
         }
         checkStreamMethod(stream, 'truncate', PosixError.EINVAL);
         return stream.truncate(safeInt(newSize));
-      };
-      const openResult = this.triggerEvent('open', { ...loc, rights, flags });
-      if (isPromise(openResult)) {
-        return openResult.then(truncate);
-      } else {
-        return truncate(openResult);
-      }
     });
   },
 });

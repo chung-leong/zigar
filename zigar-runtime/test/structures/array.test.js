@@ -4,6 +4,7 @@ import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { ENTRIES, FINALIZE, INITIALIZE, MEMORY, VISIT } from '../../src/symbols.js';
 import { encodeBase64 } from '../../src/utils.js';
+import { addressByteSize, addressSize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -1576,7 +1577,7 @@ describe('Structure: array', function() {
       const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -1588,6 +1589,13 @@ describe('Structure: array', function() {
               bitSize: 64,
               slot: 0,
               structure: structStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -1606,8 +1614,8 @@ describe('Structure: array', function() {
           members: [
             {
               type: MemberType.Object,
-              bitSize: 64,
-              byteSize: 8,
+              bitSize: addressSize,
+              byteSize: addressByteSize,
               structure: ptrStructure,
             },
           ],
@@ -1783,7 +1791,7 @@ describe('Structure: array', function() {
       const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -1794,6 +1802,13 @@ describe('Structure: array', function() {
               byteSize: 8,
               slot: 0,
               structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -1812,8 +1827,8 @@ describe('Structure: array', function() {
           members: [
             {
               type: MemberType.Object,
-              bitSize: 64,
-              byteSize: 8,
+              bitSize: addressSize,
+              byteSize: addressByteSize,
               structure: ptrStructure,
             },
           ],
@@ -1872,7 +1887,7 @@ describe('Structure: array', function() {
       const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -1884,6 +1899,13 @@ describe('Structure: array', function() {
               slot: 0,
               structure: intStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -1894,14 +1916,14 @@ describe('Structure: array', function() {
         type: StructureType.Array,
         flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         length: 4,
-        byteSize: 8 * 4,
+        byteSize: addressByteSize * 4,
         signature: 0n,
         instance: {
           members: [
             {
               type: MemberType.Object,
-              bitSize: 64,
-              byteSize: 8,
+              bitSize: addressSize,
+              byteSize: addressByteSize,
               structure: ptrStructure,
             },
           ],
@@ -1944,7 +1966,7 @@ describe('Structure: array', function() {
       const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -1955,6 +1977,13 @@ describe('Structure: array', function() {
               byteSize: 8,
               slot: 0,
               structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -1973,8 +2002,8 @@ describe('Structure: array', function() {
           members: [
             {
               type: MemberType.Object,
-              bitSize: 64,
-              byteSize: 8,
+              bitSize: addressSize,
+              byteSize: addressByteSize,
               structure: ptrStructure,
             },
           ],

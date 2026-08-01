@@ -9,6 +9,7 @@ import {
   ENTRIES, ENVIRONMENT, INITIALIZE, KEYS, MEMORY, SETTERS, SLOTS, VISIT, ZIG,
 } from '../../src/symbols.js';
 import { defineValue, encodeBase64, usize } from '../../src/utils.js';
+import { addressByteSize, addressSize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -652,7 +653,7 @@ describe('Structure: union', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -663,6 +664,13 @@ describe('Structure: union', function() {
               byteSize: 8,
               slot: 0,
               structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -681,9 +689,9 @@ describe('Structure: union', function() {
             {
               name: 'pointer',
               type: MemberType.Object,
-              bitSize: 64,
+              bitSize: addressSize,
               bitOffset: 0,
-              byteSize: 8,
+              byteSize: addressByteSize,
               slot: 0,
               structure: ptrStructure,
             },
@@ -704,8 +712,8 @@ describe('Structure: union', function() {
           members: [
             {
               type: MemberType.Object,
-              bitSize: 64,
-              byteSize: 8,
+              bitSize: addressSize,
+              byteSize: addressByteSize,
               structure: ptrStructure,
             },
           ],
@@ -724,9 +732,9 @@ describe('Structure: union', function() {
             {
               name: 'pointer',
               type: MemberType.Object,
-              bitSize: 64,
+              bitSize: addressSize,
               bitOffset: 0,
-              byteSize: 8,
+              byteSize: addressByteSize,
               slot: 0,
               structure: ptrStructure,
             },
@@ -1012,7 +1020,7 @@ describe('Structure: union', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -1023,6 +1031,13 @@ describe('Structure: union', function() {
               byteSize: 8,
               slot: 0,
               structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -1084,9 +1099,9 @@ describe('Structure: union', function() {
             {
               name: 'pointer',
               type: MemberType.Object,
-              bitSize: 64,
+              bitSize: addressSize,
               bitOffset: 0,
-              byteSize: 8,
+              byteSize: addressByteSize,
               slot: 0,
               structure: ptrStructure,
             },
@@ -1146,7 +1161,7 @@ describe('Structure: union', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -1157,6 +1172,13 @@ describe('Structure: union', function() {
               byteSize: 8,
               slot: 0,
               structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -1218,9 +1240,9 @@ describe('Structure: union', function() {
             {
               name: 'pointer',
               type: MemberType.Object,
-              bitSize: 64,
+              bitSize: addressSize,
               bitOffset: 0,
-              byteSize: 8,
+              byteSize: addressByteSize,
               slot: 0,
               structure: ptrStructure,
             },
@@ -1280,17 +1302,24 @@ describe('Structure: union', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
             {
               type: MemberType.Object,
-              bitSize: 64,
+              bitSize: 32,
               bitOffset: 0,
-              byteSize: 8,
+              byteSize: 4,
               slot: 0,
               structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -1353,9 +1382,9 @@ describe('Structure: union', function() {
             {
               name: 'pointer',
               type: MemberType.Object,
-              bitSize: 64,
+              bitSize: addressSize,
               bitOffset: 0,
-              byteSize: 8,
+              byteSize: addressByteSize,
               slot: 0,
               structure: ptrStructure,
             },
@@ -1687,7 +1716,7 @@ describe('Structure: union', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Hello',
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -1698,6 +1727,13 @@ describe('Structure: union', function() {
               byteSize: 8,
               structure,
               slot: 0,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -1754,9 +1790,9 @@ describe('Structure: union', function() {
             {
               name: '0',
               type: MemberType.Object,
-              bitSize: 64,
+              bitSize: addressSize,
               bitOffset: optStructure.byteSize * 8,
-              byteSize: 8,
+              byteSize: addressByteSize,
               structure: ptrStructure,
               slot: 0,
             },

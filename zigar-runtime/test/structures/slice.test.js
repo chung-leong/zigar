@@ -6,6 +6,7 @@ import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { ENTRIES, FINALIZE, INITIALIZE, MEMORY } from '../../src/symbols.js';
 import { encodeBase64, usize } from '../../src/utils.js';
+import { addressByteSize, addressSize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -2208,7 +2209,7 @@ describe('Structure: slice', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
-        byteSize: 8,
+        byteSize: addressByteSize * 2,
         signature: 0n,
         instance: {
           members: [
@@ -2220,6 +2221,20 @@ describe('Structure: slice', function() {
               slot: 0,
               structure: uintStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -2229,15 +2244,15 @@ describe('Structure: slice', function() {
       const structure = {
         type: StructureType.Slice,
         flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
-        name: '[_]i32',
-        byteSize: 8,
+        name: '[_][]i32',
+        byteSize: addressByteSize * 2,
         signature: 0n,
         instance: {
           members: [
             {
               type: MemberType.Object,
-              bitSize: 64,
-              byteSize: 8,
+              bitSize: addressSize * 2,
+              byteSize: addressByteSize * 2,
               structure: ptrStructure,
             },
           ],

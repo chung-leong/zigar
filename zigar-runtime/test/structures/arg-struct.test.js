@@ -276,7 +276,7 @@ describe('Structure: arg-struct', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -287,6 +287,13 @@ describe('Structure: arg-struct', function() {
               byteSize: 8,
               slot: 0,
               structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -633,11 +640,18 @@ describe('Structure: arg-struct', function() {
           members: [
             {
               type: MemberType.Object,
-              bitSize: addressSize,
+              bitSize: 0,
               bitOffset: 0,
               byteSize: addressByteSize,
               structure: resolveStructure,
               slot: 0,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -698,6 +712,13 @@ describe('Structure: arg-struct', function() {
               byteSize: addressByteSize,
               slot: 0,
               structure: sliceStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },

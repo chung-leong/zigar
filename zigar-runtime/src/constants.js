@@ -152,6 +152,7 @@ export const PosixError = { // values mirror std.os.wasi.errno_t
   EMFILE: 34,
   ENOENT: 44,
   ENOSPC: 51,
+  ENOSYS: 52,
   ENOTSUP: 58,
   EPERM: 63,
   ESPIPE: 70,

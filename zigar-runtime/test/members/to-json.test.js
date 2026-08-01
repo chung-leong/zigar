@@ -2,6 +2,7 @@ import { expect } from 'chai';
 import { MemberType, StructureFlag, StructureType, UnionFlag } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
+import { addressByteSize, addressSize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -149,7 +150,7 @@ describe('Member: toJSON', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasSlot | StructureFlag.HasPointer,
         name: '*f64',
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -160,6 +161,13 @@ describe('Member: toJSON', function() {
               bitOffset: 0,
               structure: floatStructure,
               slot: 0,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -178,9 +186,9 @@ describe('Member: toJSON', function() {
             {
               name: 'goat',
               type: MemberType.Object,
-              bitSize: 64,
+              bitSize: addressSize,
               bitOffset: 0,
-              byteSize: 8,
+              byteSize: addressByteSize,
               structure: ptrStructure,
               slot: 0,
             },

@@ -238,6 +238,16 @@ describe('Syscall: fd-write', function() {
     expect(array[0]).to.be.an('Uint8Array');
     expect(array[0]).to.have.lengthOf(text.length * 2);
   })
+  it('should write to stderr', async function() {
+    const env = new Env();
+    const text = 'ABCDEFG\n'
+    const array = new Uint8Array(text.length);
+    for (let i = 0; i < text.length; i++) {
+      array[i] = text.codePointAt(i);
+    }
+    const [ line ] = await capture(() => env.fdWriteStderr(array));
+    expect(line).to.equal('ABCDEFG');
+  })  
   if (process.env.TARGET === 'wasm') {
     it('should be callable through WASI', async function() {
       const env = new Env();

@@ -8,6 +8,7 @@ import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { MEMORY } from '../../src/symbols.js';
 import { usize } from '../../src/utils.js';
+import { addressByteSize, addressSize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -38,7 +39,7 @@ describe('Feature: abort-signal', function() {
       const ptrStructure = {
         type: StructureType.Pointer,
         name: '*const i32',
-        byteSize: 8,
+        byteSize: addressByteSize,
         flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | PointerFlag.IsSingle | PointerFlag.IsConst,
         signature: 0n,
         instance: {
@@ -50,6 +51,13 @@ describe('Feature: abort-signal', function() {
               byteSize: 4,
               structure: intStructure,
               slot: 0,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -69,9 +77,9 @@ describe('Feature: abort-signal', function() {
             {
               name: 'ptr',
               type: MemberType.Object,
-              bitSize: 64,
+              bitSize: addressSize,
               bitOffset: 0,
-              byteSize: 8,
+              byteSize: addressByteSize,
               structure: ptrStructure,
               slot: 0,
             },
@@ -109,7 +117,7 @@ describe('Feature: abort-signal', function() {
       const ptrStructure = {
         type: StructureType.Pointer,
         name: '*const i32',
-        byteSize: 8,
+        byteSize: addressByteSize,
         flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | PointerFlag.IsSingle | PointerFlag.IsConst,
         signature: 0n,
         instance: {
@@ -121,6 +129,13 @@ describe('Feature: abort-signal', function() {
               byteSize: 4,
               structure: intStructure,
               slot: 0,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -201,7 +216,7 @@ describe('Feature: abort-signal', function() {
       const ptrStructure = {
         type: StructureType.Pointer,
         name: '*const i32',
-        byteSize: 8,
+        byteSize: addressByteSize,
         flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | PointerFlag.IsSingle | PointerFlag.IsConst,
         signature: 0n,
         instance: {
@@ -213,6 +228,13 @@ describe('Feature: abort-signal', function() {
               byteSize: 4,
               structure: intStructure,
               slot: 0,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },

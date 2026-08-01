@@ -135,6 +135,7 @@ export default mixin({
           }
         }
       }
+      debugger;
       if (memoryInitial) {
         this.memory = env.memory = new WA.Memory({
           initial: memoryInitial,

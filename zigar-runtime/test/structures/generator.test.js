@@ -1,7 +1,10 @@
 import { expect } from 'chai';
+import { StructurePurpose } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { FINALIZE, GENERATOR, MEMORY, RESET, RETURN, THROWING, TRANSFORM, YIELD } from '../../src/symbols.js';
+import {
+  FINALIZE, GENERATOR, MEMORY, RESET, RETURN, THROWING, TRANSFORM, YIELD,
+} from '../../src/symbols.js';
 import { captureError, delay } from '../test-utils.js';
 
 const Env = defineEnvironment();
@@ -59,14 +62,16 @@ describe('Structure: generator', function() {
           members: [
             { 
               name: 'allocator',
-              structure: {} 
+              structure: {
+                purpose: StructurePurpose.Allocator,
+              } 
             },
           ] 
         }
       };
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
-      }      
+      }
       const { ptr, callback, allocator } = env.createGenerator(structure, args, undefined);
       args[FINALIZE] = () => {};
       expect(args[GENERATOR]).to.be.an('object');

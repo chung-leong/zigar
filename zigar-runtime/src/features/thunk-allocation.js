@@ -35,7 +35,7 @@ export default mixin({
         }
       }
       env.memory = new w.Memory({
-        initial: memoryInitial,
+        initial: memoryInitial ?? this.memory.buffer.byteLength / 65536,
         maximum: memoryMax,
         shared: multithreaded,
       });

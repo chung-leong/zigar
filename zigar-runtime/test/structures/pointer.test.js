@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import {
-  MemberFlag, MemberType, PointerFlag, SliceFlag, StructureFlag, StructureType,
+  MemberFlag, MemberType, PointerFlag, PrimitiveFlag, SliceFlag, StructureFlag, StructureType,
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import { InvalidSliceLength } from '../../src/errors.js';
@@ -19,7 +19,7 @@ describe('Structure: pointer', function() {
     it('should return a function', function() {
       const structure = {
         type: StructureType.Pointer,
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -29,7 +29,14 @@ describe('Structure: pointer', function() {
               bitOffset: 0,
               byteSize: 8,
               structure: {},
-            }
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -44,7 +51,7 @@ describe('Structure: pointer', function() {
     it('should add descriptors to the given object', function() {
       const structure = {
         type: StructureType.Pointer,
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -54,7 +61,14 @@ describe('Structure: pointer', function() {
               bitOffset: 0,
               byteSize: 8,
               structure: {},
-            }
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            }          
           ],
         },
         static: {},
@@ -74,7 +88,7 @@ describe('Structure: pointer', function() {
       const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot | PointerFlag.IsSingle,
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -84,7 +98,14 @@ describe('Structure: pointer', function() {
               bitOffset: 0,
               byteSize: 8,
               structure: {},
-            }
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -111,6 +132,13 @@ describe('Structure: pointer', function() {
               byteSize: 4,
               structure: {},
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -121,7 +149,7 @@ describe('Structure: pointer', function() {
       const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot | PointerFlag.IsSingle,
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -132,6 +160,13 @@ describe('Structure: pointer', function() {
               byteSize: 8,
               slot: 0,
               structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -174,16 +209,23 @@ describe('Structure: pointer', function() {
       const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot | PointerFlag.IsSingle,
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
             {
               type: MemberType.Object,
-              bitSize: 64,
+              bitSize: 32,
               bitOffset: 0,
-              byteSize: 8,
+              byteSize: 4,
               slot: 0,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
               structure: {},
             },
           ],
@@ -193,7 +235,7 @@ describe('Structure: pointer', function() {
       env.beginStructure(structure);
       env.finishStructure(structure);
       const Int32Ptr = structure.constructor;
-      const buffer = new ArrayBuffer(8);
+      const buffer = new ArrayBuffer(addressByteSize);
       const object1 = Int32Ptr.call(ENVIRONMENT, buffer);
       const object2 = Int32Ptr.call(ENVIRONMENT, buffer);
       expect(object2).to.equal(object1);
@@ -224,7 +266,7 @@ describe('Structure: pointer', function() {
       const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot | PointerFlag.IsSingle,
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -235,6 +277,13 @@ describe('Structure: pointer', function() {
               byteSize: 8,
               slot: 0,
               structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -273,7 +322,7 @@ describe('Structure: pointer', function() {
       const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot | PointerFlag.IsSingle,
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -283,6 +332,13 @@ describe('Structure: pointer', function() {
               bitOffset: 0,
               byteSize: 8,
               slot: 0,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
               structure: {},
             },
           ],
@@ -320,7 +376,7 @@ describe('Structure: pointer', function() {
       const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot | PointerFlag.IsSingle,
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -331,6 +387,13 @@ describe('Structure: pointer', function() {
               byteSize: 8,
               slot: 0,
               structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -369,7 +432,7 @@ describe('Structure: pointer', function() {
       const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot | PointerFlag.IsSingle,
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -380,6 +443,13 @@ describe('Structure: pointer', function() {
               byteSize: 8,
               slot: 0,
               structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -392,14 +462,14 @@ describe('Structure: pointer', function() {
         type: StructureType.Array,
         flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: '[2]*Int32',
-        byteSize: 16,
+        byteSize: addressByteSize * 2,
         signature: 0n,
         instance: {
           members: [
             {
               type: MemberType.Object,
-              bitSize: 64,
-              byteSize: 8,
+              bitSize: addressSize,
+              byteSize: addressByteSize,
               structure: ptrStructure,
             },
           ],
@@ -474,6 +544,13 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: intStructureA,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -492,6 +569,13 @@ describe('Structure: pointer', function() {
               byteSize: addressByteSize,
               slot: 0,
               structure: intStructureB,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -610,6 +694,13 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: fnStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: intStructure,
+            },
           ],
         },
         static: {},
@@ -666,7 +757,7 @@ describe('Structure: pointer', function() {
       const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot | PointerFlag.IsSingle,
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -677,6 +768,13 @@ describe('Structure: pointer', function() {
               byteSize: 8,
               slot: 0,
               structure: structStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -730,7 +828,7 @@ describe('Structure: pointer', function() {
       const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot | PointerFlag.IsSingle,
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -741,6 +839,13 @@ describe('Structure: pointer', function() {
               byteSize: 8,
               slot: 0,
               structure: structStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -790,7 +895,7 @@ describe('Structure: pointer', function() {
       const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot | PointerFlag.IsSingle,
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -801,6 +906,13 @@ describe('Structure: pointer', function() {
               byteSize: 8,
               slot: 0,
               structure: structStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -850,7 +962,7 @@ describe('Structure: pointer', function() {
       const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot | PointerFlag.IsSingle,
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -861,6 +973,13 @@ describe('Structure: pointer', function() {
               byteSize: 8,
               slot: 0,
               structure: structStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -922,6 +1041,13 @@ describe('Structure: pointer', function() {
               byteSize: 4,
               slot: 0,
               structure: structStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
             },
           ],
         },
@@ -986,6 +1112,13 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: structStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -1041,6 +1174,13 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: structStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -1062,6 +1202,13 @@ describe('Structure: pointer', function() {
               byteSize: 4,
               slot: 0,
               structure: structStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
             },
           ],
         },
@@ -1115,7 +1262,7 @@ describe('Structure: pointer', function() {
       const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot | PointerFlag.IsSingle,
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -1127,6 +1274,13 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: structStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -1137,17 +1291,24 @@ describe('Structure: pointer', function() {
       const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
             {
               type: MemberType.Object,
-              bitSize: 64,
+              bitSize: addressSize,
               bitOffset: 0,
-              byteSize: 8,
+              byteSize: addressByteSize,
               slot: 0,
               structure: ptrStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -1189,7 +1350,7 @@ describe('Structure: pointer', function() {
       const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsConst,
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -1200,6 +1361,13 @@ describe('Structure: pointer', function() {
               byteSize: 8,
               slot: 0,
               structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -1251,6 +1419,13 @@ describe('Structure: pointer', function() {
               byteSize: addressByteSize,
               slot: 0,
               structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -1314,7 +1489,7 @@ describe('Structure: pointer', function() {
       const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot | PointerFlag.IsSingle,
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -1325,6 +1500,13 @@ describe('Structure: pointer', function() {
               byteSize: 8,
               slot: 0,
               structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -1365,7 +1547,7 @@ describe('Structure: pointer', function() {
       const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot | PointerFlag.IsSingle,
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -1376,6 +1558,13 @@ describe('Structure: pointer', function() {
               byteSize: 8,
               slot: 0,
               structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -1442,7 +1631,7 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]Hello',
-        byteSize: 16,
+        byteSize: addressByteSize * 2,
         signature: 0n,
         instance: {
           members: [
@@ -1453,6 +1642,20 @@ describe('Structure: pointer', function() {
               byteSize: 8,
               slot: 0,
               structure: sliceStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -1524,7 +1727,7 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
-        byteSize: 16,
+        byteSize: addressByteSize * 2,
         signature: 0n,
         instance: {
           members: [
@@ -1535,6 +1738,20 @@ describe('Structure: pointer', function() {
               byteSize: 8,
               slot: 0,
               structure: sliceStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -1594,7 +1811,7 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
-        byteSize: 16,
+        byteSize: addressByteSize * 2,
         signature: 0n,
         instance: {
           members: [
@@ -1605,6 +1822,20 @@ describe('Structure: pointer', function() {
               byteSize: 8,
               slot: 0,
               structure: sliceStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -1695,6 +1926,20 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: sliceStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -1765,6 +2010,20 @@ describe('Structure: pointer', function() {
               byteSize: addressByteSize,
               slot: 0,
               structure: sliceStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -1844,6 +2103,20 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: sliceStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -1917,6 +2190,13 @@ describe('Structure: pointer', function() {
               byteSize: addressByteSize,
               slot: 0,
               structure: sliceStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -2020,6 +2300,20 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: sliceStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -2104,6 +2398,20 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: sliceStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -2115,7 +2423,7 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]u8',
-        byteSize: 8,
+        byteSize: addressByteSize * 2,
         signature: 0n,
         instance: {
           members: [
@@ -2126,6 +2434,20 @@ describe('Structure: pointer', function() {
               byteSize: addressByteSize,
               slot: 0,
               structure: sliceStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -2207,6 +2529,20 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: sliceStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -2229,6 +2565,20 @@ describe('Structure: pointer', function() {
               byteSize: addressByteSize,
               slot: 0,
               structure: sliceStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -2307,6 +2657,20 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: sliceStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -2357,6 +2721,13 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: structStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -2378,6 +2749,13 @@ describe('Structure: pointer', function() {
               byteSize: addressByteSize,
               slot: 0,
               structure: ptrStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -2444,6 +2822,13 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: structStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -2500,6 +2885,13 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: intStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -2548,6 +2940,13 @@ describe('Structure: pointer', function() {
               byteSize: addressByteSize,
               slot: 0,
               structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -2610,6 +3009,13 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: intStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -2668,6 +3074,13 @@ describe('Structure: pointer', function() {
               byteSize: addressByteSize,
               slot: 0,
               structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -2756,6 +3169,22 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: sliceStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
+              structure: {
+                flags: PrimitiveFlag.IsSize | StructureFlag.HasValue,
+              },
+            },
           ],
         },
         static: {},
@@ -2821,6 +3250,13 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: intStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -2878,6 +3314,13 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: intStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -2928,6 +3371,13 @@ describe('Structure: pointer', function() {
               byteSize: addressByteSize,
               slot: 0,
               structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -3004,6 +3454,22 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: sliceStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
+              structure: {
+                flags: PrimitiveFlag.IsSize | StructureFlag.HasValue,
+              },
+            },
           ],
         },
         static: {},
@@ -3065,17 +3531,31 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
-        byteSize: 16,
+        byteSize: addressByteSize * 2,
         signature: 0n,
         instance: {
           members: [
             {
               type: MemberType.Object,
-              bitSize: 64,
+              bitSize: 32,
               bitOffset: 0,
-              byteSize: 8,
+              byteSize: 4,
               slot: 0,
               structure: sliceStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -3086,10 +3566,13 @@ describe('Structure: pointer', function() {
       const { constructor: Int32SlicePtr } = structure;
       const ta = new Int32Array([ 1, 2, 3, 4 ]);
       const pointer = new Int32SlicePtr(ta);
-      pointer[ADDRESS] = 0x1000n;
+      pointer[ADDRESS] = usize(0x1000);
       pointer[LENGTH] = 4;
-      expect(pointer[MEMORY].getBigUint64(0, true)).to.equal(0x1000n);
-      expect(pointer[MEMORY].getBigUint64(8, true)).to.equal(4n);
+      const le = env.littleEndian;
+      const address = getUsize.call(pointer[MEMORY], 0, le);
+      const len = getUsize.call(pointer[MEMORY], addressByteSize, le);
+      expect(address).to.equal(usize(0x1000));
+      expect(len).to.equal(usize(4));
     })
     it('should get address and length of slice pointer with sentinel from memory', function() {
       const env = new Env();
@@ -3158,6 +3641,13 @@ describe('Structure: pointer', function() {
               byteSize: addressByteSize,
               slot: 0,
               structure: sliceStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -3248,6 +3738,22 @@ describe('Structure: pointer', function() {
               byteSize: addressByteSize * 2,
               slot: 0,
               structure: sliceStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
+              structure: {
+                flags: PrimitiveFlag.IsSize | StructureFlag.HasValue,
+              },
             },
           ],
         },
@@ -3403,6 +3909,20 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: sliceStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -3496,6 +4016,13 @@ describe('Structure: pointer', function() {
               byteSize: addressByteSize,
               slot: 0,
               structure: sliceStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -3602,6 +4129,13 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: sliceStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -3679,6 +4213,13 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: byteStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -3719,6 +4260,13 @@ describe('Structure: pointer', function() {
               byteSize: addressByteSize,
               slot: 0,
               structure: sliceStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -3793,6 +4341,13 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: sliceStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -3842,6 +4397,13 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: intStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -3884,6 +4446,13 @@ describe('Structure: pointer', function() {
               byteSize: addressByteSize,
               slot: 0,
               structure: sliceStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -3963,6 +4532,13 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: sliceStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -4040,6 +4616,13 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: sliceStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -4092,6 +4675,13 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: intStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -4134,6 +4724,13 @@ describe('Structure: pointer', function() {
               byteSize: addressByteSize,
               slot: 0,
               structure: sliceStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -4206,6 +4803,20 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: sliceStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -4228,6 +4839,13 @@ describe('Structure: pointer', function() {
               byteSize: addressByteSize,
               slot: 0,
               structure: sliceStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -4289,7 +4907,7 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
-        byteSize: 16,
+        byteSize: addressByteSize * 2,
         signature: 0n,
         instance: {
           members: [
@@ -4300,6 +4918,20 @@ describe('Structure: pointer', function() {
               byteSize: 8,
               slot: 0,
               structure: sliceStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -4323,6 +4955,13 @@ describe('Structure: pointer', function() {
               byteSize: addressByteSize,
               slot: 0,
               structure: sliceStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -4396,6 +5035,13 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: sliceStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -4418,6 +5064,13 @@ describe('Structure: pointer', function() {
               byteSize: addressByteSize,
               slot: 0,
               structure: sliceStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -4490,6 +5143,13 @@ describe('Structure: pointer', function() {
               byteSize: addressByteSize,
               slot: 0,
               structure: sliceStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -4592,6 +5252,13 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: sliceStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -4614,6 +5281,13 @@ describe('Structure: pointer', function() {
               byteSize: addressByteSize,
               slot: 0,
               structure: sliceStructureWS,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -4664,6 +5338,13 @@ describe('Structure: pointer', function() {
               byteSize: addressByteSize,
               slot: 0,
               structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -4786,6 +5467,20 @@ describe('Structure: pointer', function() {
               byteSize: addressByteSize * 2,
               slot: 0,
               structure: sliceStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -4912,6 +5607,13 @@ describe('Structure: pointer', function() {
               slot: 0,
               structure: sliceStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -5001,7 +5703,7 @@ describe('Structure: pointer', function() {
       const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot | PointerFlag.IsSingle,
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -5012,6 +5714,13 @@ describe('Structure: pointer', function() {
               byteSize: 8,
               slot: 0,
               structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -5043,6 +5752,13 @@ describe('Structure: pointer', function() {
             byteSize: 4,
             structure: {},
           },
+          {
+            type: MemberType.Uint,
+            bitSize: addressSize,
+            bitOffset: 0,
+            byteSize: addressByteSize,
+            structure: {},
+          },
         ],
       },
       static: {},
@@ -5053,7 +5769,7 @@ describe('Structure: pointer', function() {
     const structure = {
       type: StructureType.Pointer,
       flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot | PointerFlag.IsSingle,
-      byteSize: 8,
+      byteSize: addressByteSize,
       signature: 0n,
       instance: {
         members: [
@@ -5064,6 +5780,13 @@ describe('Structure: pointer', function() {
             byteSize: 8,
             slot: 0,
             structure: intStructure,
+          },
+          {
+            type: MemberType.Uint,
+            bitSize: addressSize,
+            bitOffset: 0,
+            byteSize: addressByteSize,
+            structure: {},
           },
         ],
       },

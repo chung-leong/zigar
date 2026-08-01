@@ -1,7 +1,7 @@
 import { PosixError, PosixDescriptorRight } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError, InvalidStream, checkStreamMethod } from '../errors.js';
-import { isPromise, safeInt } from '../utils.js';
+import { safeInt } from '../utils.js';
 
 var pathFilestatSetSize = mixin({
   pathFilestatSetSize(dirFd, pathAddress, pathLen, newSize, canWait) {
@@ -12,25 +12,19 @@ var pathFilestatSetSize = mixin({
         exclusive: true,
         sync: true,
       };
-      const truncate = (arg) => {
-        if (arg === undefined) {
+      return this.triggerEvent('open', { ...loc, rights, flags });
+    }, (openResult) => {
+        if (openResult === undefined) {
           return PosixError.ENOTSUP;
-        } else if (arg === false) {
+        } else if (openResult === false) {
           return PosixError.ENOENT;
         }
-        const stream = this.convertWriter(arg);
+        const stream = this.convertWriter(openResult);
         if (!stream) {
-          throw new InvalidStream(PosixDescriptorRight.write, arg);
+          throw new InvalidStream(PosixDescriptorRight.fd_write, openResult);
         }
         checkStreamMethod(stream, 'truncate', PosixError.EINVAL);
         return stream.truncate(safeInt(newSize));
-      };
-      const openResult = this.triggerEvent('open', { ...loc, rights, flags });
-      if (isPromise(openResult)) {
-        return openResult.then(truncate);
-      } else {
-        return truncate(openResult);
-      }
     });
   },
 });

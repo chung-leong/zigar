@@ -16,7 +16,7 @@ describe('Syscall: fd-allocate', function() {
     const [ error ] = await captureError(() => {
       result = env.fdAllocate(0, 123n, 16);
     });
-    expect(result).to.equal(PosixError.ENOSPC);
+    expect(result).to.equal(PosixError.ENOSYS);
   })
   it('should call handler when stream has support', async function() {
     const env = new Env();

@@ -7,6 +7,7 @@ import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { ENVIRONMENT, INITIALIZE, MEMORY, SLOTS, ZIG } from '../../src/symbols.js';
 import { usize } from '../../src/utils.js';
+import { addressByteSize, addressSize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -110,7 +111,7 @@ describe('Structure: opaque', function () {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Hello',
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -121,6 +122,13 @@ describe('Structure: opaque', function () {
               byteSize: 8,
               structure,
               slot: 0,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -176,9 +184,9 @@ describe('Structure: opaque', function () {
             {
               name: '0',
               type: MemberType.Object,
-              bitSize: 64,
+              bitSize: addressSize,
               bitOffset: optStructure.byteSize * 8,
-              byteSize: 8,
+              byteSize: addressByteSize,
               structure: ptrStructure,
               slot: 0,
             },
