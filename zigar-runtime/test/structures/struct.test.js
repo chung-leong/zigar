@@ -2016,6 +2016,60 @@ describe('Structure: struct', function() {
       expect(object.free).to.be.a('function');
       expect(object.dupe).to.be.a('function');
     })
+    it('should define an file struct', function() {
+      const env = new Env();
+      const structure = {
+        type: StructureType.Struct,
+        purpose: StructurePurpose.File,
+        flags: 0,
+        byteSize: 4,
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'handle',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
+      env.finishStructure(structure);
+      const Hello = structure.constructor;
+      const object = new Hello({ handle: 1234 });
+    })
+    it('should define an directory struct', function() {
+      const env = new Env();
+      const structure = {
+        type: StructureType.Struct,
+        purpose: StructurePurpose.Directory,
+        flags: 0,
+        byteSize: 4,
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'fd',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
+      env.finishStructure(structure);
+      const Hello = structure.constructor;
+      const object = new Hello({ fd: 1234 });
+    })
   })
 })
 

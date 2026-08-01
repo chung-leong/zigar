@@ -1892,6 +1892,134 @@ describe('Structure: union', function() {
       expect(thunkAddress).to.equal(usize(0x8888));
       expect(fnAddress).to.equal(usize(0x1_8888));
     })
+    it('should define an any-image union', function() {
+      const env = new Env();
+      const uintStructure = {
+        type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
+        byteSize: 1,
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
+      env.finishStructure(uintStructure);
+      const sliceStructure = {
+        type: StructureType.Slice,
+        flags: StructureFlag.HasProxy,
+        name: '[_]u8',
+        byteSize: 1,
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
+      const constStructure = {
+        type: StructureType.Pointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength | PointerFlag.IsConst,
+        name: '[]const u8',
+        byteSize: addressByteSize * 2,
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(constStructure);
+      env.finishStructure(constStructure);
+      const webImageStructure = {
+        type: StructureType.Struct,
+        purpose: StructurePurpose.WebImage,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject,
+        byteSize: constStructure.byteSize,
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'data',
+              type: MemberType.Object,
+              bitSize: constStructure.byteSize * 8,
+              bitOffset: 0,
+              byteSize: constStructure.byteSize,
+              structure: constStructure,
+              slot: 0,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(webImageStructure);
+      env.finishStructure(webImageStructure);
+      const structure = {
+        type: StructureType.Union,
+        purpose: StructurePurpose.AnyImage,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject,
+        byteSize: webImageStructure.byteSize,
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'web',
+              type: MemberType.Object,
+              bitSize: webImageStructure.byteSize * 8,
+              bitOffset: 0,
+              byteSize: webImageStructure.byteSize,
+              structure: webImageStructure,
+              slot: 0,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
+      env.finishStructure(structure);
+      const Hello = structure.constructor;
+      const object1 = new Hello({ data: new Uint8Array(4) });
+      const object2 = new Hello({ data: new Uint8ClampedArray(4) });
+    })
   })
 })
 

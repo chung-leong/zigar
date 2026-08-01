@@ -13,6 +13,76 @@ import { addressByteSize, addressSize } from '../test-utils.js';
 const Env = defineEnvironment();
 
 describe('Feature: structure-acquisition', function() {
+  describe('createView', function() {
+    it('should allocate new buffer and copy data using moveExternBytes', function() {
+      const env = new Env();
+      env.getBufferAddress = () => 0x10000;
+      env.moveExternBytes = (dv, address, to) => {
+        dv.setInt32(0, address, true);
+        dv.setInt32(4, dv.byteLength, true);
+      };
+      const dv = env.createView(1234, 32, true);
+      expect(dv).to.be.instanceOf(DataView);
+      expect(dv.getInt32(0, true)).to.equal(1234);
+      expect(dv.getInt32(4, true)).to.equal(32);
+    })
+    it('should get view of memory using obtainZigView', function() {
+      const env = new Env();
+      env.getBufferAddress = () => 0x10000;
+      env.obtainZigView = (address, len) => {
+        const dv = new DataView(new ArrayBuffer(len));
+        dv[ZIG] = { address, len };
+        return dv;
+      };
+      if (process.env.TARGET === 'wasm') {
+        const dv = env.createView(1234, 32, false);
+        expect(dv).to.be.instanceOf(DataView);
+        expect(dv[ZIG]).to.eql({ address: 1234, len: 32, handle: 1234 });
+      } else {
+        const dv = env.createView(1234n, 32, false, 0x8888n);
+        expect(dv).to.be.instanceOf(DataView);
+        expect(dv[ZIG]).to.eql({ address: 1234n, len: 32, handle: 0x8888n });
+      }
+    })
+  })
+  describe('createInstance', function() {
+    it('should call constructor without the use of the new operator', function() {
+      const env = new Env();
+      env.getBufferAddress = () => 0x10000;
+      env.moveExternBytes = (dv, address, to) => {};
+      let recv, arg;
+      const constructor = function(dv) {
+        recv = this;
+        arg = dv;
+        const object = Object.create(constructor.prototype);
+        object[SLOTS] = {};
+        return object;
+      }
+      const structure = { constructor };
+      const dv = env.createView(usize(1234), 16, true);
+      const object = env.createInstance(structure, dv, {});
+      expect(recv).to.equal(ENVIRONMENT);
+      expect(object).to.instanceOf(constructor);
+    })
+  })
+  describe('createTemplate', function() {
+    it('should should create a template', function() {
+      const env = new Env();
+      const dv = new DataView(new ArrayBuffer(16));
+      const slots = { 1: null };
+      const template = env.createTemplate(dv, slots);
+      expect(template[MEMORY]).to.equal(dv);
+      expect(template[SLOTS]).to.equal(slots);
+    })
+  })
+  describe('appendList', function() {
+    it('should add an element to a list', function() {
+      const env = new Env();
+      const list = [];
+      env.appendList(list, 123);
+      expect(list).to.eql([ 123 ]);
+    })
+  })
   describe('beginStructure', function() {
     it('should define the shape of a structure', function() {
       const env = new Env();
@@ -1166,76 +1236,6 @@ describe('Feature: structure-acquisition', function() {
         }
         const result = env.createString(address, len);
         expect(result).to.equal('Hello');
-      })
-    })
-    describe('createView', function() {
-      it('should allocate new buffer and copy data using moveExternBytes', function() {
-        const env = new Env();
-        env.getBufferAddress = () => 0x10000;
-        env.moveExternBytes = (dv, address, to) => {
-          dv.setInt32(0, address, true);
-          dv.setInt32(4, dv.byteLength, true);
-        };
-        const dv = env.createView(1234, 32, true);
-        expect(dv).to.be.instanceOf(DataView);
-        expect(dv.getInt32(0, true)).to.equal(1234);
-        expect(dv.getInt32(4, true)).to.equal(32);
-      })
-      it('should get view of memory using obtainZigView', function() {
-        const env = new Env();
-        env.getBufferAddress = () => 0x10000;
-        env.obtainZigView = (address, len) => {
-          const dv = new DataView(new ArrayBuffer(len));
-          dv[ZIG] = { address, len };
-          return dv;
-        };
-        if (process.env.TARGET === 'wasm') {
-          const dv = env.createView(1234, 32, false);
-          expect(dv).to.be.instanceOf(DataView);
-          expect(dv[ZIG]).to.eql({ address: 1234, len: 32, handle: 1234 });
-        } else {
-          const dv = env.createView(1234n, 32, false, 0x8888n);
-          expect(dv).to.be.instanceOf(DataView);
-          expect(dv[ZIG]).to.eql({ address: 1234n, len: 32, handle: 0x8888n });
-        }
-      })
-    })
-    describe('createInstance', function() {
-      it('should call constructor without the use of the new operator', function() {
-        const env = new Env();
-        env.getBufferAddress = () => 0x10000;
-        env.moveExternBytes = (dv, address, to) => {};
-        let recv, arg;
-        const constructor = function(dv) {
-          recv = this;
-          arg = dv;
-          const object = Object.create(constructor.prototype);
-          object[SLOTS] = {};
-          return object;
-        }
-        const structure = { constructor };
-        const dv = env.createView(usize(1234), 16, true);
-        const object = env.createInstance(structure, dv, {});
-        expect(recv).to.equal(ENVIRONMENT);
-        expect(object).to.instanceOf(constructor);
-      })
-    })
-    describe('createTemplate', function() {
-      it('should should create a template', function() {
-        const env = new Env();
-        const dv = new DataView(new ArrayBuffer(16));
-        const slots = { 1: null };
-        const template = env.createTemplate(dv, slots);
-        expect(template[MEMORY]).to.equal(dv);
-        expect(template[SLOTS]).to.equal(slots);
-      })
-    })
-    describe('appendList', function() {
-      it('should add an element to a list', function() {
-        const env = new Env();
-        const list = [];
-        env.appendList(list, 123);
-        expect(list).to.eql([ 123 ]);
       })
     })
     describe('createList', function() {
