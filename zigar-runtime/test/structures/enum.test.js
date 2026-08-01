@@ -255,7 +255,7 @@ describe('Structure: enum', function() {
       expect(Number(e1)).to.equal(2);
       const e2 = new Hello(2);
       expect(e1.$).to.equal(e2.$);
-      expect(String(e1)).to.equal('2');
+      expect(String(e1)).to.equal('@enumFromInt(2)');
     })
     it('should cast the same buffer to the same object', function() {
       const env = new Env();

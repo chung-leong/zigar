@@ -58,7 +58,9 @@ import {
   deanimalizeErrorName,
   formatList,
   getDescription,
-  replaceRangeError
+  replaceRangeError,
+  throwNoSupport,
+  throwReadOnly,
 } from '../src/errors.js';
 import { capture, captureError } from './test-utils.js';
 
@@ -843,4 +845,14 @@ describe('Error functions', function() {
       await expect(promise).to.eventually.equal(PosixError.EACCES);
     })
   })
+  describe('throwReadOnly', function() {
+    it('should throw read-only error', async function() {
+      expect(throwReadOnly).to.throw(Error);
+    })
+  });
+  describe('throwNoSupport', function() {
+    it('should throw no-support error', async function() {
+      expect(throwNoSupport).to.throw(Error);
+    })
+  });
 })

@@ -729,9 +729,11 @@ describe('Feature: structure-acquisition', function() {
       });
       expect(name).to.equal('void');
     })
+  })
+  describe('getComptimeName', function() {
     it('should return correct name for enum literal', function() {
       const env = new Env();
-      const name = env.getPrimitiveName({
+      const name = env.getComptimeName({
         type: StructureType.Primitive,
         instance: {
           members: [
@@ -742,11 +744,11 @@ describe('Feature: structure-acquisition', function() {
         },
         static: {},
       });
-      expect(name).to.equal('enum_literal');
+      expect(name).to.equal('@TypeOf(.enum_literal)');
     })
     it('should return correct name for null', function() {
       const env = new Env();
-      const name = env.getPrimitiveName({
+      const name = env.getComptimeName({
         type: StructureType.Primitive,
         instance: {
           members: [
@@ -757,11 +759,11 @@ describe('Feature: structure-acquisition', function() {
         },
         static: {},
       });
-      expect(name).to.equal('null');
+      expect(name).to.equal('@TypeOf(null)');
     })
     it('should return correct name for undefined', function() {
       const env = new Env();
-      const name = env.getPrimitiveName({
+      const name = env.getComptimeName({
         type: StructureType.Primitive,
         instance: {
           members: [
@@ -772,11 +774,11 @@ describe('Feature: structure-acquisition', function() {
         },
         static: {},
       });
-      expect(name).to.equal('undefined');
+      expect(name).to.equal('@TypeOf(undefined)');
     })
     it('should return correct name for type', function() {
       const env = new Env();
-      const name = env.getPrimitiveName({
+      const name = env.getComptimeName({
         type: StructureType.Primitive,
         instance: {
           members: [
@@ -791,7 +793,7 @@ describe('Feature: structure-acquisition', function() {
     })
     it('should return correct name for comptime', function() {
       const env = new Env();
-      const name = env.getPrimitiveName({
+      const name = env.getComptimeName({
         type: StructureType.Primitive,
         instance: {
           members: [
@@ -806,7 +808,7 @@ describe('Feature: structure-acquisition', function() {
     })
     it('should return correct name for unsupported', function() {
       const env = new Env();
-      const name = env.getPrimitiveName({
+      const name = env.getComptimeName({
         type: StructureType.Primitive,
         instance: {
           members: [
