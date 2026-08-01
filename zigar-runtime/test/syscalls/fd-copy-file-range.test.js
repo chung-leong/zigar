@@ -92,6 +92,57 @@ describe('Syscall: fd-copy-file-range', function() {
       const sentDV = env.obtainZigView(sentAddress, 4, false);
       expect(sentDV.getUint32(0, le)).to.equal(18);
     })
+    it('should transfer data from the file system to a particular offset in a virtual file', async function() {
+      const env = new Env();
+      const map = new Map();
+      env.obtainExternBuffer = function(address, len) {
+        let buffer = map.get(address);
+        if (!buffer) {
+          buffer = new ArrayBuffer(len);
+          map.set(address, buffer);
+        }
+        return buffer;
+      };
+      env.moveExternBytes = function(jsDV, address, to) {
+        const len = jsDV.byteLength;
+        const zigDV = this.obtainZigView(address, len);
+        if (!(jsDV instanceof DataView)) {
+          jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+        }
+        copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
+      };
+      env.setSyscallTrap = () => {};
+      env.setRedirectionMask = () => {};
+      let readCount = 0;      
+      let fdReceived, offsetRecevied;
+      env.readFile = (fd, length, offset) => {
+        fdReceived = fd;
+        offsetRecevied = offset;
+        return new Uint8Array(readCount++ === 0 ? length : 0);
+      };
+      let argsReceived;
+      const file = {
+        write() {
+        },
+        pwrite(...args) {
+          argsReceived = args;
+        },
+      };
+      const { handle } =  env.createFile(file);
+      const sentAddress = 0x1000n;
+      const offsetAddress = 0x2000n;
+      const le = env.littleEndian;
+      const offsetDV = env.obtainZigView(offsetAddress, 8, false);
+      offsetDV.setBigUint64(0, 72n, le);
+      const result = env.fdCopyFileRange(36, 0n, handle, offsetAddress, 18n, sentAddress);
+      expect(result).to.equal(0);
+      expect(fdReceived).to.equal(36);
+      expect(offsetRecevied).to.be.undefined;
+      expect(offsetDV.getBigUint64(0, le)).to.equal(90n);
+      const sentDV = env.obtainZigView(sentAddress, 4, false);
+      expect(sentDV.getUint32(0, le)).to.equal(18);
+      expect(argsReceived[1]).to.equal(72);
+    })
     it('should transfer data from the file system to an async virtual file', async function() {
       const env = new Env();
       const map = new Map();
@@ -211,6 +262,50 @@ describe('Syscall: fd-copy-file-range', function() {
       const decoded = new TextDecoder().decode(new Uint8Array(chunkRecevied.buffer, chunkRecevied.byteOffset, chunkRecevied.byteLength));
       expect(decoded).to.have.lengthOf(18);
       expect(decoded).to.equal('is is a test and t');
+      expect(offsetDV.getBigUint64(0, le)).to.equal(20n);
+      const sentDV = env.obtainZigView(sentAddress, 4, false);
+      expect(sentDV.getUint32(0, le)).to.equal(18);
+    })
+    it('should transfer data from a virtual file to a particular offset in a file in the file system', async function() {
+      const env = new Env();
+      const map = new Map();
+      env.obtainExternBuffer = function(address, len) {
+        let buffer = map.get(address);
+        if (!buffer) {
+          buffer = new ArrayBuffer(len);
+          map.set(address, buffer);
+        }
+        return buffer;
+      };
+      env.moveExternBytes = function(jsDV, address, to) {
+        const len = jsDV.byteLength;
+        const zigDV = this.obtainZigView(address, len);
+        if (!(jsDV instanceof DataView)) {
+          jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+        }
+        copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
+      };
+      env.setSyscallTrap = () => {};
+      env.setRedirectionMask = () => {};
+      let fdReceived, chunkRecevied;
+      env.writeFile = (fd, chunk) => {
+        fdReceived = fd;
+        chunkRecevied = chunk;
+      };
+      const string = 'This is a test and this is only a test';
+      const { handle } =  env.createFile(string);
+      const sentAddress = 0x1000n;
+      const offsetAddress = 0x2000n;
+      const le = env.littleEndian;
+      const offsetDV = env.obtainZigView(offsetAddress, 8, false);
+      offsetDV.setBigUint64(0, 2n, le);
+      const result = env.fdCopyFileRange(handle, 0n, 36, offsetAddress, 18n, sentAddress);
+      expect(result).to.equal(0);
+      expect(fdReceived).to.equal(36);
+      expect(chunkRecevied).to.have.lengthOf(18);
+      const decoded = new TextDecoder().decode(new Uint8Array(chunkRecevied.buffer, chunkRecevied.byteOffset, chunkRecevied.byteLength));
+      expect(decoded).to.have.lengthOf(18);
+      expect(decoded).to.equal('This is a test and');
       expect(offsetDV.getBigUint64(0, le)).to.equal(20n);
       const sentDV = env.obtainZigView(sentAddress, 4, false);
       expect(sentDV.getUint32(0, le)).to.equal(18);
