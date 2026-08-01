@@ -932,6 +932,27 @@ describe('Structure: arg-struct', function() {
       expect(() => new ArgStruct([ 123, { callback: 1234 } ])).to.throw(TypeError);
     })
   })
+  describe('updateArgStructMembers', function() {
+    it('should update the flags of an existing member', function() {
+      const env = new Env();
+      const structure = {
+        instance: { 
+          members: [
+            { 
+              type: MemberType.Int,
+              bitSize: 8,
+              byteSize: 1,
+              flags: 0,
+              structure: {}, 
+            }
+          ]
+        }
+      };
+      structure.constructor = function() {};
+      env.updateArgStructMembers(structure, [ 1 ]);
+      expect(structure.instance.members[0].flags).to.equal(1);
+    });
+  })
 })
 
 function zig(address, len = 0) {
