@@ -1,6 +1,8 @@
 import { expect } from 'chai';
 import {
-  ArgStructFlag, MemberType, PointerFlag, SliceFlag, StructureFlag, StructurePurpose,
+  ArgStructFlag,
+  MemberFlag,
+  MemberType, PointerFlag, SliceFlag, StructureFlag, StructurePurpose,
   StructureType, VisitorFlag
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
@@ -187,6 +189,7 @@ describe('Structure: arg-struct', function() {
             {
               name: 'dog',
               type: MemberType.Int,
+              flags: MemberFlag.IsRequired,
               bitSize: 32,
               bitOffset: 0,
               byteSize: 4,
@@ -195,6 +198,7 @@ describe('Structure: arg-struct', function() {
             {
               name: 'cat',
               type: MemberType.Int,
+              flags: MemberFlag.IsRequired,
               bitSize: 32,
               bitOffset: 32,
               byteSize: 4,
@@ -224,20 +228,20 @@ describe('Structure: arg-struct', function() {
             },
             {
               name: '0',
-              type: MemberType.Object,
-              bitSize: childStructure.byteSize * 8,
+              type: MemberType.Int,
+              bitSize: 32,
               bitOffset: 32,
-              byteSize: childStructure.byteSize,
-              slot: 0,
-              structure: childStructure,
+              byteSize: 4,
+              structure: intStructure,
             },
             {
               name: '1',
-              type: MemberType.Int,
-              bitSize: 32,
-              bitOffset: 32 + childStructure.byteSize * 8,
-              byteSize: 4,
-              structure: intStructure,
+              type: MemberType.Object,
+              bitSize: childStructure.byteSize * 8,
+              bitOffset: 32 + 32,
+              byteSize: childStructure.byteSize,
+              slot: 0,
+              structure: childStructure,
             },
           ],
         },
@@ -246,9 +250,96 @@ describe('Structure: arg-struct', function() {
       env.beginStructure(structure);
       env.finishStructure(structure);
       const ArgStruct = structure.constructor;
-      const object = new ArgStruct([ { dog: 1234, cat: 4567 }, 789 ]);
-      object[0].valueOf();
-      expect(object[0].valueOf()).to.eql({ dog: 1234, cat: 4567 });
+      const object = new ArgStruct([ 789, { dog: 1234, cat: 4567 } ]);
+      expect(object[0]).to.equal(789);
+      expect(object[1].valueOf()).to.eql({ dog: 1234, cat: 4567 });
+    })
+    it('should define an argument struct that contains an optional struct', function() {
+      const env = new Env();
+      const intStructure = {
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+        flags: StructureFlag.HasValue,
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
+      env.finishStructure(intStructure);
+      const childStructure = {
+        type: StructureType.Struct,
+        byteSize: 4 * 2,
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'dog',
+              type: MemberType.Int,
+              flags: 0,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+            {
+              name: 'cat',
+              type: MemberType.Int,
+              flags: 0,
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(childStructure);
+      env.finishStructure(childStructure);
+      const structure = {
+        type: StructureType.ArgStruct,
+        flags: StructureFlag.HasObject | StructureFlag.HasSlot,
+        byteSize: childStructure.byteSize + 4 + 4,
+        length: 1,
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'retval',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+            {
+              name: '0',
+              type: MemberType.Object,
+              bitSize: childStructure.byteSize * 8,
+              bitOffset: 32,
+              byteSize: childStructure.byteSize,
+              slot: 0,
+              structure: childStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
+      env.finishStructure(structure);
+      const ArgStruct = structure.constructor;
+      const object = new ArgStruct([]);
     })
     it('should define an argument struct with pointer as return value', function() {
       const env = new Env();
