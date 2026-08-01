@@ -6,7 +6,7 @@ import { copyView } from '../../src/utils.js';
 
 const Env = defineEnvironment();
 
-describe('Syscall: fd-sendfile', function() {
+describe('Syscall: fd-copy-file-range', function() {
   if (process.env.TARGET === 'node') {
     it('should transfer data from the file system to a virtual file', async function() {
       const env = new Env();
@@ -39,7 +39,7 @@ describe('Syscall: fd-sendfile', function() {
       const array = [];
       const { handle } =  env.createFile(array);
       const sentAddress = 0x1000n;
-      const result = env.fdSendfile(handle, 36, 0n, 0n, 18, sentAddress);
+      const result = env.fdCopyFileRange(36, 0n, handle, 0n, 18n, sentAddress);
       expect(result).to.equal(0);
       expect(fdReceived).to.equal(36);
       expect(offsetRecevied).to.be.undefined;
@@ -78,15 +78,16 @@ describe('Syscall: fd-sendfile', function() {
       const { handle } =  env.createFile(array);
       const sentAddress = 0x1000n;
       const offsetAddress = 0x2000n;
+      const le = env.littleEndian;
+      const offsetDV = env.obtainZigView(offsetAddress, 8, false);
+      offsetDV.setBigUint64(0, 72n, le);
       env.fdFdstatSetFlags(handle, PosixDescriptorFlag.nonblock);
-      const result = env.fdSendfile(handle, 36, 72n, offsetAddress, 18, sentAddress);
+      const result = env.fdCopyFileRange(36, offsetAddress, handle, 0n, 18n, sentAddress);
       expect(result).to.equal(0);
       expect(fdReceived).to.equal(36);
       expect(offsetRecevied).to.equal(72n);
       expect(array).to.have.lengthOf(1);
       expect(array[0]).to.have.lengthOf(18);
-      const le = env.littleEndian;
-      const offsetDV = env.obtainZigView(offsetAddress, 8, false);
       expect(offsetDV.getBigUint64(0, le)).to.equal(90n);
       const sentDV = env.obtainZigView(sentAddress, 4, false);
       expect(sentDV.getUint32(0, le)).to.equal(18);
@@ -127,7 +128,7 @@ describe('Syscall: fd-sendfile', function() {
       });
       const { handle } =  env.createFile(stream);
       const sentAddress = 0x1000n;
-      const promise = env.fdSendfile(handle, 36, 0n, 0n, 18, sentAddress, true);
+      const promise = env.fdCopyFileRange(36, 0n, handle, 0n, 18n, sentAddress, true);
       expect(promise).to.be.a('promise');
       const result = await promise;
       expect(result).to.equal(0);
@@ -165,7 +166,7 @@ describe('Syscall: fd-sendfile', function() {
       const string = 'This is a test and this is only a test';
       const { handle } =  env.createFile(string);
       const sentAddress = 0x1000n;
-      const result = env.fdSendfile(36, handle, 0n, 0n, 18, sentAddress);
+      const result = env.fdCopyFileRange(handle, 0n, 36, 0n, 18n, sentAddress);
       expect(result).to.equal(0);
       expect(fdReceived).to.equal(36);
       expect(chunkRecevied).to.have.lengthOf(18);
@@ -200,15 +201,16 @@ describe('Syscall: fd-sendfile', function() {
       const { handle } =  env.createFile(string);
       const sentAddress = 0x1000n;
       const offsetAddress = 0x2000n;
-      const result = env.fdSendfile(36, handle, 2n, offsetAddress, 18, sentAddress);
+      const le = env.littleEndian;
+      const offsetDV = env.obtainZigView(offsetAddress, 8, false);
+      offsetDV.setBigUint64(0, 2n, le);
+      const result = env.fdCopyFileRange(handle, offsetAddress, 36, 0n, 18n, sentAddress);
       expect(result).to.equal(0);
       expect(fdReceived).to.equal(36);
       expect(chunkRecevied).to.have.lengthOf(18);
       const decoded = new TextDecoder().decode(new Uint8Array(chunkRecevied.buffer, chunkRecevied.byteOffset, chunkRecevied.byteLength));
       expect(decoded).to.have.lengthOf(18);
       expect(decoded).to.equal('is is a test and t');
-      const le = env.littleEndian;
-      const offsetDV = env.obtainZigView(offsetAddress, 8, false);
       expect(offsetDV.getBigUint64(0, le)).to.equal(20n);
       const sentDV = env.obtainZigView(sentAddress, 4, false);
       expect(sentDV.getUint32(0, le)).to.equal(18);
@@ -242,7 +244,7 @@ describe('Syscall: fd-sendfile', function() {
       const string = 'This is a test and this is only a test';
       const { handle } =  env.createFile(string);
       const sentAddress = 0x1000n;
-      const result = env.fdSendfile(36, handle, 0n, 0n, 0xffff_ffff, sentAddress);
+      const result = env.fdCopyFileRange(handle, 0n, 36, 0n, 0xffff_ffffn, sentAddress);
       expect(result).to.equal(0);
       expect(fdReceived).to.equal(36);
       expect(chunkRecevied).to.have.lengthOf(string.length);
@@ -278,7 +280,7 @@ describe('Syscall: fd-sendfile', function() {
       const blob = new Blob([ array ]);
       const { handle } =  env.createFile(blob);
       const sentAddress = 0x1000n;
-      const promise = env.fdSendfile(36, handle, 0n, 0n, 18, sentAddress, true);
+      const promise = env.fdCopyFileRange(handle, 0n, 36, 0n, 18n, sentAddress, true);
       expect(promise).to.be.a('promise');
       const result = await promise;
       expect(result).to.equal(0);
@@ -316,7 +318,7 @@ describe('Syscall: fd-sendfile', function() {
       const blob = new Blob(Array(100000).fill(array));
       const { handle } =  env.createFile(blob);
       const sentAddress = 0x1000n;
-      const promise = env.fdSendfile(36, handle, 0n, 0n, blob.size, sentAddress, true);
+      const promise = env.fdCopyFileRange(handle, 0n, 36, 0n, BigInt(blob.size), sentAddress, true);
       expect(promise).to.be.a('promise');
       const result = await promise;
       expect(result).to.equal(0);
