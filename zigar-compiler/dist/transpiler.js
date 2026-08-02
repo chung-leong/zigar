@@ -10585,6 +10585,7 @@ var union = mixin({
         if (found > 1) {
           throw new MultipleUnionInitializers(structure);
         }
+        debugger;
         if (propApplier.call(this, arg, allocator) === 0) {
           throw new MissingUnionInitializer(structure, arg, exclusion);
         }
