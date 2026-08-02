@@ -1263,9 +1263,11 @@ export function addTests(importModule, options) {
       __zigar.on('open', (evt) => {
         return chunks;
       });
-      // should fail when stream does not implement allocate()
-      expect(() => save('/hello/world', 'This is a test')).to.throw(Error)
-        .with.property('message', 'Allocation failed');
+      await captureError(() => {
+        // should fail when stream does not implement allocate()
+        expect(() => save('/hello/world', 'This is a test')).to.throw(Error)
+          .with.property('message', 'Allocation failed');
+      });
       let called = false, args;
       __zigar.on('open', (evt) => {
         return {
