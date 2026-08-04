@@ -1,6 +1,6 @@
 {
   "name": "node-zigar",
-  "version": "0.15.3-alpha.2",
+  "version": "0.15.3",
   "description": "Enable the use of Zig in Node.js",
   "main": "./dist/index.js",
   "exports": {
@@ -41,13 +41,13 @@
   },
   "homepage": "https://github.com/chung-leong/zigar/wiki",
   "dependencies": {
-    "node-zigar-addon": "^0.15.3-alpha.2",
-    "zigar-compiler": "^0.15.3-alpha.1"
+    "node-zigar-addon": "^0.15.3",
+    "zigar-compiler": "^0.15.3"
   },
   "devDependencies": {
     "c8": "^12.0.0",
     "chai": "^6.2.2",
-    "mocha": "^11.7.6",
+    "mocha": "^11.8.0",
     "mocha-skip-if": "^1.0.4"
   }
 }
