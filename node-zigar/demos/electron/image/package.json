@@ -20,7 +20,7 @@
   "license": "MIT",
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1",
-    "node-zigar": "^0.15.3-alpha.2"
+    "node-zigar": "^0.15.3"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.11.2",
