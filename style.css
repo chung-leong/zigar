@@ -77,6 +77,8 @@ a:hover {
 
 .demo-list .tag.bun {
     background-color: #fbf0df;
+    border: 1px #ccc solid;
+    display: none;
 }
 
 .demo-list .tag.node {
@@ -115,5 +117,9 @@ a:hover {
 @media (max-width: 500px) {
     .demo-list LI {
         width: 100%;
+    }
+
+    .demo-list .tag.bun {
+        display: inherit;
     }
 }
