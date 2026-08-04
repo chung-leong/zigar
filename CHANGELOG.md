@@ -1,3 +1,13 @@
+## 0.15.3
+
+* Introduced php-zigar
+* Added builtin support for image manipulation
+* Added handling of truncation to virtual file system
+* Added support for Float16Array
+* Made last argument optional when it's a struct with no required field
+* Fixed generator with allocator
+* Switched to use of deep binding on Linux
+
 ## 0.15.2
 
 * Support for Zig 0.15.x
