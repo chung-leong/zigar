@@ -35,7 +35,7 @@ var thunkAllocation = mixin({
         }
       }
       env.memory = new w.Memory({
-        initial: memoryInitial,
+        initial: memoryInitial ?? this.memory.buffer.byteLength / 65536,
         maximum: memoryMax,
         shared: multithreaded,
       });
@@ -43,8 +43,8 @@ var thunkAllocation = mixin({
         initial: tableInitial,
         element: 'anyfunc',
       });
-      const { exports: exports$1 } = new w.Instance(this.executable, imports);
-      const { createJsThunk, destroyJsThunk, identifyJsThunk } = exports$1;
+      const { exports } = new w.Instance(this.executable, imports);
+      const { createJsThunk, destroyJsThunk, identifyJsThunk } = exports;
       const source = {
         thunkCount: 0,
         createJsThunk,

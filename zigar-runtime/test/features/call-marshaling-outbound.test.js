@@ -743,7 +743,7 @@ describe('Feature: call-marshaling-outbound', function() {
       env.finishStructure(resolveStructure);
       const resolvePtrStructure = {
         type: StructureType.Pointer,
-        byteSize: 8,
+        byteSize: addressByteSize,
         flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | PointerFlag.IsSingle | PointerFlag.IsConst,
         signature: 0n,
         instance: {
@@ -755,6 +755,13 @@ describe('Feature: call-marshaling-outbound', function() {
               byteSize: 0,
               structure: resolveStructure,
               slot: 0,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -917,7 +924,7 @@ describe('Feature: call-marshaling-outbound', function() {
       env.finishStructure(yieldStructure);
       const yieldPtrStructure = {
         type: StructureType.Pointer,
-        byteSize: 8,
+        byteSize: addressByteSize,
         flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | PointerFlag.IsSingle | PointerFlag.IsConst,
         signature: 0n,
         instance: {
@@ -929,6 +936,13 @@ describe('Feature: call-marshaling-outbound', function() {
               byteSize: 0,
               structure: yieldStructure,
               slot: 0,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -1017,7 +1031,7 @@ describe('Feature: call-marshaling-outbound', function() {
       env.finishStructure(intStructure);
       const ptrStructure = {
         type: StructureType.Pointer,
-        byteSize: 8,
+        byteSize: addressByteSize,
         flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | PointerFlag.IsSingle | PointerFlag.IsConst,
         signature: 0n,
         instance: {
@@ -1029,6 +1043,13 @@ describe('Feature: call-marshaling-outbound', function() {
               byteSize: 4,
               structure: intStructure,
               slot: 0,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },

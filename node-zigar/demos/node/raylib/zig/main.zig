@@ -1,6 +1,7 @@
 const std = @import("std");
+
+const c = @import("c");
 const zigar = @import("zigar");
-const r = @cImport(@cInclude("raylib.h"));
 
 pub fn launch(promise: zigar.function.Promise(void)) !void {
     try zigar.thread.use();
@@ -16,13 +17,13 @@ fn run_main(promise: zigar.function.Promise(void)) void {
 }
 
 pub fn main() void {
-    r.InitWindow(800, 450, "raylib [core] example - basic window");
-    defer r.CloseWindow();
+    c.InitWindow(800, 450, "raylib [core] example - basic window");
+    defer c.CloseWindow();
 
-    while (!r.WindowShouldClose()) {
-        r.BeginDrawing();
-        r.ClearBackground(r.RAYWHITE);
-        r.DrawText("Congrats! You created your first window!", 190, 200, 20, r.LIGHTGRAY);
-        r.EndDrawing();
+    while (!c.WindowShouldClose()) {
+        c.BeginDrawing();
+        c.ClearBackground(c.RAYWHITE);
+        c.DrawText("Congrats! You created your first window!", 190, 200, 20, c.LIGHTGRAY);
+        c.EndDrawing();
     }
 }

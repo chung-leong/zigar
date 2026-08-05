@@ -54,7 +54,7 @@ export async function compile(srcPath, modPath, options) {
       if (!outputMTimeBefore || options.recompile !== false) {
         const { onStart, onEnd } = options;
         // create config file
-        await createProject(config, moduleBuildDir);
+        await createProject(config);
         // then run the compiler
         await runCompiler(zigPath, zigArgs, { cwd: moduleBuildDir, onStart, onEnd });
       }
@@ -145,9 +145,9 @@ class MissingModule extends Error {
 export function formatProjectConfig(config) {
   const lines = [];
   const fields = [
-    'moduleName', 'modulePath', 'moduleDir', 'outputPath', 'pdbPath', 'zigarSrcPath', 'useLibc', 
-    'useLLVM', 'usePthreadEmulation', 'useRedirection', 'isWASM', 'multithreaded', 'stackSize', 
-    'maxMemory', 'evalBranchQuota', 'omitFunctions', 'omitVariables',
+    'moduleName', 'modulePath', 'moduleDir', 'outputPath', 'pdbPath', 'zigarSrcPath',
+    'cHeaderPath', 'useLibc', 'useLLVM', 'usePthreadEmulation', 'useRedirection', 'isWASM',
+    'multithreaded', 'stackSize', 'maxMemory', 'evalBranchQuota', 'omitFunctions', 'omitVariables',
   ];
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
@@ -158,7 +158,8 @@ export function formatProjectConfig(config) {
   return lines.join('\n') + '\n';
 }
 
-export async function createProject(config, dir) {
+export async function createProject(config) {
+  const dir = config.moduleBuildDir;
   await createDirectory(dir);
   const content = formatProjectConfig(config);
   const cfgFilePath = join(dir, 'build.cfg.zig');
@@ -309,6 +310,8 @@ export async function createConfig(srcPath, modPath, options = {}) {
   }
   // add path to build.extra.zig if it exists
   const extraFilePath = await findModuleFile(moduleDir, 'build.extra.zig');
+  // add path to build.extra.h if it exists
+  const cHeaderPath = await findModuleFile(moduleDir, 'build.extra.h');
   // add package manager manifest
   const packageConfigPath = await findModuleFile(moduleDir, 'build.zig.zon');
   return {
@@ -325,6 +328,7 @@ export async function createConfig(srcPath, modPath, options = {}) {
     buildFilePath,
     packageConfigPath,
     outputPath,
+    cHeaderPath,
     pdbPath,
     clean,
     zigPath,

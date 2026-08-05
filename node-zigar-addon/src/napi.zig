@@ -1,12 +1,11 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
+const c = @import("c");
+pub const version = c.NAPI_VERSION;
+
 const api_translator = @import("zigft/api-translator.zig");
 const inout = api_translator.inout;
-
-const c = @cImport({
-    @cInclude("node_api.h");
-});
 
 pub const Error = error{
     InvalidArg,
@@ -1279,8 +1278,6 @@ test {
     }
 }
 
-pub const version = c.NAPI_VERSION;
-
 pub fn createAddon(comptime attachExports: anytype) void {
     _ = struct {
         export fn node_api_module_get_api_version_v1() i32 {
@@ -1373,8 +1370,10 @@ pub fn createCallback(
                 args[offset] = @ptrCast(@alignCast(ptr.?));
                 offset += 1;
             }
+            comptime var env_index: usize = undefined;
             if (need_env) {
                 args[offset] = env;
+                env_index = offset;
                 offset += 1;
             }
             if (need_this) {
@@ -1385,7 +1384,7 @@ pub fn createCallback(
                 args[offset + i] = if (i < argc) argv[i] else try env.getUndefined();
             }
             // call function
-            const retval = @call(.auto, func, args);
+            const retval = @call(.always_inline, func, args);
             // check for error if it's possible
             const result = switch (@typeInfo(@TypeOf(retval))) {
                 .error_union => try retval,

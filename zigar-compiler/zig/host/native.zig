@@ -3,7 +3,9 @@ const expectEqual = std.testing.expectEqual;
 const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
-const exporter = @import("../exporter.zig");
+const c = @import("c");
+
+const exporter = @import("../export.zig");
 const Value = exporter.Value;
 const js_fn = @import("../thunk/js-fn.zig");
 const zig_fn = @import("../thunk/zig-fn.zig");
@@ -11,6 +13,7 @@ pub const AbortSignal = @import("../type/abort-signal.zig").AbortSignal;
 pub const Generator = @import("../type/generator.zig").Generator;
 pub const GeneratorOf = @import("../type/generator.zig").GeneratorOf;
 pub const GeneratorArgOf = @import("../type/generator.zig").GeneratorArgOf;
+pub const image = @import("../type/image.zig");
 pub const Promise = @import("../type/promise.zig").Promise;
 pub const PromiseOf = @import("../type/promise.zig").PromiseOf;
 pub const PromiseArgOf = @import("../type/promise.zig").PromiseArgOf;
@@ -72,9 +75,9 @@ pub fn createString(initializer: []const u8) !Value {
     return value;
 }
 
-pub fn createView(bytes: ?[*]const u8, len: usize, copying: bool, export_handle: ?usize) !Value {
+pub fn createView(bytes: ?[*]const u8, len: usize, copying: bool, read_only: bool, export_handle: ?usize, byte_align: usize) !Value {
     var value: Value = undefined;
-    if (imports.create_view(instance, bytes, len, copying, export_handle orelse 0, &value) != .SUCCESS) {
+    if (imports.create_view(instance, bytes, len, copying, read_only, export_handle orelse 0, byte_align, &value) != .SUCCESS) {
         return error.UnableToCreateDataView;
     }
     return value;
@@ -189,7 +192,7 @@ pub fn enableCallback(structure: Value, template: Value, member_flags: Value) !v
 
 pub fn handleJscall(fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
     if (!initialized) @panic("Uninitialized thread");
-    var call: Module.Jscall = .{
+    var call: interface.Jscall = .{
         .fn_id = fn_id,
         .arg_address = @intFromPtr(arg_ptr),
         .arg_size = arg_size,
@@ -213,7 +216,7 @@ pub fn stopMultithread() void {
 }
 
 pub fn redirectIO(fn_ptr: *const anyopaque) !void {
-    if (imports.redirect_syscalls(instance, fn_ptr) != .SUCCESS) return error.UnableToRedirectIO;
+    if (imports.redirect_syscalls(instance, fn_ptr) != .SUCCESS) return error.UnableToRedirectIo;
 }
 
 pub fn getInstance() *anyopaque {
@@ -221,6 +224,18 @@ pub fn getInstance() *anyopaque {
 }
 
 pub fn setHostInstance(ptr: *Module.Host) callconv(.c) E {
+    if (builtin.link_libc and builtin.target.os.tag != .windows) {
+        if (@hasDecl(c, "RTLD_DEEPBIND")) {
+            // fix missing environ due to RTLD_DEEPBIND option given to dlopen()
+            if (std.c.dlopen(null, .{ .LAZY = true, .NOLOAD = true })) |handle| {
+                defer _ = std.c.dlclose(handle);
+                if (std.c.dlsym(handle, "environ")) |symbol| {
+                    const environ_ptr: @TypeOf(&std.c.environ) = @ptrCast(@alignCast(symbol));
+                    std.c.environ = environ_ptr.*;
+                }
+            }
+        }
+    }
     instance = ptr;
     initialized = true;
     return E.SUCCESS;
@@ -242,6 +257,10 @@ pub fn getExportAddress(handle: usize, dest: *usize) callconv(.c) E {
     const f: *const fn () usize = @ptrFromInt(handle);
     dest.* = f();
     return .SUCCESS;
+}
+
+pub fn getLanguageName() []const u8 {
+    return language_name;
 }
 
 const empty_ptr: *anyopaque = @ptrCast(@constCast(&.{}));
@@ -290,6 +309,13 @@ fn destroyJsThunk(
     const controller: js_fn.ThunkController = @ptrFromInt(controller_address);
     const fn_id = controller(.destroy, fn_address) catch return .FAULT;
     dest.* = fn_id;
+    return .SUCCESS;
+}
+
+var language_name: []const u8 = "JavaScript";
+
+fn setLanguageName(name: [*:0]const u8) callconv(.c) E {
+    language_name = std.mem.sliceTo(name, 0);
     return .SUCCESS;
 }
 
@@ -388,6 +414,11 @@ pub fn createModule(comptime module_ns: type) Module {
             },
             .libc = builtin.link_libc,
             .io_redirection = exporter.options.use_redirection,
+            .debug = builtin.mode == .Debug,
+        },
+        .module_path = switch (builtin.mode) {
+            .Debug => exporter.options.module_path.ptr,
+            else => @ptrCast(std.fs.path.basename(exporter.options.module_path).ptr),
         },
         .imports = &imports,
         .exports = &.{
@@ -399,6 +430,7 @@ pub fn createModule(comptime module_ns: type) Module {
             .create_js_thunk = createJsThunk,
             .destroy_js_thunk = destroyJsThunk,
             .get_syscall_hook = getSyscallHook,
+            .set_language_name = setLanguageName,
         },
     };
 }

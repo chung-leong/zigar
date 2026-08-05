@@ -82,7 +82,7 @@ var _enum = mixin({
               // write the value into memory
               set.call(item, arg);
               // attach the new item to the enum set
-              const name = `${arg}`;
+              const name = `@enumFromInt(${arg})`;
               defineProperty(item, NAME, defineValue(name));
               defineProperty(constructor, name, defineValue(item));
               itemsByIndex[arg] = item;

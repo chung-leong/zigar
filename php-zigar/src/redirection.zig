@@ -1,0 +1,1 @@
+../../node-zigar-addon/src/redirection.zig

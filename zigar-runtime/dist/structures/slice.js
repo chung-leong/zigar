@@ -96,6 +96,9 @@ var slice = mixin({
         descriptors.clampedArray = this.defineClampedArray(structure);
       }
     }
+    if (!(flags & SliceFlag.IsString) && this.hasStringProperty(structure)) {
+      descriptors.string = this.defineStringArray(structure);
+    }
     descriptors.entries = descriptors[ENTRIES] = this.defineArrayEntries();
     descriptors.subarray = {
       value(begin, end) {

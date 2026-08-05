@@ -1,19 +1,22 @@
 const std = @import("std");
 
+pub var number: i32 = 1234;
+
 pub const StructA = packed struct {
-    text1: []const u8 = "1 apple",
-    text2: []const u8 = "2 oranges",
-    number: u10 = 100,
-    text3: []const u8 = "3 bananas",
+    ptr1: *i32,
+    ptr2: *i32,
+    number: u10,
+    ptr3: *i32,
 };
 
-pub var struct_a: StructA = .{
-    .text1 = "dog",
-    .text2 = "cat",
-    .number = 200,
-    .text3 = "monkey",
-};
+// struct cannot be initialized since non-byte-aligned relocation is not allowed
+pub var struct_a: StructA = undefined;
 
-pub fn print() void {
-    std.debug.print("{any}\n", .{struct_a});
+pub fn init() void {
+    struct_a = .{
+        .ptr1 = &number,
+        .ptr2 = &number,
+        .ptr3 = &number,
+        .number = 200,
+    };
 }

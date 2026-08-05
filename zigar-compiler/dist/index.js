@@ -249,7 +249,6 @@ function getPlatform() {
           for (let i = 0; i < sectionCount; i++, position += Usize(Shdr.size)) {
             shdrs.push(read(position, Shdr.size));
           }
-          const decoder = new TextDecoder();
           for (const shdr of shdrs) {
             const sectionType = shdr.getUint32(Shdr.sh_type, le);
             if (sectionType == SHT_DYNAMIC) {
@@ -357,7 +356,7 @@ function generateCode(definition, params) {
     envVariables = {},
     standaloneLoader,
   } = params;
-  const exports$1 = getExports(structures);
+  const exports = getExports(structures);
   const lines = [];
   const type = standaloneLoader?.type ?? 'esm';
   const add = manageIndentation(lines);
@@ -428,9 +427,9 @@ function generateCode(definition, params) {
     add(`const { constructor: v0 } = root;`);
     add(`const v1 = env.getSpecialExports();`);
     specialVarName = 'v1';
-    if (exports$1.length > 2) {
+    if (exports.length > 2) {
       add(`const {`);
-      for (const [ index, name ] of exports$1.entries()) {
+      for (const [ index, name ] of exports.entries()) {
         if (index >= 2) {
           add(`${name}: v${index},`);
         }
@@ -439,13 +438,13 @@ function generateCode(definition, params) {
     }
     if (type == 'esm') {
       add(`export {`);
-      for (const [ index, name ] of exports$1.entries()) {
+      for (const [ index, name ] of exports.entries()) {
         add(`v${index} as ${name},`);
       }
       add(`};`);
     } else {
       add(`module.exports = {`);
-      for (const [ index, name ] of exports$1.entries()) {
+      for (const [ index, name ] of exports.entries()) {
         add(`${name}: v${index},`);
       }
       add(`};`);
@@ -464,7 +463,7 @@ function generateCode(definition, params) {
     add(`\n${getLibraryExt}`);
   }
   const code = lines.join('\n');
-  return { code, exports: exports$1, structures };
+  return { code, exports, structures };
 }
 
 function addStructureDefinitions(lines, definition) {
@@ -794,7 +793,7 @@ async function test(srcPath, options) {
   const config = await createConfig(srcPath, '', options);
   const { zigPath, moduleBuildDir } = config;
   // create config file
-  await createProject(config, moduleBuildDir);
+  await createProject(config);
   const cwd = moduleBuildDir;
   const stdio = (silent) ? 'pipe' : 'inherit';
   const child = spawn(zigPath, [ 'build', 'test', ...extraArgs ], { cwd, stdio, windowsHide: true });
@@ -831,7 +830,7 @@ async function compile(srcPath, modPath, options) {
       if (!outputMTimeBefore || options.recompile !== false) {
         const { onStart, onEnd } = options;
         // create config file
-        await createProject(config, moduleBuildDir);
+        await createProject(config);
         // then run the compiler
         await runCompiler(zigPath, zigArgs, { cwd: moduleBuildDir, onStart, onEnd });
       }
@@ -922,9 +921,9 @@ class MissingModule extends Error {
 function formatProjectConfig(config) {
   const lines = [];
   const fields = [
-    'moduleName', 'modulePath', 'moduleDir', 'outputPath', 'pdbPath', 'zigarSrcPath', 'useLibc', 
-    'useLLVM', 'usePthreadEmulation', 'useRedirection', 'isWASM', 'multithreaded', 'stackSize', 
-    'maxMemory', 'evalBranchQuota', 'omitFunctions', 'omitVariables',
+    'moduleName', 'modulePath', 'moduleDir', 'outputPath', 'pdbPath', 'zigarSrcPath',
+    'cHeaderPath', 'useLibc', 'useLLVM', 'usePthreadEmulation', 'useRedirection', 'isWASM',
+    'multithreaded', 'stackSize', 'maxMemory', 'evalBranchQuota', 'omitFunctions', 'omitVariables',
   ];
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
@@ -935,7 +934,8 @@ function formatProjectConfig(config) {
   return lines.join('\n') + '\n';
 }
 
-async function createProject(config, dir) {
+async function createProject(config) {
+  const dir = config.moduleBuildDir;
   await createDirectory(dir);
   const content = formatProjectConfig(config);
   const cfgFilePath = join(dir, 'build.cfg.zig');
@@ -1086,6 +1086,8 @@ async function createConfig(srcPath, modPath, options = {}) {
   }
   // add path to build.extra.zig if it exists
   const extraFilePath = await findModuleFile(moduleDir, 'build.extra.zig');
+  // add path to build.extra.h if it exists
+  const cHeaderPath = await findModuleFile(moduleDir, 'build.extra.h');
   // add package manager manifest
   const packageConfigPath = await findModuleFile(moduleDir, 'build.zig.zon');
   return {
@@ -1102,6 +1104,7 @@ async function createConfig(srcPath, modPath, options = {}) {
     buildFilePath,
     packageConfigPath,
     outputPath,
+    cHeaderPath,
     pdbPath,
     clean,
     zigPath,

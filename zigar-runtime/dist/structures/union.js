@@ -1,4 +1,4 @@
-import { UnionFlag, StructureFlag, VisitorFlag, StructurePurpose } from '../constants.js';
+import { UnionFlag, StructurePurpose, StructureFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { MultipleUnionInitializers, MissingUnionInitializer, InvalidInitializer, InactiveUnionProperty, InaccessiblePointer } from '../errors.js';
 import { NAME, VISIT, SETTERS, KEYS, RESTRICT, INITIALIZE, TAG, VIVIFICATE, ENTRIES, PROPS, GETTERS, TARGET } from '../symbols.js';
@@ -35,7 +35,16 @@ var union = mixin({
         setSelector.call(this, index);
       };
     const propApplier = this.createApplier(structure);
-    const initializer = this.createInitializer(function(arg, allocator) {
+    const initializer = this.createInitializer(function(arg, allocator) {      
+      if (purpose == StructurePurpose.AnyImage && typeof(arg) === 'object') {
+        // not using instanceof just in case we're getting objects created in other contexts
+        switch (arg.data?.[Symbol.toStringTag]) {
+          case 'Uint8Array':
+          case 'Uint8ClampedArray':
+            arg = { web: arg };
+            break;
+        }
+      }      
       if (isCompatibleInstanceOf(arg, constructor)) {
         copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
@@ -51,6 +60,7 @@ var union = mixin({
         if (found > 1) {
           throw new MultipleUnionInitializers(structure);
         }
+        debugger;
         if (propApplier.call(this, arg, allocator) === 0) {
           throw new MissingUnionInitializer(structure, arg, exclusion);
         }

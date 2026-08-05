@@ -34,5 +34,10 @@ export function addTests(importModule, options) {
       expect(returnClampedArray()).to.eql(new Uint8ClampedArray([ 72, 101, 108, 108, 111,  32, 119, 111, 114, 108, 100 ]));
       expect(returnTypedArray()).to.eql(new Uint8Array([ 72, 101, 108, 108, 111,  32, 119, 111, 114, 108, 100 ]));
     })
+    it('should handle array and slice of strings', async function() {
+      const { names, getNames } = await importTest('slice-of-strings');
+      expect(names).to.eql([ 'Agnieszka', 'Basia', 'Carmen' ]);
+      expect(getNames()).to.eql([ 'Agnieszka', 'Basia' ]);
+    })
   })
 }

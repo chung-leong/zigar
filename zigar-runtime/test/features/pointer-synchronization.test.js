@@ -51,7 +51,14 @@ describe('Feature: pointer-synchronization', function() {
               byteSize: addressByteSize,
               slot: 0,
               structure: intStructure,
-            }
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -182,6 +189,13 @@ describe('Feature: pointer-synchronization', function() {
               slot: 0,
               structure: intStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -281,7 +295,7 @@ describe('Feature: pointer-synchronization', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Hello',
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -292,6 +306,13 @@ describe('Feature: pointer-synchronization', function() {
               byteSize: 8,
               slot: 0,
               structure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -311,8 +332,8 @@ describe('Feature: pointer-synchronization', function() {
               name: 'value',
               type: MemberType.Object,
               bitOffset: 0,
-              bitSize: 64,
-              byteSize: 8,
+              bitSize: addressSize,
+              byteSize: addressByteSize,
               slot: 0,
               structure: ptrStructure,
             },
@@ -321,7 +342,7 @@ describe('Feature: pointer-synchronization', function() {
               type: MemberType.Bool,
               bitOffset: 0,
               bitSize: 1,
-              byteSize: 8,
+              byteSize: addressByteSize,
               structure: {},
             },
           ],
@@ -434,6 +455,13 @@ describe('Feature: pointer-synchronization', function() {
               slot: 0,
               structure: intStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ]
         },
         static: {},
@@ -524,6 +552,13 @@ describe('Feature: pointer-synchronization', function() {
               slot: 0,
               structure: intStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -606,7 +641,7 @@ describe('Feature: pointer-synchronization', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Int32',
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -618,6 +653,13 @@ describe('Feature: pointer-synchronization', function() {
               slot: 0,
               structure: intStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -628,16 +670,16 @@ describe('Feature: pointer-synchronization', function() {
         type: StructureType.Struct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'SomeStruct',
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
             {
               name: 'pointer',
               type: MemberType.Object,
-              bitSize: 64,
+              bitSize: addressSize,
               bitOffset: 0,
-              byteSize: 8,
+              byteSize: addressByteSize,
               slot: 0,
               structure: ptrStructure,
             },
@@ -652,14 +694,14 @@ describe('Feature: pointer-synchronization', function() {
         flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: '[4]*Int32',
         length: 4,
-        byteSize: 8 * 4,
+        byteSize: addressByteSize * 4,
         signature: 0n,
         instance: {
           members: [
             {
               type: MemberType.Object,
-              bitSize: 64,
-              byteSize: 8,
+              bitSize: addressSize,
+              byteSize: addressByteSize,
               structure: ptrStructure,
             },
           ]
@@ -671,34 +713,34 @@ describe('Feature: pointer-synchronization', function() {
       const structure = {
         type: StructureType.Union,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | UnionFlag.HasInaccessible,
-        byteSize: 8 * 4,
+        byteSize: addressByteSize * 4,
         signature: 0n,
         instance: {
           members: [
             {
               name: 'pointer',
               type: MemberType.Object,
-              bitSize: 64,
+              bitSize: addressSize,
               bitOffset: 0,
-              byteSize: 8,
+              byteSize: addressByteSize,
               slot: 0,
               structure: ptrStructure,
             },
             {
               name: 'struct',
               type: MemberType.Object,
-              bitSize: 64,
+              bitSize: addressSize,
               bitOffset: 0,
-              byteSize: 8,
+              byteSize: addressByteSize,
               slot: 1,
               structure: structStructure,
             },
             {
               name: 'array',
               type: MemberType.Object,
-              bitSize: 64,
+              bitSize: addressSize * 4,
               bitOffset: 0,
-              byteSize: 8 * 4,
+              byteSize: addressByteSize * 4,
               slot: 2,
               structure: arrayStructure,
             },
@@ -787,7 +829,7 @@ describe('Feature: pointer-synchronization', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -799,6 +841,13 @@ describe('Feature: pointer-synchronization', function() {
               slot: 0,
               structure: intStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -808,7 +857,7 @@ describe('Feature: pointer-synchronization', function() {
       const structure = {
         type: StructureType.Optional,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue,
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -816,8 +865,8 @@ describe('Feature: pointer-synchronization', function() {
               name: 'value',
               type: MemberType.Object,
               bitOffset: 0,
-              bitSize: 64,
-              byteSize: 8,
+              bitSize: addressSize,
+              byteSize: addressByteSize,
               slot: 0,
               structure: ptrStructure,
             },
@@ -826,7 +875,7 @@ describe('Feature: pointer-synchronization', function() {
               type: MemberType.Bool,
               bitOffset: 0,
               bitSize: 1,
-              byteSize: 8,
+              byteSize: addressByteSize,
               structure: {},
             },
           ],
@@ -838,7 +887,7 @@ describe('Feature: pointer-synchronization', function() {
       const Hello = structure.constructor;
       const object = new Hello(new Int32(123));
       expect(object.$['*']).to.equal(123);
-      object[MEMORY].setBigUint64(0, 0n);
+      setUsize.call(object[MEMORY], 0, usize(0));
       expect(object.$).to.be.null;
       expect(object[SLOTS][0][SLOTS][0]).to.be.undefined;
     })
@@ -868,7 +917,7 @@ describe('Feature: pointer-synchronization', function() {
       const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -879,7 +928,14 @@ describe('Feature: pointer-synchronization', function() {
               byteSize: 8,
               slot: 0,
               structure: intStructure,
-            }
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -889,7 +945,7 @@ describe('Feature: pointer-synchronization', function() {
       const structure = {
         type: StructureType.ArgStruct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
-        byteSize: 8,
+        byteSize: addressByteSize,
         length: 1,
         signature: 0n,
         instance: {
@@ -899,15 +955,15 @@ describe('Feature: pointer-synchronization', function() {
               type: MemberType.Bool,
               bitOffset: 0,
               bitSize: 1,
-              byteSize: 8,
+              byteSize: addressByteSize,
               structure: {},
             },
             {
               name: '0',
               type: MemberType.Object,
               bitOffset: 0,
-              bitSize: 64,
-              byteSize: 8,
+              bitSize: addressSize,
+              byteSize: addressByteSize,
               slot: 0,
               structure: ptrStructure,
             },
@@ -950,7 +1006,7 @@ describe('Feature: pointer-synchronization', function() {
       const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsConst,
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -961,6 +1017,13 @@ describe('Feature: pointer-synchronization', function() {
               byteSize: 8,
               slot: 0,
               structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -981,15 +1044,15 @@ describe('Feature: pointer-synchronization', function() {
               type: MemberType.Bool,
               bitOffset: 0,
               bitSize: 1,
-              byteSize: 8,
+              byteSize: addressByteSize,
               structure: {},
             },
             {
               name: '0',
               type: MemberType.Object,
               bitOffset: 0,
-              bitSize: 64,
-              byteSize: 8,
+              bitSize: addressSize,
+              byteSize: addressByteSize,
               slot: 0,
               structure: ptrStructure,
             },
@@ -1043,6 +1106,13 @@ describe('Feature: pointer-synchronization', function() {
               slot: 0,
               structure: intStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -1072,7 +1142,7 @@ describe('Feature: pointer-synchronization', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Hello',
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -1084,6 +1154,13 @@ describe('Feature: pointer-synchronization', function() {
               slot: 0,
               structure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -1094,7 +1171,7 @@ describe('Feature: pointer-synchronization', function() {
         type: StructureType.Optional,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue,
         name: '?*Hello',
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -1102,8 +1179,8 @@ describe('Feature: pointer-synchronization', function() {
               name: 'value',
               type: MemberType.Object,
               bitOffset: 0,
-              bitSize: 64,
-              byteSize: 8,
+              bitSize: addressSize,
+              byteSize: addressByteSize,
               slot: 0,
               structure: ptrStructure,
             },
@@ -1112,7 +1189,7 @@ describe('Feature: pointer-synchronization', function() {
               type: MemberType.Bool,
               bitOffset: 0,
               bitSize: 1,
-              byteSize: 8,
+              byteSize: addressByteSize,
               structure: {},
             },
           ],
@@ -1147,8 +1224,8 @@ describe('Feature: pointer-synchronization', function() {
             name: 'sibling',
             type: MemberType.Object,
             bitOffset: 0,
-            bitSize: 64,
-            byteSize: 8,
+            bitSize: addressSize,
+            byteSize: addressByteSize,
             slot: 0,
             structure: optionalStructure,
           },
@@ -1175,19 +1252,19 @@ describe('Feature: pointer-synchronization', function() {
       expect(object3.sibling['*'].sibling['*']).to.equal(object1);
       expect(object3.sibling['*'].sibling['*'].sibling['*']).to.equal(object3);
       const map = new Map([
-        [ 0x1000n, object1[MEMORY] ],
-        [ 0x2000n, object2[MEMORY] ],
-        [ 0x3000n, object3[MEMORY] ],
-        [ 0x4000n, object4[MEMORY] ],
-        [ 0x5000n, object5[MEMORY] ],
+        [ usize(0x1000), object1[MEMORY] ],
+        [ usize(0x2000), object2[MEMORY] ],
+        [ usize(0x3000), object3[MEMORY] ],
+        [ usize(0x4000), object4[MEMORY] ],
+        [ usize(0x5000), object5[MEMORY] ],
       ]);
       env.obtainZigView = function(address, len) {
         return map.get(address);
       };
-      object1[MEMORY].setBigUint64(0, 0x5000n, true); // obj1 -> obj5
-      object2[MEMORY].setBigUint64(0, 0x1000n, true); // obj2 -> obj1
-      object3[MEMORY].setBigUint64(0, 0x0000n, true); // obj3 -> null
-      object5[MEMORY].setBigUint64(0, 0x4000n, true); // obj5 -> obj4
+      setUsize.call(object1[MEMORY], 0, usize(0x5000), true); // obj1 -> obj5
+      setUsize.call(object2[MEMORY], 0, usize(0x1000), true); // obj2 -> obj1
+      setUsize.call(object3[MEMORY], 0, usize(0x0000), true); // obj3 -> null
+      setUsize.call(object5[MEMORY], 0, usize(0x4000), true); // obj5 -> obj4
       const context = env.startContext();
       env.updatePointerTargets(context, object3, true);
       expect(object3.sibling).to.be.null;
@@ -1208,7 +1285,7 @@ describe('Feature: pointer-synchronization', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Hello',
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -1220,6 +1297,13 @@ describe('Feature: pointer-synchronization', function() {
               slot: 0,
               structure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -1230,7 +1314,7 @@ describe('Feature: pointer-synchronization', function() {
         type: StructureType.Optional,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue,
         name: '?*Hello',
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -1238,8 +1322,8 @@ describe('Feature: pointer-synchronization', function() {
               name: 'value',
               type: MemberType.Object,
               bitOffset: 0,
-              bitSize: 64,
-              byteSize: 8,
+              bitSize: addressSize,
+              byteSize: addressByteSize,
               slot: 0,
               structure: ptrStructure,
             },
@@ -1248,7 +1332,7 @@ describe('Feature: pointer-synchronization', function() {
               type: MemberType.Bool,
               bitOffset: 0,
               bitSize: 1,
-              byteSize: 8,
+              byteSize: addressByteSize,
               structure: {},
             },
           ],
@@ -1283,8 +1367,8 @@ describe('Feature: pointer-synchronization', function() {
             name: 'sibling',
             type: MemberType.Object,
             bitOffset: 0,
-            bitSize: 64,
-            byteSize: 8,
+            bitSize: addressSize,
+            byteSize: addressByteSize,
             slot: 0,
             structure: optionalStructure,
           },
@@ -1305,16 +1389,16 @@ describe('Feature: pointer-synchronization', function() {
       const object2 = new Hello({ sibling: null });
       const object3 = new Hello({ sibling: null });
       const map = new Map([
-        [ 0x1000n, object1[MEMORY] ],
-        [ 0x2000n, object2[MEMORY] ],
-        [ 0x3000n, object3[MEMORY] ],
+        [ usize(0x1000), object1[MEMORY] ],
+        [ usize(0x2000), object2[MEMORY] ],
+        [ usize(0x3000), object3[MEMORY] ],
       ]);
       env.obtainZigView = function(address, len) {
         return map.get(address);
       };
-      object1[MEMORY].setBigUint64(0, 0x3000n, true); // obj1 -> obj3
-      object2[MEMORY].setBigUint64(0, 0x1000n, true); // obj2 -> obj1
-      object3[MEMORY].setBigUint64(0, 0x2000n, true); // obj3 -> obj2
+      setUsize.call(object1[MEMORY], 0, usize(0x3000), true); // obj1 -> obj3
+      setUsize.call(object2[MEMORY], 0, usize(0x1000), true); // obj2 -> obj1
+      setUsize.call(object3[MEMORY], 0, usize(0x2000), true); // obj3 -> obj2
       const context = env.startContext();
       env.updatePointerTargets(context, object3, true);
       expect(object3.sibling['*']).to.equal(object2);
@@ -1342,14 +1426,21 @@ describe('Feature: pointer-synchronization', function() {
         signature: 0n,
         instance: {
           members: [
-          {
-            type: MemberType.Object,
-            bitSize: addressSize,
-            bitOffset: 0,
-            byteSize: addressByteSize,
-            slot: 0,
-            structure: opaqueStructure,
-          },
+            {
+              type: MemberType.Object,
+              bitSize: 0,
+              bitOffset: 0,
+              byteSize: 0,
+              slot: 0,
+              structure: opaqueStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},

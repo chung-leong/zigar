@@ -3,6 +3,7 @@ import { MemberType, PointerFlag, StructureFlag, StructureType } from '../../src
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { MEMORY, SLOTS } from '../../src/symbols.js';
+import { addressByteSize, addressSize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -164,7 +165,7 @@ describe('Feature: write-protection', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]Hello',
-        byteSize: 16,
+        byteSize: addressByteSize * 2,
         signature: 0n,
         instance: {
           members: [
@@ -175,6 +176,20 @@ describe('Feature: write-protection', function() {
               byteSize: 8,
               slot: 0,
               structure: sliceStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },

@@ -19,6 +19,7 @@ let currentModule;
 async function importModule(path, options) {
   const {
     optimize,
+    optimizeAddon,
     multithreaded,
     omitFunctions,
     omitVariables,
@@ -27,6 +28,7 @@ async function importModule(path, options) {
   } = options;
   currentModule?.__zigar?.abandon();
   let query = `optimize=${optimize}&`
+              + `optimize-addon=${optimizeAddon ?? 'ReleaseSmall'}&`
               + `multithreaded=${multithreaded ? 1 : 0}&`
               + `omit-functions=${omitFunctions ? 1 : 0}&`
               + `omit-variables=${omitVariables ? 1 : 0}&`

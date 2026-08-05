@@ -1,0 +1,436 @@
+const std = @import("std");
+const builtin = @import("builtin");
+
+const memory_map = @import("memory-map.zig");
+const php = @import("php.zig");
+const ClassEntry = php.ClassEntry;
+const Object = php.Object;
+const String = php.String;
+const Value = php.Value;
+
+pub const ByteBuffer = struct {
+    bytes: []u8 = undefined,
+    ref_count: u32 = 1,
+    alignment: std.mem.Alignment = .@"1",
+    bit_offset: u3 = 0,
+    flags: packed struct {
+        uninitialized: bool = true,
+        read_only: bool = false,
+        inaccessible: bool = false,
+        temporary: bool = false,
+        transient: bool = false,
+        contains_packed_data: bool = false,
+        contains_special_contents: bool = false,
+        has_allocator: bool = false,
+
+        fn assign(self: @This(), flags: anytype) @This() {
+            var new = self;
+            inline for (std.meta.fields(@TypeOf(flags))) |field| {
+                @field(new, field.name) = @field(flags, field.name);
+            }
+            return new;
+        }
+    } = .{},
+    source_type: enum {
+        none,
+        php,
+        buffer,
+        string,
+        allocator,
+    } = .none,
+    source: extern union {
+        buffer: *ByteBuffer,
+        string: *String,
+        allocator: *std.mem.Allocator,
+    } = undefined,
+
+    pub const Encoding = enum { base64 };
+    pub const Extent = struct {
+        address: usize,
+        len: usize = 1,
+    };
+    pub const RelativePosition = memory_map.RelativePosition;
+
+    pub fn data(self: *@This(), index: usize, comptime write_access: bool) !switch (write_access) {
+        false => []const u8,
+        true => []u8,
+    } {
+        if (builtin.mode == .Debug) {
+            if (self.ref_count == 0) {
+                var buffer: [128]u8 = undefined;
+                @panic(std.fmt.bufPrint(&buffer, "Accessing buffer that has already been freed: 0x{x}", .{
+                    @intFromPtr(self),
+                }) catch unreachable);
+            }
+        }
+        if (self.flags.read_only and write_access) return error.WriteProtected;
+        if (self.flags.uninitialized) return error.AccessingDeallocatedMemory;
+        if (index > self.bytes.len) return error.OutOfBound;
+        return self.bytes;
+    }
+
+    pub fn create(alignment: std.mem.Alignment) !*@This() {
+        const self = try php.allocator.create(@This());
+        self.* = .{ .alignment = alignment };
+        return self;
+    }
+
+    pub fn init(bytes: []u8) @This() {
+        return .{
+            .bytes = bytes,
+            .flags = .{
+                .temporary = true,
+                .transient = true,
+                .uninitialized = false,
+            },
+        };
+    }
+
+    pub fn allocate(self: *@This(), allocator: ?*std.mem.Allocator, len: usize) !void {
+        std.debug.assert(self.flags.uninitialized);
+        defer self.flags.uninitialized = false;
+        if (len > 0) {
+            if (allocator) |al| {
+                const byte_ptr = al.rawAlloc(len, self.alignment, 0) orelse return error.OutOfMemory;
+                self.bytes = byte_ptr[0..len];
+                // the allocator will be used to deallocate memory unless the buffer gets externalized,
+                // which happens after an object is fully constructed when a custom allocator is provided
+                self.source_type = .allocator;
+                self.source = .{ .allocator = al };
+                self.flags.has_allocator = true;
+            } else {
+                const byte_ptr = php.allocator.rawAlloc(len, self.alignment, 0) orelse return error.OutOfMemory;
+                self.bytes = byte_ptr[0..len];
+                self.source_type = .php;
+            }
+        } else {
+            self.bytes = &.{};
+            self.source_type = .none;
+        }
+    }
+
+    pub fn referenceString(self: *@This(), str: *String, read_only: bool) void {
+        std.debug.assert(self.flags.uninitialized);
+        defer self.flags.uninitialized = false;
+        if (!read_only) {
+            const interned = php.isStringInterned(str);
+            // separate the string if another variable is referencing it or if it's interned
+            if (str.gc.refcount > 1 or interned) {
+                const sc = php.getStringContent(str);
+                const new_str = php.createString(sc);
+                self.bytes = @constCast(php.getStringContent(new_str));
+                self.source_type = .string;
+                self.source = .{ .string = new_str };
+                return;
+            }
+        }
+        self.bytes = @constCast(php.getStringContent(str));
+        self.source_type = .string;
+        self.source = .{ .string = php.reuse(str) };
+        if (read_only) self.flags.read_only = true;
+    }
+
+    pub fn referenceBytes(self: *@This(), bytes: []const u8, parent: ?*@This()) void {
+        std.debug.assert(self.flags.uninitialized);
+        defer self.flags.uninitialized = false;
+        self.bytes = @constCast(bytes);
+        if (parent) |p_buf| {
+            const base = p_buf.getBase();
+            self.flags = base.flags.assign(.{ .has_allocator = false, .read_only = false, .temporary = false });
+            if (base.source_type != .none) {
+                self.source_type = .buffer;
+                self.source = .{ .buffer = base };
+                base.addRef();
+            }
+        }
+    }
+
+    pub fn externalize(self: *@This()) bool {
+        if (self.source_type == .allocator) {
+            self.source_type = .none;
+            return true;
+        }
+        return false;
+    }
+
+    pub fn slice(self: *@This(), offset: usize, len: usize, alignment: std.mem.Alignment, bit_offset: u3) !*@This() {
+        const slice_bit_offset: u3, const slice_alignment = switch (self.flags.contains_packed_data) {
+            false => .{ 0, alignment },
+            true => .{ self.bit_offset +% bit_offset, .@"1" },
+        };
+        const bytes = try self.data(offset + len, false);
+        const new = try php.allocator.create(@This());
+        const slice_bytes = bytes[offset .. offset + len];
+        if (!self.flags.contains_packed_data) {
+            std.debug.assert(alignment.check(@intFromPtr(slice_bytes.ptr)));
+        }
+        var src_buf = self;
+        while (src_buf.source_type == .buffer) {
+            src_buf = src_buf.source.buffer;
+        }
+        new.* = .{
+            .bytes = @constCast(slice_bytes),
+            .alignment = slice_alignment,
+            .bit_offset = slice_bit_offset,
+            .flags = self.flags.assign(.{ .has_allocator = false, .temporary = false }),
+        };
+        if (src_buf.source_type != .none) {
+            new.source_type = .buffer;
+            new.source = .{ .buffer = src_buf };
+            src_buf.addRef();
+        }
+        return new;
+    }
+
+    pub fn protect(self: *@This()) void {
+        self.flags.read_only = true;
+    }
+
+    pub fn copy(self: *@This(), other: *const @This()) !void {
+        try self.copyBytes(other.bytes);
+    }
+
+    pub fn copyBytes(self: *@This(), bytes: []const u8) !void {
+        const dest = try self.data(0, true);
+        if (self.bytes.len != bytes.len) return error.LengthMismatch;
+        @memmove(dest, bytes);
+    }
+
+    pub fn clear(self: *@This()) !void {
+        const dest = try self.data(0, true);
+        @memset(dest, 0);
+    }
+
+    pub fn addRef(self: *@This()) void {
+        if (self.flags.temporary) return;
+        self.ref_count += 1;
+    }
+
+    pub fn release(self: *@This()) void {
+        if (self.flags.temporary) return;
+        self.ref_count -= 1;
+        if (self.ref_count == 0) {
+            switch (self.source_type) {
+                .buffer => self.source.buffer.release(),
+                .string => php.release(self.source.string),
+                .allocator => self.source.allocator.rawFree(self.bytes, self.alignment, 0),
+                .php => php.allocator.rawFree(self.bytes, self.alignment, 0),
+                .none => {},
+            }
+            php.allocator.destroy(self);
+        }
+    }
+
+    pub fn free(self: *@This()) void {
+        // free memory associated with the buffer without freeing the buffer itself
+        switch (self.source_type) {
+            .allocator => {
+                self.source.allocator.rawFree(self.bytes, self.alignment, 0);
+                self.source_type = .none;
+            },
+            else => {},
+        }
+        self.flags = .{};
+    }
+
+    pub fn getBase(self: *const @This()) *@This() {
+        return switch (self.source_type) {
+            .buffer => self.source.buffer,
+            else => @constCast(self),
+        };
+    }
+
+    pub fn getString(self: *@This(), encoding: ?Encoding) !*String {
+        const bytes = try self.data(0, false);
+        if (encoding) |ec| {
+            switch (ec) {
+                .base64 => {
+                    const encoder = std.base64.url_safe_no_pad.Encoder;
+                    const base64_len = encoder.calcSize(bytes.len);
+                    const str = php.createStringWithLength(base64_len);
+                    const dest = @constCast(php.getStringContent(str));
+                    _ = encoder.encode(dest, bytes);
+                    dest.ptr[base64_len] = 0;
+                    return str;
+                },
+            }
+        }
+        return php.createString(bytes);
+    }
+
+    pub fn copyString(self: *@This(), str: *String, encoding: ?Encoding) !void {
+        const bytes = try self.data(0, true);
+        const sc = php.getStringContent(str);
+        if (encoding) |ec| {
+            switch (ec) {
+                .base64 => {
+                    const decoder = std.base64.url_safe_no_pad.Decoder;
+                    const base64_len = decoder.calcSizeForSlice(sc) catch return error.InvalidEncoding;
+                    if (bytes.len != base64_len) return error.LengthMismatch;
+                    decoder.decode(bytes, sc) catch return error.InvalidEncoding;
+                    return;
+                },
+            }
+        }
+        if (bytes.len != sc.len) return error.LengthMismatch;
+        @memmove(bytes, sc);
+    }
+
+    pub fn getParent(self: *const @This()) ?*@This() {
+        return switch (self.source_type) {
+            .buffer => self.source.buffer,
+            else => null,
+        };
+    }
+
+    pub fn getMaximumExtent(self: *@This()) Extent {
+        switch (self.source_type) {
+            .buffer => return self.source.buffer.getMaximumExtent(),
+            .string => {
+                const sc = php.getStringContent(self.source.string);
+                return .{ .address = @intFromPtr(sc.ptr), .len = sc.len };
+            },
+            .php, .allocator => {
+                return .{ .address = @intFromPtr(self.bytes.ptr), .len = self.bytes.len };
+            },
+            .none => {
+                // don't really know where the memory ceases to be valid
+                const address = @intFromPtr(self.bytes.ptr);
+                return .{ .address = address, .len = std.math.maxInt(usize) - address };
+            },
+        }
+    }
+
+    pub fn attachAllcator(self: *@This(), allocator: *std.mem.Allocator) void {
+        // associate a custom allocator with a buffer (that isn't itself allocated from a custom allocator)
+        switch (self.source_type) {
+            .allocator => @panic("Illegal operation"),
+            .buffer => self.source.buffer.attachAllcator(allocator),
+            else => {
+                self.source = .{ .allocator = allocator };
+                self.flags.has_allocator = true;
+            },
+        }
+    }
+
+    pub fn getAllocator(self: *const @This()) ?*std.mem.Allocator {
+        return if (self.flags.has_allocator)
+            self.source.allocator
+        else if (self.source_type == .buffer)
+            self.source.buffer.getAllocator()
+        else
+            null;
+    }
+
+    pub fn inZigMemory(self: *const @This()) bool {
+        const base = self.getBase();
+        return switch (base.source_type) {
+            .none, .allocator => true,
+            else => false,
+        };
+    }
+
+    pub fn dump(self: *const @This(), label: []const u8) void {
+        if (self.ref_count == 0) {
+            std.debug.print("[INVALID BUFFER]\n", .{});
+        }
+        std.debug.print("[{x}] {s}:", .{ @intFromPtr(self), label });
+        for (self.bytes) |byte| {
+            std.debug.print(" {X}", .{byte});
+        }
+        std.debug.print("\n", .{});
+    }
+
+    pub fn compareAddress(a: *const @This(), b: anytype) ?RelativePosition {
+        // smaller address comes first
+        if (@intFromPtr(a.bytes.ptr) < @intFromPtr(b.bytes.ptr)) return .ab;
+        if (@intFromPtr(a.bytes.ptr) > @intFromPtr(b.bytes.ptr)) return .ba;
+        return null;
+    }
+
+    pub fn compareLength(a: *const @This(), b: anytype) ?RelativePosition {
+        // short length comes first--this means a
+        if (a.bytes.len < b.bytes.len) return .ab;
+        if (a.bytes.len > b.bytes.len) return .ba;
+        return null;
+    }
+
+    pub fn compareReadOnly(a: *const @This(), b: anytype) ?RelativePosition {
+        const b_read_only = if (comptime hasField(@TypeOf(b), "flags"))
+            b.flags.read_only
+        else if (comptime hasField(@TypeOf(b), "read_only"))
+            b.read_only
+        else
+            return null;
+        if (a.flags.read_only and !b_read_only) return .ab;
+        if (!a.flags.read_only and b_read_only) return .ba;
+        return null;
+    }
+
+    pub fn compareAlignment(a: *const @This(), b: anytype) ?RelativePosition {
+        if (comptime hasField(@TypeOf(b), "alignment")) {
+            if (@intFromEnum(a.alignment) < @intFromEnum(b.alignment)) return .ab;
+            if (@intFromEnum(a.alignment) > @intFromEnum(b.alignment)) return .ab;
+        }
+        return null;
+    }
+
+    pub fn compare(a: *const @This(), b: anytype) ?RelativePosition {
+        return compareAddress(a, b) orelse
+            compareLength(a, b) orelse
+            compareReadOnly(a, b) orelse
+            compareAlignment(a, b);
+    }
+
+    pub fn contains(a: *const @This(), b: anytype) bool {
+        const a_start = @intFromPtr(a.bytes.ptr);
+        const a_end = a_start + a.bytes.len;
+        const b_start = @intFromPtr(b.bytes.ptr);
+        const b_end = b_start + b.bytes.len;
+        return a_start <= b_start and b_end <= a_end;
+    }
+
+    fn hasField(comptime T: type, comptime name: []const u8) bool {
+        return switch (@typeInfo(T)) {
+            .pointer => |pt| hasField(pt.child, name),
+            else => @hasField(T, name),
+        };
+    }
+};
+
+pub const BufferMap = struct {
+    map: Map = .{},
+
+    const Map = memory_map.MemoryMap(*ByteBuffer, php.allocator);
+    const SearchResult = memory_map.SearchResult;
+
+    pub fn deinit(self: *@This()) void {
+        for (self.map.list.items) |buf| buf.release();
+        self.map.deinit();
+    }
+
+    pub fn find(self: *@This(), b: anytype) SearchResult {
+        return self.map.find(b, ByteBuffer.compare);
+    }
+
+    pub fn get(self: *@This(), result: SearchResult) ?*ByteBuffer {
+        return self.map.get(result);
+    }
+
+    pub fn getParentBuffer(self: *@This(), b: anytype, result: SearchResult) ?*ByteBuffer {
+        return self.map.getMatching(b, result, ByteBuffer.contains);
+    }
+
+    pub fn insert(self: *@This(), result: SearchResult, buffer: *ByteBuffer) !void {
+        return try self.map.insert(result, buffer);
+    }
+
+    pub fn remove(self: *@This(), result: SearchResult) void {
+        return self.map.remove(result);
+    }
+
+    pub fn clear(self: *@This()) void {
+        const buffers = self.map.items();
+        for (buffers) |buf| buf.release();
+    }
+};

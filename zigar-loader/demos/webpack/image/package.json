@@ -1,0 +1,31 @@
+{
+  "name": "image",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "dev": "webpack serve --mode development",
+    "build": "webpack --mode production",
+    "preview": "http-server ./dist"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@babel/core": "^7.29.7",
+    "@babel/preset-env": "^7.29.7",
+    "@babel/preset-react": "^7.29.7",
+    "babel-loader": "^10.1.1",
+    "css-loader": "^7.1.4",
+    "file-loader": "^6.2.0",
+    "html-webpack-plugin": "^5.6.7",
+    "http-server": "^14.1.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "style-loader": "^4.0.0",
+    "webpack": "^5.109.0",
+    "webpack-cli": "^7.2.1",
+    "webpack-dev-server": "^6.0.0",
+    "zigar-loader": "^0.15.3"
+  }
+}

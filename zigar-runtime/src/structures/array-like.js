@@ -1,3 +1,4 @@
+import { ArrayFlag, SliceFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { MEMORY, NO_CACHE, PARENT, RESTORE, SLOTS } from '../symbols.js';
 import { defineProperties } from '../utils.js';
@@ -29,5 +30,28 @@ export default mixin({
     };
     return { value };
   },
+  hasStringProperty(structure) {
+    switch (structure.type) {
+      case StructureType.Array:
+        if (structure.flags & ArrayFlag.IsString) {
+          return true;
+        }
+      case StructureType.Slice:
+        if (structure.flags & SliceFlag.IsString) {
+          return true;
+        }
+    }
+    switch (structure.type) {
+      case StructureType.Array:
+      case StructureType.Slice:
+      case StructureType.Optional:
+      case StructureType.ErrorUnion:
+      case StructureType.Pointer:
+        const childStructure = structure.instance.members?.[0]?.structure;
+        if (childStructure) {
+          return this.hasStringProperty(childStructure);
+        }
+    }  
+    return false;
+  }  
 });
-

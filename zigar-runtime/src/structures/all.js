@@ -2,12 +2,12 @@ import {
   MemberFlag, MemberType, ProxyType, StructureFlag, structureNames, StructureType,
 } from '../constants.js';
 import { mixin } from '../environment.js';
-import { MissingInitializers, NoInitializer, NoProperty } from '../errors.js';
+import { MissingInitializers, NoInitializer, NoProperty, throwNoSupport } from '../errors.js';
 import { removeProxy } from '../proxies.js';
 import {
   ALIGN, CACHE, CAST, ENTRIES, ENVIRONMENT, FINALIZE, FLAGS, INITIALIZE, KEYS, MEMORY, PROPS,
-  PROXY,
-  RESTORE, RESTRICT, SETTERS, SHAPE, SIGNATURE, SIZE, SLOTS, TRANSFORM, TYPE, TYPED_ARRAY, UPDATE
+  PROXY, RESTORE, RESTRICT, SETTERS, SHAPE, SIGNATURE, SIZE, SLOTS, TRANSFORM, TYPE, TYPED_ARRAY,
+  UPDATE
 } from '../symbols.js';
 import { copyObject, defineProperties, defineProperty, defineValue, ObjectCache } from '../utils.js';
 
@@ -339,7 +339,7 @@ export default mixin({
                         : (type === MemberType.Int) ? 'Int' : 'Uint';
           const prefix = (byteSize > 4 && type !== MemberType.Float) ? 'Big' : '';
           const arrayName = prefix + intType + (byteSize * 8) + 'Array';
-          return globalThis[arrayName];
+          return globalThis[arrayName] ?? throwNoSupport.bind(null, arrayName);
         } break;
         case StructureType.Array:
         case StructureType.Slice:

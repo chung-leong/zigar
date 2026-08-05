@@ -39,7 +39,7 @@ export function addTests(importModule, options) {
       expect(Donut(1n)).to.not.be.undefined;
       expect(Donut(5n)).to.not.be.undefined;
       expect(module.donut).to.equal(Donut(5n));
-      expect(module.donut.valueOf()).to.equal('5');
+      expect(module.donut.valueOf()).to.equal('@enumFromInt(5)');
     })
     it('should print enum arguments', async function() {
       const { Pet, print } = await importTest('as-function-parameters');

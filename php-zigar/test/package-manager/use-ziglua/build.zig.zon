@@ -1,0 +1,14 @@
+.{
+    .name = .ziglua_example,
+    .version = "0.0.0",
+    .dependencies = .{
+        .zlua = .{
+            .url = "https://github.com/natecraddock/ziglua/archive/refs/tags/0.5.0.zip",
+            .hash = "zlua-0.1.0-hGRpC444BQDrHc6QhcEeGh1eWMwFbl-c21vlGPWjKBfQ",
+        },
+    },
+    .paths = .{
+        "",
+    },
+    .fingerprint = 0x427f3f675e35fa40,
+}

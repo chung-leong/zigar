@@ -43,7 +43,16 @@ export default mixin({
         setSelector.call(this, index);
       };
     const propApplier = this.createApplier(structure);
-    const initializer = this.createInitializer(function(arg, allocator) {
+    const initializer = this.createInitializer(function(arg, allocator) {      
+      if (purpose == StructurePurpose.AnyImage && typeof(arg) === 'object') {
+        // not using instanceof just in case we're getting objects created in other contexts
+        switch (arg.data?.[Symbol.toStringTag]) {
+          case 'Uint8Array':
+          case 'Uint8ClampedArray':
+            arg = { web: arg };
+            break;
+        }
+      }      
       if (isCompatibleInstanceOf(arg, constructor)) {
         copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
@@ -59,6 +68,7 @@ export default mixin({
         if (found > 1) {
           throw new MultipleUnionInitializers(structure);
         }
+        debugger;
         if (propApplier.call(this, arg, allocator) === 0) {
           throw new MissingUnionInitializer(structure, arg, exclusion);
         }

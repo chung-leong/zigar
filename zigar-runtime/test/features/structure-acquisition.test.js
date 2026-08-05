@@ -83,54 +83,6 @@ describe('Feature: structure-acquisition', function() {
       expect(list).to.eql([ 123 ]);
     })
   })
-  describe('getSlotValue', function() {
-    it('should read from global slots where target is null', function() {
-      const env = new Env();
-      const object = {}
-      env.slots[1] = object;
-      const result1 = env.getSlotValue(null, 1);
-      const result2 = env.getSlotValue(null, 2);
-      expect(result1).to.equal(object);
-      expect(result2).to.be.undefined;
-    })
-    it('should read from target object', function() {
-      const env = new Env();
-      const object = {}
-      const target = {
-        1: object,
-      };
-      const result1 = env.getSlotValue(target, 1);
-      const result2 = env.getSlotValue(target, 2);
-      expect(result1).to.equal(object);
-      expect(result2).to.be.undefined;
-    })
-    it('should not throw where object does not have slots', function() {
-      const env = new Env();
-      const target = {};
-      expect(() => env.getSlotValue(target, 1)).to.not.throw();
-    })
-  })
-  describe('setSlotValue', function() {
-    it('should write into global slots where target is null', function() {
-      const env = new Env();
-      const object = {}
-      env.setSlotValue(null, 1, object);
-      expect(env.slots[1]).to.equal(object);
-    })
-    it('should write to slot of target object', function() {
-      const env = new Env();
-      const object = {}
-      const target = {};
-      env.setSlotValue(target, 1, object);
-      expect(target[1]).to.equal(object);
-    })
-    it('should not throw where object does not have slots', function() {
-      const env = new Env();
-      const object = {}
-      const target = {};
-      expect(() => env.setSlotValue(target, 1, object)).to.not.throw();
-    })
-  })
   describe('beginStructure', function() {
     it('should define the shape of a structure', function() {
       const env = new Env();
@@ -222,11 +174,18 @@ describe('Feature: structure-acquisition', function() {
           members: [
             {
               type: MemberType.Object,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              slot: 0,
+              structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
               bitSize: addressSize,
               bitOffset: 0,
               byteSize: addressByteSize,
-              slot: 0,
-              structure: intStructure,
+              structure: {},
             },
           ],
         },
@@ -729,9 +688,11 @@ describe('Feature: structure-acquisition', function() {
       });
       expect(name).to.equal('void');
     })
+  })
+  describe('getComptimeName', function() {
     it('should return correct name for enum literal', function() {
       const env = new Env();
-      const name = env.getPrimitiveName({
+      const name = env.getComptimeName({
         type: StructureType.Primitive,
         instance: {
           members: [
@@ -742,11 +703,11 @@ describe('Feature: structure-acquisition', function() {
         },
         static: {},
       });
-      expect(name).to.equal('enum_literal');
+      expect(name).to.equal('@TypeOf(.enum_literal)');
     })
     it('should return correct name for null', function() {
       const env = new Env();
-      const name = env.getPrimitiveName({
+      const name = env.getComptimeName({
         type: StructureType.Primitive,
         instance: {
           members: [
@@ -757,11 +718,11 @@ describe('Feature: structure-acquisition', function() {
         },
         static: {},
       });
-      expect(name).to.equal('null');
+      expect(name).to.equal('@TypeOf(null)');
     })
     it('should return correct name for undefined', function() {
       const env = new Env();
-      const name = env.getPrimitiveName({
+      const name = env.getComptimeName({
         type: StructureType.Primitive,
         instance: {
           members: [
@@ -772,11 +733,11 @@ describe('Feature: structure-acquisition', function() {
         },
         static: {},
       });
-      expect(name).to.equal('undefined');
+      expect(name).to.equal('@TypeOf(undefined)');
     })
     it('should return correct name for type', function() {
       const env = new Env();
-      const name = env.getPrimitiveName({
+      const name = env.getComptimeName({
         type: StructureType.Primitive,
         instance: {
           members: [
@@ -791,7 +752,7 @@ describe('Feature: structure-acquisition', function() {
     })
     it('should return correct name for comptime', function() {
       const env = new Env();
-      const name = env.getPrimitiveName({
+      const name = env.getComptimeName({
         type: StructureType.Primitive,
         instance: {
           members: [
@@ -806,7 +767,7 @@ describe('Feature: structure-acquisition', function() {
     })
     it('should return correct name for unsupported', function() {
       const env = new Env();
-      const name = env.getPrimitiveName({
+      const name = env.getComptimeName({
         type: StructureType.Primitive,
         instance: {
           members: [
@@ -1230,6 +1191,90 @@ describe('Feature: structure-acquisition', function() {
       expect(name).to.equal('fn ()');
     })
   })
+  if (process.env.TARGET === 'wasm') {
+    describe('createBool', function() {
+      it('should return boolean', function() {
+        const env = new Env();
+        const value = env.createBool(true);
+        expect(value).to.equal(true);
+      })
+    })
+    describe('createInteger', function() {
+      it('should return number', function() {
+        const env = new Env();
+        const value = env.createInteger(123, false);
+        expect(value).to.equal(123);
+      })
+      it('should convert negative number to unsigned int', function() {
+        const env = new Env();
+        const value = env.createInteger(-2, true);
+        expect(value).to.equal(0xFFFF_FFFE);
+      })
+    })
+    describe('createBigInteger', function() {
+      it('should return big integer', function() {
+        const env = new Env();
+        const value = env.createBigInteger(123n, false);
+        expect(value).to.equal(123n);
+      })
+      it('should convert negative number to unsigned big int', function() {
+        const env = new Env();
+        const value = env.createBigInteger(-2n, true);
+        expect(value).to.equal(0xFFFF_FFFF_FFFF_FFFEn);
+      })
+    })
+    describe('createString', function() {
+      it('should return string', function() {
+        const env = new Env();
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+        const string = 'Hello';
+        const address = 0x1000;
+        const len = string.length;
+        const dv = new DataView(env.memory.buffer, address, len);
+        for (let i = 0; i < 5; i++) {
+          dv.setUint8(i, string.codePointAt(i));
+        }
+        const result = env.createString(address, len);
+        expect(result).to.equal('Hello');
+      })
+    })
+    describe('createList', function() {
+      it('should return an array', function() {
+        const env = new Env();
+        const array = env.createList();
+        expect(array).to.eql([]);
+      })
+    })
+    describe('createObject', function() {
+      it('should return an object', function() {
+        const env = new Env();
+        const object = env.createObject();
+        expect(object).to.eql({});
+      })
+    })
+    describe('getProperty', function() {
+      it('should read from target object', function() {
+        const env = new Env();
+        const object = {}
+        const target = {
+          1: object,
+        };
+        const result1 = env.getProperty(target, 1);
+        const result2 = env.getProperty(target, 2);
+        expect(result1).to.equal(object);
+        expect(result2).to.be.undefined;
+      })
+    })
+    describe('setProperty', function() {
+      it('should write to slot of target object', function() {
+        const env = new Env();
+        const object = {}
+        const target = {};
+        env.setProperty(target, 1, object);
+        expect(target[1]).to.equal(object);
+      })
+    })
+  }
 })
 
 function zig(address, len = 0) {

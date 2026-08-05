@@ -163,14 +163,10 @@ export function addTests(importModule, options) {
         'number = 1234, value = 8',
         'number = 1234, value = 9',
         'number = 1234, value = 10',
-        'number = 1234, value = null',
       ]);
       const f3 = function({ callback }) {
         for (let i = 6; i < 20; i++) {
-          if (!callback(i)) {
-            callback(null);
-            break;
-          }
+          if (!callback(i)) break;
         }
       };
       const lines3 = await capture(async () => {
@@ -183,7 +179,6 @@ export function addTests(importModule, options) {
         'number = 1234, value = 8',
         'number = 1234, value = 9',
         'number = 1234, value = 10',
-        'number = 1234, value = null',
       ]);
     })
     it('should correctly pass allocator and generator as arguments', async function() {
@@ -216,6 +211,21 @@ export function addTests(importModule, options) {
       expect(lines2).to.eql([
         'real_name = Tony Stark, superhero_name = Ironman, age = 53',
         'error = Unexpected'
+      ]);
+      const f3 = function({ allocator, callback }) {
+        callback({ 
+          real_name: allocator.dupe('Natasha Romanoff'), // manual allocation
+          superhero_name: 'Black Widow',  // auto allocation from allocator
+          age: 39 
+        });
+        callback(null);
+      };
+      const lines3 = await capture(async () => {
+        call(f3);
+        await delay(10);
+      });
+      expect(lines3).to.eql([
+        'real_name = Natasha Romanoff, superhero_name = Black Widow, age = 39',
       ]);
     })
     skip.if(platform() === 'win32' && arch() === 'x64').

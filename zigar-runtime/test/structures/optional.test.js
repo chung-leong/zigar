@@ -1,8 +1,12 @@
 import { expect } from 'chai';
-import { MemberFlag, MemberType, OptionalFlag, PointerFlag, SliceFlag, StructureFlag, StructureType, VisitorFlag } from '../../src/constants.js';
+import {
+  MemberFlag, MemberType, OptionalFlag, PointerFlag, SliceFlag, StructureFlag, StructureType,
+  VisitorFlag,
+} from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { INITIALIZE, MEMORY, SLOTS, VISIT } from '../../src/symbols.js';
+import { addressByteSize, addressSize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -475,7 +479,7 @@ describe('Structure: optional', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Int32',
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -486,6 +490,13 @@ describe('Structure: optional', function() {
               byteSize: 8,
               slot: 0,
               structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -503,8 +514,8 @@ describe('Structure: optional', function() {
             {
               type: MemberType.Object,
               bitOffset: 0,
-              bitSize: 64,
-              byteSize: 8,
+              bitSize: addressSize,
+              byteSize: addressByteSize,
               slot: 0,
               structure: ptrStructure,
             },
@@ -513,7 +524,7 @@ describe('Structure: optional', function() {
               flags: MemberFlag.IsSelector,
               bitOffset: 0,
               bitSize: 1,
-              byteSize: 8,
+              byteSize: addressByteSize,
               structure: {},
             },
           ],
@@ -575,7 +586,7 @@ describe('Structure: optional', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]Uint8',
-        byteSize: 16,
+        byteSize: addressByteSize * 2,
         signature: 0n,
         instance: {
           members: [
@@ -586,6 +597,20 @@ describe('Structure: optional', function() {
               byteSize: 16,
               slot: 0,
               structure: sliceStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -604,8 +629,8 @@ describe('Structure: optional', function() {
               name: 'value',
               type: MemberType.Object,
               bitOffset: 0,
-              bitSize: 128,
-              byteSize: 16,
+              bitSize: addressSize * 2,
+              byteSize: addressByteSize * 2,
               slot: 0,
               structure: ptrStructure,
             },
@@ -614,7 +639,7 @@ describe('Structure: optional', function() {
               type: MemberType.Bool,
               bitOffset: 0,
               bitSize: 1,
-              byteSize: 8,
+              byteSize: addressByteSize,
               structure: {},
             },
           ],
@@ -680,7 +705,7 @@ describe('Structure: optional', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.HasLength | PointerFlag.IsMultiple,
         name: '[]u8',
-        byteSize: 16,
+        byteSize: addressByteSize * 2,
         signature: 0n,
         instance: {
           members: [
@@ -691,6 +716,13 @@ describe('Structure: optional', function() {
               byteSize: 16,
               slot: 0,
               structure: sliceStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -708,8 +740,8 @@ describe('Structure: optional', function() {
             {
               type: MemberType.Object,
               bitOffset: 0,
-              bitSize: 128,
-              byteSize: 16,
+              bitSize: addressSize * 2,
+              byteSize: addressByteSize * 2,
               slot: 0,
               structure: ptrStructure,
             },
@@ -718,7 +750,7 @@ describe('Structure: optional', function() {
               flags: MemberFlag.IsSelector,
               bitOffset: 0,
               bitSize: 1,
-              byteSize: 8,
+              byteSize: addressByteSize,
               structure: {},
             },
           ],
@@ -762,7 +794,7 @@ describe('Structure: optional', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureType.IsSingle,
         name: '*Int32',
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -773,6 +805,13 @@ describe('Structure: optional', function() {
               byteSize: 8,
               slot: 0,
               structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -790,18 +829,18 @@ describe('Structure: optional', function() {
             {
               name: 'dog',
               type: MemberType.Object,
-              bitSize: 64,
+              bitSize: addressSize,
               bitOffset: 0,
-              byteSize: 8,
+              byteSize: addressByteSize,
               slot: 0,
               structure: ptrStructure,
             },
             {
               name: 'cat',
               type: MemberType.Object,
-              bitSize: 64,
-              bitOffset: 64,
-              byteSize: 8,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
               slot: 1,
               structure: ptrStructure,
             }
@@ -877,7 +916,7 @@ describe('Structure: optional', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureType.IsSingle,
         name: '*Int32',
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -888,6 +927,13 @@ describe('Structure: optional', function() {
               byteSize: 8,
               slot: 0,
               structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -905,18 +951,18 @@ describe('Structure: optional', function() {
             {
               name: 'dog',
               type: MemberType.Object,
-              bitSize: 64,
+              bitSize: addressSize,
               bitOffset: 0,
-              byteSize: 8,
+              byteSize: addressByteSize,
               slot: 0,
               structure: ptrStructure,
             },
             {
               name: 'cat',
               type: MemberType.Object,
-              bitSize: 64,
-              bitOffset: 64,
-              byteSize: 8,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
               slot: 1,
               structure: ptrStructure,
             }          
@@ -991,7 +1037,7 @@ describe('Structure: optional', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Int32',
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -1002,6 +1048,13 @@ describe('Structure: optional', function() {
               byteSize: 8,
               slot: 0,
               structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -1019,8 +1072,8 @@ describe('Structure: optional', function() {
           members: [
             {
               type: MemberType.Object,
-              bitSize: 64,
-              byteSize: 8,
+              bitSize: addressSize,
+              byteSize: addressByteSize,
               structure: ptrStructure,
             },
           ],

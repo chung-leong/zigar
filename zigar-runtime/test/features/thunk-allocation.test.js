@@ -31,7 +31,6 @@ if (process.env.TARGET === 'wasm') {
         const binary = await readFile(wasmPath);
         const env = new Env();
         await env.loadModule(binary, {
-          memoryInitial: 1024,
           tableInitial: 100,
           multithreaded: false,
         });
@@ -57,7 +56,6 @@ if (process.env.TARGET === 'wasm') {
         const binary = await readFile(wasmPath);
         const env = new Env();
         await env.loadModule(binary, {
-          memoryInitial: 1024,
           tableInitial: 100,
           multithreaded: false,
         });
@@ -85,7 +83,6 @@ if (process.env.TARGET === 'wasm') {
         const binary = await readFile(wasmPath);
         const env = new Env();
         await env.loadModule(binary, {
-          memoryInitial: 1024,
           tableInitial: 100,
           multithreaded: false,
         });

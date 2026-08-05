@@ -1,0 +1,451 @@
+const std = @import("std");
+
+const Generator = @import("generator.zig").Generator;
+const php = @import("php.zig");
+const ClassEntry = php.ClassEntry;
+const Object = php.Object;
+const ObjectIterator = php.ObjectIterator;
+const ObjectIteratorFunctions = php.ObjectIteratorFunctions;
+const String = php.String;
+const Value = php.Value;
+const structure = @import("structure.zig");
+const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
+const ZigObject = @import("object.zig").ZigObject;
+
+pub fn ArrayIterator(comptime S: type) type {
+    return struct {
+        iter: ObjectIterator,
+        object: *Object,
+        len: usize,
+        index: usize,
+
+        fn fromIter(iter: *ObjectIterator) *@This() {
+            return @fieldParentPtr("iter", iter);
+        }
+
+        pub fn create(obj: *Object) !*ObjectIterator {
+            const self = try php.allocator.create(@This());
+            const array = S.fromObject(obj);
+            php.initializeIterator(&self.iter);
+            self.object = php.reuse(obj);
+            self.len = array.getLength();
+            self.index = 0;
+            self.iter.funcs = &methods;
+            self.iter.data = php.createValueNull();
+            return &self.iter;
+        }
+
+        pub fn destroy(iter: *ObjectIterator) void {
+            const self = fromIter(iter);
+            php.release(&iter.data);
+            php.release(self.object);
+        }
+
+        pub fn isValid(iter: *ObjectIterator) !c_int {
+            const self = fromIter(iter);
+            return if (self.index < self.len) php.SUCCESS else php.FAILURE;
+        }
+
+        pub fn getCurrentData(iter: *ObjectIterator) *Value {
+            const self = fromIter(iter);
+            const container = S.fromObject(self.object);
+            php.release(&iter.data);
+            iter.data = container.getElement(self.index) catch |err| init: {
+                _ = &err;
+                break :init php.createValueNull();
+            };
+            return &iter.data;
+        }
+
+        pub fn getCurrentKey(iter: *ObjectIterator, key_ptr: *Value) void {
+            const self = fromIter(iter);
+            key_ptr.* = php.createValueAnyInt(self.index);
+        }
+
+        pub fn moveForward(iter: *ObjectIterator) void {
+            const self = fromIter(iter);
+            self.index += 1;
+        }
+
+        pub fn rewind(iter: *ObjectIterator) !void {
+            const self = fromIter(iter);
+            self.index = 0;
+        }
+
+        const methods: ObjectIteratorFunctions = .{
+            .dtor = php.transform(destroy),
+            .valid = php.transform(isValid),
+            .get_current_data = php.transform(getCurrentData),
+            .get_current_key = php.transform(getCurrentKey),
+            .move_forward = php.transform(moveForward),
+            .rewind = php.transform(rewind),
+        };
+    };
+}
+
+pub fn PropertyIterator(comptime S: type) type {
+    return struct {
+        iter: ObjectIterator,
+        member_iter: ZigClassEntry.MemberIterator,
+        container: *S,
+        current_name: ?*String,
+        current_index: usize,
+
+        fn fromIter(iter: *ObjectIterator) *@This() {
+            return @fieldParentPtr("iter", iter);
+        }
+
+        pub const scope: ZigClassEntry.ScopeType = if (@hasDecl(S, "scope")) S.scope else .instance;
+
+        pub fn init(obj: *Object) @This() {
+            var self: @This() = undefined;
+            const class = ZigClassEntry.fromObject(obj);
+            self.member_iter = class.getMemberIterator(scope);
+            self.container = S.fromObject(obj);
+            self.current_name = null;
+            self.current_index = std.math.maxInt(usize);
+            self.iter.funcs = &methods;
+            self.iter.data = php.createValueNull();
+            return self;
+        }
+
+        pub fn deinit(self: *@This()) void {
+            php.release(&self.iter.data);
+        }
+
+        pub fn create(obj: *Object) !*ObjectIterator {
+            const self = try php.allocator.create(@This());
+            self.* = .init(obj);
+            // initializeIterator() adds the iterator to the Zend object store, that's why
+            // we don't call it when we use the iterator as a stack object
+            php.initializeIterator(&self.iter);
+            php.addRef(obj);
+            return &self.iter;
+        }
+
+        pub fn destroy(iter: *ObjectIterator) void {
+            const self = fromIter(iter);
+            self.deinit();
+            php.release(ZigObject(S).fromStructure(self.container).object());
+        }
+
+        pub fn isValid(iter: *ObjectIterator) c_int {
+            const self = fromIter(iter);
+            return if (self.current_name != null) php.SUCCESS else php.FAILURE;
+        }
+
+        pub fn getCurrentData(iter: *ObjectIterator) *Value {
+            return &iter.data;
+        }
+
+        pub fn getCurrentKey(iter: *ObjectIterator, key_ptr: *Value) void {
+            const self = fromIter(iter);
+            key_ptr.* = if (self.current_name) |name|
+                php.createValueString(php.reuse(name))
+            else
+                php.createValueNull();
+        }
+
+        pub fn moveForward(iter: *ObjectIterator) void {
+            const self = fromIter(iter);
+            php.release(&iter.data);
+            while (self.member_iter.next()) |member| {
+                if (self.member_iter.currentName()) |name| {
+                    if (@hasDecl(S, "isMemberActive")) {
+                        if (!self.container.isMemberActive(name, member)) continue;
+                    }
+                    if (member.accessors == .property) {
+                        if (member.accessors.property.getter == null) continue;
+                    }
+                    if (member.class.type != .function) {
+                        if (member.accessors.get(self.container) catch null) |value| {
+                            iter.data = value;
+                            self.current_name = name;
+                            if (self.current_index == std.math.maxInt(usize)) {
+                                self.current_index = 0;
+                            } else {
+                                self.current_index += 1;
+                            }
+                            return;
+                        }
+                    }
+                }
+            } else {
+                iter.data = php.createValueNull();
+                self.current_name = null;
+            }
+        }
+
+        pub fn rewind(iter: *ObjectIterator) !void {
+            const self = fromIter(iter);
+            self.member_iter.reset();
+            self.current_index = std.math.maxInt(usize);
+            moveForward(&self.iter);
+        }
+
+        pub fn next(self: *@This()) ?*Value {
+            moveForward(&self.iter);
+            return if (self.current_name != null) &self.iter.data else null;
+        }
+
+        const methods: ObjectIteratorFunctions = .{
+            .dtor = php.transform(destroy),
+            .valid = php.transform(isValid),
+            .get_current_data = php.transform(getCurrentData),
+            .get_current_key = php.transform(getCurrentKey),
+            .move_forward = php.transform(moveForward),
+            .rewind = php.transform(rewind),
+        };
+    };
+}
+
+pub const GeneratorIterator = struct {
+    iter: ObjectIterator,
+    generator: *Generator,
+    index: usize,
+
+    fn fromIter(iter: *ObjectIterator) *@This() {
+        return @fieldParentPtr("iter", iter);
+    }
+
+    pub fn create(obj: *Object) !*ObjectIterator {
+        const generator_struct = structure.Struct.fromObject(obj);
+        const generator = try generator_struct.getSpecialContext(Generator);
+        const self = try php.allocator.create(@This());
+        generator.addRef();
+        php.initializeIterator(&self.iter);
+        self.generator = generator;
+        self.index = 0;
+        self.iter.funcs = &methods;
+        self.iter.data = php.createValueNull();
+        return &self.iter;
+    }
+
+    pub fn destroy(iter: *ObjectIterator) void {
+        const self = fromIter(iter);
+        self.generator.release();
+    }
+
+    pub fn isValid(iter: *ObjectIterator) !c_int {
+        const self = fromIter(iter);
+        return if (self.generator.isValid()) php.SUCCESS else php.FAILURE;
+    }
+
+    pub fn getCurrentData(iter: *ObjectIterator) !*Value {
+        const self = fromIter(iter);
+        return &self.generator.result;
+    }
+
+    pub fn getCurrentKey(iter: *ObjectIterator, key_ptr: *Value) void {
+        const self = fromIter(iter);
+        key_ptr.* = php.createValueAnyInt(self.index);
+    }
+
+    pub fn moveForward(iter: *ObjectIterator) !void {
+        const self = fromIter(iter);
+        try self.generator.moveForward();
+        self.index += 1;
+    }
+
+    pub fn rewind(iter: *ObjectIterator) !void {
+        const self = fromIter(iter);
+        try self.generator.rewind();
+        self.index = 0;
+    }
+
+    const methods: ObjectIteratorFunctions = .{
+        .dtor = php.transform(destroy),
+        .valid = php.transform(isValid),
+        .get_current_data = php.transform(getCurrentData),
+        .get_current_key = php.transform(getCurrentKey),
+        .move_forward = php.transform(moveForward),
+        .rewind = php.transform(rewind),
+    };
+};
+
+pub const IteratorIterator = struct {
+    iter: ObjectIterator,
+    iter_object: *Object,
+    index: usize,
+    flags: packed struct {
+        moved: bool = false,
+        valid: bool = false,
+    },
+
+    fn fromIter(iter: *ObjectIterator) *@This() {
+        return @fieldParentPtr("iter", iter);
+    }
+
+    pub fn create(obj: *Object) !*ObjectIterator {
+        const self = try php.allocator.create(@This());
+        php.initializeIterator(&self.iter);
+        self.iter_object = php.reuse(obj);
+        self.iter.funcs = &methods;
+        self.index = 0;
+        self.flags = .{};
+        return &self.iter;
+    }
+
+    pub fn destroy(iter: *ObjectIterator) void {
+        const self = fromIter(iter);
+        php.release(self.iter_object);
+    }
+
+    pub fn isValid(iter: *ObjectIterator) !c_int {
+        const self = fromIter(iter);
+        return if (self.flags.valid) php.SUCCESS else php.FAILURE;
+    }
+
+    pub fn getCurrentData(iter: *ObjectIterator) !*Value {
+        return &iter.data;
+    }
+
+    pub fn getCurrentKey(iter: *ObjectIterator, key_ptr: *Value) void {
+        const self = fromIter(iter);
+        key_ptr.* = php.createValueAnyInt(self.index);
+    }
+
+    pub fn moveForward(iter: *ObjectIterator) !void {
+        const self = fromIter(iter);
+        defer self.flags.moved = true;
+        if (self.flags.valid) {
+            php.release(&iter.data);
+            self.flags.valid = false;
+        }
+        if (self.call("next")) |result| {
+            if (!php.isValueNull(&result)) {
+                iter.data = result;
+                self.index += 1;
+                self.flags.valid = true;
+            }
+        } else |err| {
+            return err;
+        }
+    }
+
+    pub fn rewind(iter: *ObjectIterator) !void {
+        const self = fromIter(iter);
+        if (self.flags.moved) {
+            if (self.call("reset")) |_| {
+                self.flags.moved = false;
+            } else |_| {
+                return;
+            }
+        }
+        try moveForward(iter);
+    }
+
+    fn call(self: *@This(), comptime method: []const u8) !Value {
+        const obj_value = php.createValueObject(self.iter_object);
+        const method_value = php.createValuePersistentString(method);
+        return php.invokeMethod(&obj_value, &method_value, &.{});
+    }
+
+    const methods: ObjectIteratorFunctions = .{
+        .dtor = php.transform(destroy),
+        .valid = php.transform(isValid),
+        .get_current_data = php.transform(getCurrentData),
+        .get_current_key = php.transform(getCurrentKey),
+        .move_forward = php.transform(moveForward),
+        .rewind = php.transform(rewind),
+    };
+};
+
+pub const TupleIterator = struct {
+    iter: ObjectIterator,
+    member_iter: ZigClassEntry.MemberIterator,
+    container: *structure.Struct,
+    current_index: usize,
+    has_value: bool = false,
+
+    fn fromIter(iter: *ObjectIterator) *@This() {
+        return @fieldParentPtr("iter", iter);
+    }
+
+    pub fn init(obj: *Object) @This() {
+        var self: @This() = undefined;
+        const class = ZigClassEntry.fromObject(obj);
+        self.member_iter = class.getMemberIterator(.instance);
+        self.container = structure.Struct.fromObject(obj);
+        self.current_index = std.math.maxInt(usize);
+        self.has_value = false;
+        self.iter.funcs = &methods;
+        self.iter.data = php.createValueNull();
+        return self;
+    }
+
+    pub fn deinit(self: *@This()) void {
+        php.release(&self.iter.data);
+    }
+
+    pub fn create(obj: *Object) !*ObjectIterator {
+        const self = try php.allocator.create(@This());
+        self.* = .init(obj);
+        // initializeIterator() adds the iterator to the Zend object store, that's why
+        // we don't call it when we use the iterator as a stack object
+        php.initializeIterator(&self.iter);
+        php.addRef(obj);
+        return &self.iter;
+    }
+
+    pub fn destroy(iter: *ObjectIterator) void {
+        const self = fromIter(iter);
+        self.deinit();
+        php.release(ZigObject(structure.Struct).fromStructure(self.container).object());
+    }
+
+    pub fn isValid(iter: *ObjectIterator) c_int {
+        const self = fromIter(iter);
+        return if (self.has_value) php.SUCCESS else php.FAILURE;
+    }
+
+    pub fn getCurrentData(iter: *ObjectIterator) *Value {
+        return &iter.data;
+    }
+
+    pub fn getCurrentKey(iter: *ObjectIterator, key_ptr: *Value) void {
+        const self = fromIter(iter);
+        key_ptr.* = php.createValueAnyInt(self.current_index);
+    }
+
+    pub fn moveForward(iter: *ObjectIterator) void {
+        const self = fromIter(iter);
+        php.release(&iter.data);
+        while (self.member_iter.next()) |member| {
+            if (member.accessors.get(self.container) catch null) |value| {
+                iter.data = value;
+                self.has_value = true;
+                if (self.current_index == std.math.maxInt(usize)) {
+                    self.current_index = 0;
+                } else {
+                    self.current_index += 1;
+                }
+                return;
+            }
+        } else {
+            iter.data = php.createValueNull();
+            self.has_value = false;
+        }
+    }
+
+    pub fn rewind(iter: *ObjectIterator) !void {
+        const self = fromIter(iter);
+        self.member_iter.reset();
+        self.current_index = std.math.maxInt(usize);
+        moveForward(&self.iter);
+    }
+
+    pub fn next(self: *@This()) ?*Value {
+        moveForward(&self.iter);
+        return if (self.has_value) &self.iter.data else null;
+    }
+
+    const methods: ObjectIteratorFunctions = .{
+        .dtor = php.transform(destroy),
+        .valid = php.transform(isValid),
+        .get_current_data = php.transform(getCurrentData),
+        .get_current_key = php.transform(getCurrentKey),
+        .move_forward = php.transform(moveForward),
+        .rewind = php.transform(rewind),
+    };
+};

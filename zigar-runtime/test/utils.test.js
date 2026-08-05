@@ -28,6 +28,7 @@ import {
   isPromise,
   never,
   ObjectCache,
+  remove,
   safeInt,
   toString,
   transformIterable,
@@ -482,5 +483,12 @@ describe('Utility functions', function() {
       copyObject(dst, src);
       expect(dstDV.getUint32(4, true)).to.equal(1234);
     })
+  })
+  describe('remove', function() {
+    it('should remove matching item from array', function() {
+      const array = [ 1, 2, 3, 4, 5 ];
+      remove(array, 3);
+      expect(array).to.eql([ 1, 2, 4, 5 ]);
+    }) 
   })
 })

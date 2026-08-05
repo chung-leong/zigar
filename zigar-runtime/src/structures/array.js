@@ -71,6 +71,9 @@ export default mixin({
         descriptors.clampedArray = this.defineClampedArray(structure);
       }
     }
+    if (!(flags & ArrayFlag.IsString) && this.hasStringProperty(structure)) {
+      descriptors.string = this.defineStringArray(structure);
+    }
     descriptors[Symbol.iterator] = this.defineArrayIterator();
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);

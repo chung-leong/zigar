@@ -17,7 +17,7 @@
     .dependencies = .{
         .zlua = .{
             .url = "https://github.com/natecraddock/ziglua/archive/refs/heads/zig-0.15.2.zip",
-            .hash = "zlua-0.1.0-hGRpCww-BQCx3cX6zbKWfTgOx6B7Peo4P17RK2hm7-xV",
+            .hash = "zlua-0.1.0-hGRpCxFDBQBTLH7HYIvzCfvr_8xFE6kqLzLFxkcgdWNl",
         },
     },
     .paths = .{

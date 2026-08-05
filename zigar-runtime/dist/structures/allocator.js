@@ -5,33 +5,25 @@ import { usizeMax, usize } from '../utils.js';
 var allocator = mixin({
   init() {
     this.defaultAllocator = null;
-    this.allocatorVtable =  null;
     this.allocatorContextMap = new Map();
     this.nextAllocatorContextId = usize(0x1000);
   },
   createDefaultAllocator(args, structure) {
-    let allocator = this.defaultAllocator;
-    if (!allocator) {
-      allocator = this.defaultAllocator = this.createJsAllocator(args, structure, false);
-    }
-    return allocator;
+    return this.defaultAllocator ??= this.createJsAllocator(args, structure, false);
   },
   createJsAllocator(args, structure, resettable) {
     const { constructor: Allocator } = structure;
-    let vtable = this.allocatorVtable;
-    if (!vtable) {      
-      const { noResize, noRemap } = Allocator;
-      vtable = this.allocatorVtable = {
-        alloc: this.allocateHostMemory.bind(this),
-        free: this.freeHostMemory.bind(this),
-        resize: noResize,
-      };
-      if (noRemap) {
-        vtable.remap = noRemap;
-      }
-      this.destructors.push(() => this.freeFunction(vtable.alloc));
-      this.destructors.push(() => this.freeFunction(vtable.free));
+    const { noResize, noRemap } = Allocator;
+    const vtable = {
+      alloc: this.allocateHostMemory.bind(this),
+      free: this.freeHostMemory.bind(this),
+      resize: noResize,
+    };
+    if (noRemap) {
+      vtable.remap = noRemap;
     }
+    this.destructors.push(() => this.freeFunction(vtable.alloc));
+    this.destructors.push(() => this.freeFunction(vtable.free));
     let contextId = usizeMax;
     if (resettable) {
       // create list used to clean memory allocated for generator

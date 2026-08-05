@@ -71,15 +71,15 @@ export function addTests(importModule, options) {
     it('should use returned allocator in call', async function() {
       const {
         Struct,
-        defaultAllocator,
+        default_allocator,
         alloc,
       } = await importTest('allocate-from-zig-allocator');
-      const struct = new Struct({ number1: 123, number2: 456 }, { allocator: defaultAllocator });
+      const struct = new Struct({ number1: 123, number2: 456 }, { allocator: default_allocator });
       expect(struct.valueOf()).to.eql({ number1: 123, number2: 456 });
-      defaultAllocator.free(struct);
-      const ptr = alloc({ allocator: defaultAllocator });
+      default_allocator.free(struct);
+      const ptr = alloc({ allocator: default_allocator });
       expect(ptr.valueOf()).to.eql({ number1: 123, number2: 456 });
-      defaultAllocator.free(ptr);
+      default_allocator.free(ptr);
     })
   })
 }

@@ -9,11 +9,13 @@ export default mixin({
     if (process.env.TARGET === 'node') {
       if (typeof(arg) === 'object' && typeof(arg?.fd) === 'number') {
         let { fd } = arg;
+        /* c8 ignore start */
         if (process.env.TARGET === 'node' && process.platform === 'win32') {
           // need to get handle from Node.js
           const address = this.getFileHandle(fd);
           fd = this.obtainZigView(address, 0, false);
         }
+        /* c8 ignore end */
         return { handle: fd  };
       }
     }

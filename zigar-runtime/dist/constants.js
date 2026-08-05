@@ -14,6 +14,7 @@ const StructureType = {
   ArgStruct: 12,
   VariadicStruct: 13,
   Function: 14,
+  Comptime: 15,
 };
 const StructurePurpose = {
   Unknown: 0,
@@ -24,6 +25,9 @@ const StructurePurpose = {
   Iterator: 5,
   File: 6,
   Directory: 7,
+  AnyImage: 8,
+  WebImage: 9,
+  GdImage: 10,
 };
 const structureNames = Object.keys(StructureType);
 const StructureFlag = {
@@ -148,6 +152,7 @@ const PosixError = { // values mirror std.os.wasi.errno_t
   EMFILE: 34,
   ENOENT: 44,
   ENOSPC: 51,
+  ENOSYS: 52,
   ENOTSUP: 58,
   EPERM: 63,
   ESPIPE: 70,

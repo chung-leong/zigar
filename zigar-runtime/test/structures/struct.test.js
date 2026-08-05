@@ -1461,6 +1461,13 @@ describe('Structure: struct', function() {
               slot: 0,
               structure: intStructure,
             },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
           ],
         },
         static: {},
@@ -1574,6 +1581,13 @@ describe('Structure: struct', function() {
               byteSize: addressByteSize,
               slot: 0,
               structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -1703,7 +1717,7 @@ describe('Structure: struct', function() {
       const ptrStructure = {
         type: StructureType.Pointer,
         name: '*i32',
-        byteSize: 8,
+        byteSize: addressByteSize,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         signature: 0n,
         instance: {
@@ -1714,6 +1728,13 @@ describe('Structure: struct', function() {
               bitOffset: 0,
               byteSize: 8,
               slot: 0,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
               structure: {},
             },
           ],
@@ -1732,18 +1753,18 @@ describe('Structure: struct', function() {
             {
               name: 'dog',
               type: MemberType.Object,
-              bitSize: 64,
+              bitSize: addressSize,
               bitOffset: 0,
-              byteSize: 8,
+              byteSize: addressByteSize,
               slot: 0,
               structure: ptrStructure,
             },
             {
               name: 'cat',
               type: MemberType.Object,
-              bitSize: 64,
-              bitOffset: 64,
-              byteSize: 8,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
               slot: 1,
               structure: ptrStructure,
             }          
@@ -1789,7 +1810,7 @@ describe('Structure: struct', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Hello',
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -1800,6 +1821,13 @@ describe('Structure: struct', function() {
               byteSize: 8,
               structure,
               slot: 0,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -1857,9 +1885,9 @@ describe('Structure: struct', function() {
             {
               name: '0',
               type: MemberType.Object,
-              bitSize: 64,
+              bitSize: addressSize,
               bitOffset: optStructure.byteSize * 8,
-              byteSize: 8,
+              byteSize: addressByteSize,
               structure: ptrStructure,
               slot: 1,
             },
@@ -1987,6 +2015,60 @@ describe('Structure: struct', function() {
       expect(object.alloc).to.be.a('function');
       expect(object.free).to.be.a('function');
       expect(object.dupe).to.be.a('function');
+    })
+    it('should define an file struct', function() {
+      const env = new Env();
+      const structure = {
+        type: StructureType.Struct,
+        purpose: StructurePurpose.File,
+        flags: 0,
+        byteSize: 4,
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'handle',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
+      env.finishStructure(structure);
+      const Hello = structure.constructor;
+      const object = new Hello({ handle: 1234 });
+    })
+    it('should define an directory struct', function() {
+      const env = new Env();
+      const structure = {
+        type: StructureType.Struct,
+        purpose: StructurePurpose.Directory,
+        flags: 0,
+        byteSize: 4,
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'fd',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
+      env.finishStructure(structure);
+      const Hello = structure.constructor;
+      const object = new Hello({ fd: 1234 });
     })
   })
 })

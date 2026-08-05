@@ -1,0 +1,73 @@
+const std = @import("std");
+
+const accessor = @import("../accessor.zig");
+const Transform = accessor.Transform;
+const ByteBuffer = @import("../buffer.zig").ByteBuffer;
+const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
+const php = @import("../php.zig");
+const HashTable = php.HashTable;
+const Value = php.Value;
+const Object = php.Object;
+const String = php.String;
+const structure = @import("../structure.zig");
+
+pub const Comptime = struct {
+    table: Value = undefined,
+
+    pub const Super = structure.OptionalLike(@This());
+    pub const Static = struct {
+        value_acc: *accessor.Any = undefined,
+
+        pub fn init(self: *@This(), class_obj: *Object) !void {
+            const class = ZigClassEntry.fromObject(class_obj);
+            const member = try class.getMember(.instance, 0);
+            self.value_acc = &member.accessors;
+        }
+    };
+
+    pub fn checkArguments(_: *@This(), _: *php.ArgumentIterator) !void {
+        return error.CannotCreateComptimeObject;
+    }
+
+    pub fn getValue(self: *@This(), transform: accessor.Transform) !Value {
+        if (transform == .none) {
+            const class = ZigClassEntry.fromStructure(self);
+            const static = class.getStaticData(@This());
+            return try static.value_acc.get(self);
+        } else {
+            return Super.getValue(self, transform);
+        }
+    }
+
+    pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) !void {
+        if (transform == .none) {
+            const class = ZigClassEntry.fromStructure(self);
+            const static = class.getStaticData(@This());
+            return try static.value_acc.set(self, value);
+        } else {
+            return Super.setValue(self, value, transform);
+        }
+    }
+
+    pub const setStorage = Super.setStorage;
+    pub const initialize = Super.initialize;
+    pub const finalize = Super.finalize;
+    pub const externalize = Super.externalize;
+    pub const getProperty = Super.getProperty;
+    pub const setProperty = Super.setProperty;
+    pub const propertyExists = Super.propertyExists;
+    pub const visitPointers = Super.visitPointers;
+    pub const getConstructor = Super.getConstructor;
+    pub const cloneObject = Super.cloneObject;
+    pub const freeObject = Super.freeObject;
+    pub const readProperty = Super.readProperty;
+    pub const writeProperty = Super.writeProperty;
+    pub const hasProperty = Super.hasProperty;
+    pub const getProperties = Super.getProperties;
+    pub const getPropertyPointer = Super.getPropertyPointer;
+    pub const compare = Super.compare;
+    pub const getGarbageCollection = Super.getGarbageCollection;
+    pub const getIterator = Super.getIterator;
+    pub const fromObject = Super.fromObject;
+    pub const fromValue = Super.fromValue;
+};

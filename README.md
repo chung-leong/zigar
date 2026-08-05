@@ -2,16 +2,16 @@
 
 ![Logo](./logo.png)
 
-A software tool set that lets you utilize [Zig](https://ziglang.org/) code in your JavaScript
-projects.
+A software tool set that lets you utilize [Zig](https://ziglang.org/) code in your JavaScript or
+PHP projects.
 
 Consult the [project wiki](https://github.com/chung-leong/zigar/wiki) for installation instructions
 and tutorials.
 
 ## Features
 
-* Access to all Zig data types in JavaScript
-* Zig-to-JavaScript, JavaScript-to-Zig call marshalling
+* Access to all Zig data types in JavaScript/PHP
+* Zig-to-JavaScript/PHP, JavaScript/PHP-to-Zig call marshalling
 * Async task management
 * Threads in native code and WebAssembly (with support for pthread)
 * Emulating of file system operations
@@ -22,14 +22,7 @@ and tutorials.
 ## Versioning
 
 The major and minor version numbers of Zigar correspond to the version of the Zig compiler
-it's designed for. The current version is 0.15.2. It works with Zig 0.15.x.
-
-Version 0.14.3 has the same feature set as 0.15.2 and works with Zig 0.14.x. 
-
-For those on the absolutely bleeding edge, a development version of this toolkit is available that
-works with master. Append the package name with the tag `@dev` to install it. At any given time it
-might be broken due to changes to the language itself. Please file a bug report when you encounter
-a problem.
+it's designed for. The current version is 0.15.3. It works with Zig 0.15.x.
 
 ## Technical support
 

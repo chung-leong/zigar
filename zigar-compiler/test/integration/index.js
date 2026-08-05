@@ -7,6 +7,7 @@ import * as Console from './console/tests.js';
 import * as ErrorHandling from './error-handling/tests.js';
 import * as FunctionCalling from './function-calling/tests.js';
 import * as FunctionPointer from './function-pointer/tests.js';
+import * as ImageProcessing from './image-processing/tests.js';
 import * as Iterator from './iterator/tests.js';
 import * as MemoryAllocation from './memory-allocation/tests.js';
 import * as MetaTypes from './meta-types/tests.js';
@@ -27,6 +28,7 @@ export function addTests(importModule, options) {
   ErrorHandling.addTests(importModule, options);
   FunctionCalling.addTests(importModule, options);
   FunctionPointer.addTests(importModule, options);
+  ImageProcessing.addTests(importModule, options);
   Iterator.addTests(importModule, options);
   MemoryAllocation.addTests(importModule, options);
   Options.addTests(importModule, options);

@@ -1,0 +1,19 @@
+{
+  "optimize": "ReleaseSmall",
+  "modules": {
+    "lib/scale.zigar": {
+      "source": "zig/scale.zig",
+      "loader": "src/scale.js"
+    },
+    "lib/sepia.zigar": {
+      "source": "zig/sepia.zig",
+      "loader": "src/sepia.js"
+    }
+  },
+  "targets": [
+    { "platform": "linux", "arch": "x64" },
+    { "platform": "linux", "arch": "arm64" },
+    { "platform": "linux-musl", "arch": "x64" },
+    { "platform": "linux-musl", "arch": "arm64" }
+  ]
+}

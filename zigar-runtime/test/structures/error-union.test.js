@@ -3,6 +3,7 @@ import { ErrorSetFlag, MemberFlag, MemberType, PointerFlag, SliceFlag, Structure
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { ENVIRONMENT, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
+import { addressByteSize, addressSize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -690,7 +691,7 @@ describe('Structure: error-union', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Int32',
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -701,6 +702,13 @@ describe('Structure: error-union', function() {
               byteSize: 8,
               slot: 0,
               structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -719,8 +727,8 @@ describe('Structure: error-union', function() {
               name: 'value',
               type: MemberType.Object,
               bitOffset: 0,
-              bitSize: 64,
-              byteSize: 8,
+              bitSize: addressSize,
+              byteSize: addressByteSize,
               slot: 0,
               structure: ptrStructure,
             },
@@ -835,7 +843,7 @@ describe('Structure: error-union', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]u8',
-        byteSize: 16,
+        byteSize: addressByteSize * 2,
         signature: 0n,
         instance: {
           members: [
@@ -846,6 +854,20 @@ describe('Structure: error-union', function() {
               byteSize: 16,
               slot: 0,
               structure: sliceStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -864,8 +886,8 @@ describe('Structure: error-union', function() {
               name: 'value',
               type: MemberType.Object,
               bitOffset: 0,
-              bitSize: 128,
-              byteSize: 16,
+              bitSize: addressSize * 2,
+              byteSize: addressByteSize * 2,
               slot: 0,
               structure: ptrStructure,
             },
@@ -964,7 +986,7 @@ describe('Structure: error-union', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Int32',
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -975,6 +997,13 @@ describe('Structure: error-union', function() {
               byteSize: 8,
               slot: 0,
               structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -993,8 +1022,8 @@ describe('Structure: error-union', function() {
               name: 'value',
               type: MemberType.Object,
               bitOffset: 0,
-              bitSize: 64,
-              byteSize: 8,
+              bitSize: addressSize,
+              byteSize: addressByteSize,
               slot: 0,
               structure: ptrStructure,
             },
@@ -1089,7 +1118,7 @@ describe('Structure: error-union', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Int32',
-        byteSize: 8,
+        byteSize: addressByteSize,
         signature: 0n,
         instance: {
           members: [
@@ -1100,6 +1129,13 @@ describe('Structure: error-union', function() {
               byteSize: 8,
               slot: 0,
               structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
             },
           ],
         },
@@ -1118,8 +1154,8 @@ describe('Structure: error-union', function() {
               name: 'value',
               type: MemberType.Object,
               bitOffset: 0,
-              bitSize: 64,
-              byteSize: 8,
+              bitSize: addressSize,
+              byteSize: addressByteSize,
               slot: 0,
               structure: ptrStructure,
             },

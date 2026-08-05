@@ -13,6 +13,11 @@ export function addTests(importModule, options) {
   };
   describe('Function calling', function() {
     this.timeout(0);
+    it('should allow omission of optional struct', async function() {
+      const { call } = await importTest('accept-optional-struct');
+      const [ line ] = await capture(() => call());
+      expect(line).to.equal('.{ .a = true, .b = false, .c = true }');
+    })
     it('should throw when function returns an error', async function() {
       const { returnNumber } = await importTest('throw-error');
       const result = returnNumber(1234);
@@ -385,6 +390,13 @@ export function addTests(importModule, options) {
       const [ line3 ] = await capture(() => print());
       expect(line3).to.equal('odd = 777, even = 888');
     })
+    it('should call inline function', async function() {
+      const { print } = await importTest('call-inline-function');
+      const [ line ] = await capture(() => {
+          print();
+      });
+      expect(line).to.equal('Hello world!');
+    })
     it('should handle pointer in struct', async function() {
       const { User } = await importTest('handle-pointer-in-struct');
       const user = new User({ name: 'Alice' });
@@ -403,14 +415,6 @@ export function addTests(importModule, options) {
       });
       expect(after).to.eql([ 'Bob', 'Bob', 'Bob' ]);
     })
-    it('should correctly return const pointer', async function() {
-      const { getUser } = await importTest('return-const-pointer');
-      const user = getUser();
-      expect(() => user.age = 18).to.throw(TypeError);
-      expect(() => user.name = "Jesus Christ").to.throw(TypeError);
-      expect(() => user.address.street = "Nowhere").to.throw(TypeError);
-      expect(() => user.address.zip = 33333).to.throw(TypeError);
-    })
     it('should correctly handle recursive structure', async function() {
       const { getRoot } = await importTest('handle-recursive-structure');
       const root = getRoot();
@@ -421,6 +425,14 @@ export function addTests(importModule, options) {
       const child2 = parent.children[1];
       expect(child1.parent).to.equal(parent);
       expect(child2.parent).to.equal(parent);
+    })
+    it('should correctly return const pointer', async function() {
+      const { getUser } = await importTest('return-const-pointer');
+      const user = getUser();
+      expect(() => user.age = 18).to.throw(TypeError);
+      expect(() => user.name = "Jesus Christ").to.throw(TypeError);
+      expect(() => user.address.street = "Nowhere").to.throw(TypeError);
+      expect(() => user.address.zip = 33333).to.throw(TypeError);
     })
     it('should accept multi-pointers', async function() {
       const { print } = await importTest('accept-multi-pointer');
@@ -514,8 +526,7 @@ export function addTests(importModule, options) {
     })
     // VaList is "disabled due to miscompilations" on 64-bits Windows
     // and ARM64 Linux currently
-    skip.if(platform() === 'win32').
-    or(platform() === 'linux' && arch() === 'aarch64').
+    skip.if(platform() === 'win32').or(platform() === 'linux').
     it('should call variadic functions', async function() {
       const {
         Int8, Int16, Int32, Int64, Int128, printIntegers,
@@ -677,7 +688,7 @@ export function addTests(importModule, options) {
       expect(String.fromCharCode(...buffer2)).to.equal('abi');
     })
     it('should call printf correctly', async function() {
-      const { printf, Int, Double, StrPtr } = await importTest('call-printf', { useLibc: true });
+      const { printf, Int, Double, StrPtr } = await importTest('call-printf', { useLibc: true, useLLVM: true });
       await capture(() => {
         const result = printf(
           'Hello world %d!\n',

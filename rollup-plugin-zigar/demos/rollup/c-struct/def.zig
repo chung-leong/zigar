@@ -1,5 +1,2 @@
-const c = @cImport(
-    @cInclude("def.h"),
-);
-
+const c = @import("c");
 pub const Struct = c.Struct;

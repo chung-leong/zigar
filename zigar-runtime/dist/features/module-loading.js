@@ -95,12 +95,12 @@ var moduleLoading = mixin({
       }
       return imports;
     },
-    importFunctions(exports$1) {
+    importFunctions(exports) {
       if (!this.memory) {
-        this.memory = exports$1.memory;
+        this.memory = exports.memory;
       }
       for (const [ name, { argType, returnType } ] of Object.entries(this.imports)) {
-        const fn = exports$1[name];
+        const fn = exports[name];
         if (fn) {
           defineProperty(this, name, defineValue(this.importFunction(fn, argType, returnType)));
           this.destructors.push(() => this[name] = throwError);
@@ -120,7 +120,7 @@ var moduleLoading = mixin({
       const executable = this.executable = await f(res);
       const functions = this.exportFunctions();
       const env = {}, wasi = {}, wasiPreview = {};
-      const exports$1 = this.exportedModules = { env, wasi, wasi_snapshot_preview1: wasiPreview };
+      const exports = this.exportedModules = { env, wasi, wasi_snapshot_preview1: wasiPreview };
       for (const { module, name, kind } of WA.Module.imports(executable)) {
         if (kind === 'function') {
           if (module === 'env') {
@@ -135,6 +135,7 @@ var moduleLoading = mixin({
           }
         }
       }
+      debugger;
       if (memoryInitial) {
         this.memory = env.memory = new WA.Memory({
           initial: memoryInitial,
@@ -150,7 +151,7 @@ var moduleLoading = mixin({
         });
       }
       this.initialTableLength = tableInitial;
-      return WA.instantiate(executable, exports$1);
+      return WA.instantiate(executable, exports);
     },
     loadModule(source, options) {
       return this.initPromise = (async () => {

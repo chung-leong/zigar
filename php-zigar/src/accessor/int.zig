@@ -1,0 +1,111 @@
+const std = @import("std");
+
+const accessor = @import("../accessor.zig");
+const ByteBuffer = @import("../buffer.zig").ByteBuffer;
+const Error = @import("../failure.zig").Error;
+const failure = @import("../failure.zig");
+const php = @import("../php.zig");
+const Long = php.Long;
+const Ulong = php.Ulong;
+const Value = php.Value;
+
+const Attributes = struct {
+    signedness: std.builtin.Signedness,
+    bit_size: usize,
+    use_bit_offset: bool = false,
+
+    pub fn Type(self: @This()) type {
+        return @Type(.{
+            .int = .{ .bits = self.bit_size, .signedness = self.signedness },
+        });
+    }
+};
+
+pub fn Int(comptime attrs: Attributes) type {
+    @setEvalBranchQuota(2000000);
+    const T = attrs.Type();
+    return switch (attrs.use_bit_offset) {
+        false => struct {
+            byte_offset: usize,
+            runtime_check: bool,
+            comptime type: accessor.Type = .int,
+            comptime attributes: Attributes = attrs,
+
+            pub fn get(self: @This(), buffer: *ByteBuffer) Error!Value {
+                const byte_size = (@bitSizeOf(T) + 7) / 8;
+                const bytes: []const u8 = try buffer.data(self.byte_offset + byte_size, false);
+                if (comptime @bitSizeOf(T) == 0) return php.createValueLong(0);
+                const ptr: *align(1) const T = @ptrCast(&bytes[self.byte_offset]);
+                return php.createValueAnyInt(ptr.*);
+            }
+
+            pub fn set(self: @This(), buffer: *ByteBuffer, value: *const Value) Error!void {
+                const number = try php.getValueLong(value);
+                if (self.runtime_check) try check(T, number);
+                const byte_size = (@bitSizeOf(T) + 7) / 8;
+                const bytes: []u8 = try buffer.data(self.byte_offset + byte_size, true);
+                if (comptime @bitSizeOf(T) == 0) return;
+                const ptr: *align(1) T = @ptrCast(&bytes[self.byte_offset]);
+                ptr.* = switch (attrs.signedness) {
+                    .signed => @truncate(number),
+                    .unsigned => @truncate(@as(Ulong, @bitCast(number))),
+                };
+            }
+        },
+        true => struct {
+            byte_offset: usize,
+            bit_offset: u3,
+            runtime_check: bool,
+            comptime type: accessor.Type = .int,
+            comptime attributes: Attributes = attrs,
+
+            pub fn get(self: @This(), buffer: *ByteBuffer) Error!Value {
+                const bit_offset = buffer.bit_offset +% self.bit_offset;
+                return inline for (.{ 0, 1, 2, 3, 4, 5, 6, 7 }) |possible_offset| {
+                    if (bit_offset == possible_offset) {
+                        break try self.getAt(buffer, possible_offset);
+                    }
+                } else unreachable;
+            }
+
+            pub fn getAt(self: @This(), buffer: *ByteBuffer, comptime bit_offset: u3) Error!Value {
+                // use a packed struct to access the boolean when there's a bit offset
+                const AT = accessor.WithBitOffset(T, bit_offset);
+                const byte_size = (@bitSizeOf(AT) + 7) / 8;
+                const bytes: []const u8 = try buffer.data(self.byte_offset + byte_size, false);
+                if (comptime @bitSizeOf(T) == 0) return php.createValueLong(0);
+                const ptr: *align(1) const AT = @ptrCast(&bytes[self.byte_offset]);
+                return php.createValueAnyInt(ptr.value);
+            }
+
+            pub fn set(self: @This(), buffer: *ByteBuffer, value: *const Value) Error!void {
+                const bit_offset = buffer.bit_offset +% self.bit_offset;
+                inline for (.{ 0, 1, 2, 3, 4, 5, 6, 7 }) |possible_offset| {
+                    if (bit_offset == possible_offset) {
+                        break try self.setAt(buffer, possible_offset, value);
+                    }
+                } else unreachable;
+            }
+
+            pub fn setAt(self: @This(), buffer: *ByteBuffer, comptime bit_offset: u3, value: *const Value) Error!void {
+                const number = try php.getValueLong(value);
+                if (self.runtime_check) try check(T, number);
+                const AT = accessor.WithBitOffset(T, bit_offset);
+                const byte_size = (@bitSizeOf(AT) + 7) / 8;
+                const bytes: []u8 = try buffer.data(self.byte_offset + byte_size, true);
+                if (comptime @bitSizeOf(T) == 0) return;
+                const ptr: *align(1) AT = @ptrCast(&bytes[self.byte_offset]);
+                ptr.value = switch (attrs.signedness) {
+                    .signed => @truncate(number),
+                    .unsigned => @truncate(@as(Ulong, @bitCast(number))),
+                };
+            }
+        },
+    };
+}
+
+fn check(comptime T: type, value: Long) error{FailureReported}!void {
+    if (value < std.math.minInt(T) or value > std.math.maxInt(T)) {
+        return failure.report("{s} cannot represent the value given: {d}", .{ @typeName(T), value });
+    }
+}

@@ -1,8 +1,8 @@
 const std = @import("std");
+
+const c = @import("c");
+
 const zig = @import("./hello.zig");
-const c = @cImport({
-    @cInclude("./hello.c");
-});
 
 pub fn printZig() void {
     std.debug.print("{s}\n", .{zig.hello()});

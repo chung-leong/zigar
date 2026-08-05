@@ -7,7 +7,7 @@ export default mixin({
   fdAllocate(fd, offset, len, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
       const [ stream ] = this.getStream(fd);
-      checkStreamMethod(stream, 'allocate', PosixError.ENOSPC);
+      checkStreamMethod(stream, 'allocate', PosixError.ENOSYS);
       return stream.allocate(safeInt(offset), safeInt(len));
     });
   },

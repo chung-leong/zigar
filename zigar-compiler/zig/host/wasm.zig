@@ -3,7 +3,9 @@ const wasm_allocator = std.heap.wasm_allocator;
 const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
-const exporter = @import("../exporter.zig");
+const c = @import("c");
+
+const exporter = @import("../export.zig");
 const Value = exporter.Value;
 const js_fn = @import("../thunk/js-fn.zig");
 const zig_fn = @import("../thunk/zig-fn.zig");
@@ -11,14 +13,11 @@ pub const AbortSignal = @import("../type/abort-signal.zig").AbortSignal;
 pub const Generator = @import("../type/generator.zig").Generator;
 pub const GeneratorOf = @import("../type/generator.zig").GeneratorOf;
 pub const GeneratorArgOf = @import("../type/generator.zig").GeneratorArgOf;
+pub const image = @import("../type/image.zig");
 pub const Promise = @import("../type/promise.zig").Promise;
 pub const PromiseOf = @import("../type/promise.zig").PromiseOf;
 pub const PromiseArgOf = @import("../type/promise.zig").PromiseArgOf;
 const util = @import("../type/util.zig");
-
-const stdio_h = @cImport({
-    @cInclude("stdio.h");
-});
 
 pub fn WorkQueue(ns: type) type {
     return @import("../type/work-queue.zig").WorkQueue(ns, struct {});
@@ -42,7 +41,9 @@ pub fn createString(initializer: []const u8) !Value {
     return _createString(initializer.ptr, initializer.len);
 }
 
-pub fn createView(bytes: ?[*]const u8, len: usize, copying: bool, _: @TypeOf(null)) !Value {
+pub fn createView(bytes: ?[*]const u8, len: usize, copying: bool, read_only: bool, _: @TypeOf(null), byte_align: usize) !Value {
+    _ = read_only;
+    _ = byte_align;
     return _createView(bytes, len, copying);
 }
 
@@ -129,6 +130,10 @@ pub fn startMultithread() !void {}
 
 pub fn stopMultithread() void {}
 
+pub fn getLanguageName() []const u8 {
+    return "JavaScript";
+}
+
 pub fn redirectIO(_: *const anyopaque) !void {
     return error.NoSupport;
 }
@@ -144,7 +149,7 @@ export fn runThunk(
     const fn_ptr: *anyopaque = @ptrFromInt(fn_address);
     const arg_ptr: *anyopaque = if (arg_address != 0) @ptrFromInt(arg_address) else empty_ptr;
     thunk(fn_ptr, arg_ptr) catch return false;
-    if (builtin.link_libc) _ = stdio_h.fflush(stdio_h.stdout);
+    if (builtin.link_libc) _ = c.fflush(c.stdout);
     return true;
 }
 
@@ -160,7 +165,7 @@ export fn runVariadicThunk(
     const arg_ptr: *anyopaque = if (arg_address != 0) @ptrFromInt(arg_address) else empty_ptr;
     const attr_ptr: *anyopaque = if (arg_address != 0) @ptrFromInt(attr_address) else empty_ptr;
     thunk(fn_ptr, arg_ptr, attr_ptr, arg_count) catch return false;
-    if (builtin.link_libc) _ = stdio_h.fflush(stdio_h.stdout);
+    if (builtin.link_libc) _ = c.fflush(c.stdout);
     return true;
 }
 

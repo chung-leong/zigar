@@ -1,0 +1,7 @@
+*.so
+*.dll
+*.dynlib
+*.o
+*.obj
+*.pdb
+*.lib

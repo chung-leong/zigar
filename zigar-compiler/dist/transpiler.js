@@ -24,6 +24,7 @@ const StructureType = {
   ArgStruct: 12,
   VariadicStruct: 13,
   Function: 14,
+  Comptime: 15,
 };
 const StructurePurpose = {
   Unknown: 0,
@@ -34,6 +35,9 @@ const StructurePurpose = {
   Iterator: 5,
   File: 6,
   Directory: 7,
+  AnyImage: 8,
+  WebImage: 9,
+  GdImage: 10,
 };
 const structureNames = Object.keys(StructureType);
 const StructureFlag = {
@@ -155,6 +159,7 @@ const PosixError = { // values mirror std.os.wasi.errno_t
   EMFILE: 34,
   ENOENT: 44,
   ENOSPC: 51,
+  ENOSYS: 52,
   ENOTSUP: 58,
   EPERM: 63,
   ESPIPE: 70,
@@ -859,7 +864,6 @@ function getPlatform() {
           for (let i = 0; i < sectionCount; i++, position += Usize(Shdr.size)) {
             shdrs.push(read(position, Shdr.size));
           }
-          const decoder = new TextDecoder();
           for (const shdr of shdrs) {
             const sectionType = shdr.getUint32(Shdr.sh_type, le);
             if (sectionType == SHT_DYNAMIC) {
@@ -967,7 +971,7 @@ function generateCode(definition, params) {
     envVariables = {},
     standaloneLoader,
   } = params;
-  const exports$1 = getExports(structures);
+  const exports = getExports(structures);
   const lines = [];
   const type = standaloneLoader?.type ?? 'esm';
   const add = manageIndentation(lines);
@@ -1038,9 +1042,9 @@ function generateCode(definition, params) {
     add(`const { constructor: v0 } = root;`);
     add(`const v1 = env.getSpecialExports();`);
     specialVarName = 'v1';
-    if (exports$1.length > 2) {
+    if (exports.length > 2) {
       add(`const {`);
-      for (const [ index, name ] of exports$1.entries()) {
+      for (const [ index, name ] of exports.entries()) {
         if (index >= 2) {
           add(`${name}: v${index},`);
         }
@@ -1049,13 +1053,13 @@ function generateCode(definition, params) {
     }
     if (type == 'esm') {
       add(`export {`);
-      for (const [ index, name ] of exports$1.entries()) {
+      for (const [ index, name ] of exports.entries()) {
         add(`v${index} as ${name},`);
       }
       add(`};`);
     } else {
       add(`module.exports = {`);
-      for (const [ index, name ] of exports$1.entries()) {
+      for (const [ index, name ] of exports.entries()) {
         add(`${name}: v${index},`);
       }
       add(`};`);
@@ -1074,7 +1078,7 @@ function generateCode(definition, params) {
     add(`\n${getLibraryExt}`);
   }
   const code = lines.join('\n');
-  return { code, exports: exports$1, structures };
+  return { code, exports, structures };
 }
 
 function addStructureDefinitions(lines, definition) {
@@ -1425,7 +1429,7 @@ async function compile(srcPath, modPath, options) {
       if (!outputMTimeBefore || options.recompile !== false) {
         const { onStart, onEnd } = options;
         // create config file
-        await createProject(config, moduleBuildDir);
+        await createProject(config);
         // then run the compiler
         await runCompiler(zigPath, zigArgs, { cwd: moduleBuildDir, onStart, onEnd });
       }
@@ -1515,9 +1519,9 @@ class MissingModule extends Error {
 function formatProjectConfig(config) {
   const lines = [];
   const fields = [
-    'moduleName', 'modulePath', 'moduleDir', 'outputPath', 'pdbPath', 'zigarSrcPath', 'useLibc', 
-    'useLLVM', 'usePthreadEmulation', 'useRedirection', 'isWASM', 'multithreaded', 'stackSize', 
-    'maxMemory', 'evalBranchQuota', 'omitFunctions', 'omitVariables',
+    'moduleName', 'modulePath', 'moduleDir', 'outputPath', 'pdbPath', 'zigarSrcPath',
+    'cHeaderPath', 'useLibc', 'useLLVM', 'usePthreadEmulation', 'useRedirection', 'isWASM',
+    'multithreaded', 'stackSize', 'maxMemory', 'evalBranchQuota', 'omitFunctions', 'omitVariables',
   ];
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
@@ -1528,7 +1532,8 @@ function formatProjectConfig(config) {
   return lines.join('\n') + '\n';
 }
 
-async function createProject(config, dir) {
+async function createProject(config) {
+  const dir = config.moduleBuildDir;
   await createDirectory(dir);
   const content = formatProjectConfig(config);
   const cfgFilePath = join(dir, 'build.cfg.zig');
@@ -1679,6 +1684,8 @@ async function createConfig(srcPath, modPath, options = {}) {
   }
   // add path to build.extra.zig if it exists
   const extraFilePath = await findModuleFile(moduleDir, 'build.extra.zig');
+  // add path to build.extra.h if it exists
+  const cHeaderPath = await findModuleFile(moduleDir, 'build.extra.h');
   // add package manager manifest
   const packageConfigPath = await findModuleFile(moduleDir, 'build.zig.zon');
   return {
@@ -1695,6 +1702,7 @@ async function createConfig(srcPath, modPath, options = {}) {
     buildFilePath,
     packageConfigPath,
     outputPath,
+    cHeaderPath,
     pdbPath,
     clean,
     zigPath,
@@ -3229,6 +3237,10 @@ function throwReadOnly() {
   throw new ReadOnly();
 }
 
+function throwNoSupport(feature) {
+  throw new Error(`Current platform does not support ${feature}`);
+}
+
 function deanimalizeErrorName(name) {
   // deal with snake_case first
   let s = name.replace(/_/g, ' ');
@@ -3666,6 +3678,7 @@ var callMarshalingInbound = mixin({
       value() {
         let options;
         let allocatorCount = 0, callbackCount = 0, signalCount = 0;
+        let generatorAlloc;
         const args = [];
         for (const [ srcIndex, { structure, type } ] of members.entries()) {
           // error unions will throw on access, in which case we pass the error as the argument
@@ -3692,6 +3705,8 @@ var callMarshalingInbound = mixin({
                   optName = 'callback';
                   if (++callbackCount === 1) {
                     opt = thisEnv.createGeneratorCallback(this, arg);
+                    // put allocator from the generator into the options object when there's one
+                    generatorAlloc = arg.allocator;
                   }
                   break;
                 case StructurePurpose.AbortSignal:
@@ -3716,6 +3731,9 @@ var callMarshalingInbound = mixin({
           }
         }
         if (options) {
+          if (generatorAlloc) {
+            options.allocator = generatorAlloc;
+          }
           args.push(options);
         }
         return args[Symbol.iterator]();
@@ -4707,12 +4725,12 @@ var moduleLoading = mixin({
       }
       return imports;
     },
-    importFunctions(exports$1) {
+    importFunctions(exports) {
       if (!this.memory) {
-        this.memory = exports$1.memory;
+        this.memory = exports.memory;
       }
       for (const [ name, { argType, returnType } ] of Object.entries(this.imports)) {
-        const fn = exports$1[name];
+        const fn = exports[name];
         if (fn) {
           defineProperty(this, name, defineValue(this.importFunction(fn, argType, returnType)));
           this.destructors.push(() => this[name] = throwError$1);
@@ -4732,7 +4750,7 @@ var moduleLoading = mixin({
       const executable = this.executable = await f(res);
       const functions = this.exportFunctions();
       const env = {}, wasi = {}, wasiPreview = {};
-      const exports$1 = this.exportedModules = { env, wasi, wasi_snapshot_preview1: wasiPreview };
+      const exports = this.exportedModules = { env, wasi, wasi_snapshot_preview1: wasiPreview };
       for (const { module, name, kind } of WA.Module.imports(executable)) {
         if (kind === 'function') {
           if (module === 'env') {
@@ -4747,6 +4765,7 @@ var moduleLoading = mixin({
           }
         }
       }
+      debugger;
       if (memoryInitial) {
         this.memory = env.memory = new WA.Memory({
           initial: memoryInitial,
@@ -4762,7 +4781,7 @@ var moduleLoading = mixin({
         });
       }
       this.initialTableLength = tableInitial;
-      return WA.instantiate(executable, exports$1);
+      return WA.instantiate(executable, exports);
     },
     loadModule(source, options) {
       return this.initPromise = (async () => {
@@ -5355,7 +5374,7 @@ var thunkAllocation = mixin({
         }
       }
       env.memory = new w.Memory({
-        initial: memoryInitial,
+        initial: memoryInitial ?? this.memory.buffer.byteLength / 65536,
         maximum: memoryMax,
         shared: multithreaded,
       });
@@ -5363,8 +5382,8 @@ var thunkAllocation = mixin({
         initial: tableInitial,
         element: 'anyfunc',
       });
-      const { exports: exports$1 } = new w.Instance(this.executable, imports);
-      const { createJsThunk, destroyJsThunk, identifyJsThunk } = exports$1;
+      const { exports } = new w.Instance(this.executable, imports);
+      const { createJsThunk, destroyJsThunk, identifyJsThunk } = exports;
       const source = {
         thunkCount: 0,
         createJsThunk,
@@ -5495,33 +5514,25 @@ var abortSignal = mixin({
 var allocator = mixin({
   init() {
     this.defaultAllocator = null;
-    this.allocatorVtable =  null;
     this.allocatorContextMap = new Map();
     this.nextAllocatorContextId = usize(0x1000);
   },
   createDefaultAllocator(args, structure) {
-    let allocator = this.defaultAllocator;
-    if (!allocator) {
-      allocator = this.defaultAllocator = this.createJsAllocator(args, structure, false);
-    }
-    return allocator;
+    return this.defaultAllocator ??= this.createJsAllocator(args, structure, false);
   },
   createJsAllocator(args, structure, resettable) {
     const { constructor: Allocator } = structure;
-    let vtable = this.allocatorVtable;
-    if (!vtable) {      
-      const { noResize, noRemap } = Allocator;
-      vtable = this.allocatorVtable = {
-        alloc: this.allocateHostMemory.bind(this),
-        free: this.freeHostMemory.bind(this),
-        resize: noResize,
-      };
-      if (noRemap) {
-        vtable.remap = noRemap;
-      }
-      this.destructors.push(() => this.freeFunction(vtable.alloc));
-      this.destructors.push(() => this.freeFunction(vtable.free));
+    const { noResize, noRemap } = Allocator;
+    const vtable = {
+      alloc: this.allocateHostMemory.bind(this),
+      free: this.freeHostMemory.bind(this),
+      resize: noResize,
+    };
+    if (noRemap) {
+      vtable.remap = noRemap;
     }
+    this.destructors.push(() => this.freeFunction(vtable.alloc));
+    this.destructors.push(() => this.freeFunction(vtable.free));
     let contextId = usizeMax;
     if (resettable) {
       // create list used to clean memory allocated for generator
@@ -5677,7 +5688,7 @@ var generator = mixin({
     }
     args[RETURN] = result => callback(ptr, result);
     const generator = { ptr, callback };
-    const allocatorMember = members.find(m => m.name === 'allocator');
+    const allocatorMember = members.find(m => m.structure?.purpose === StructurePurpose.Allocator);
     if (allocatorMember) {
       const { structure } = allocatorMember;     
       generator.allocator = this.createJsAllocator(args, structure, true);
@@ -5700,7 +5711,7 @@ var generator = mixin({
         for await (const elem of iter) {
           if (elem !== null) {
             if (!args[YIELD](elem)) {
-              break;
+              return;
             }
           }
         }
@@ -5986,7 +5997,7 @@ var fdAllocate = mixin({
   fdAllocate(fd, offset, len, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
       const [ stream ] = this.getStream(fd);
-      checkStreamMethod(stream, 'allocate', PosixError.ENOSPC);
+      checkStreamMethod(stream, 'allocate', PosixError.ENOSYS);
       return stream.allocate(safeInt(offset), safeInt(len));
     });
   },
@@ -6119,6 +6130,17 @@ var fdFilestatGet = mixin({
         return this.inferStat(stream);
       }
     }, (stat) => this.copyStat(bufAddress, stat));
+  },
+});
+
+var fdFileStatSetSize = mixin({
+  fdFilestatSetSize(fd, newSize, canWait) {
+    return catchPosixError(canWait, PosixError.EBADF, () => {
+      const entry = this.getStream(fd);
+      const [ stream ] = entry;
+      checkStreamMethod(stream, 'truncate', PosixError.EINVAL);
+      return stream.truncate(safeInt(newSize));
+    });    
   },
 });
 
@@ -7124,6 +7146,7 @@ var structureAcquisition = mixin({
             case 'fd_fdstat_set_flags': this.use(fdFdstatSetFlags); break;
             case 'fd_fdstat_set_rights': this.use(fdFdstatSetRights); break;
             case 'fd_filestat_get':this.use(fdFilestatGet); break;
+            case 'fd_filestat_set_size': this.use(fdFileStatSetSize); break;
             case 'fd_filestat_set_times': this.use(fdFileStatSetTimes); break;
             case 'fd_pread': this.use(fdPread); break;
             case 'fd_prestat_get': this.use(fdPrestatGet); break;
@@ -7225,7 +7248,7 @@ var structureAcquisition = mixin({
     s.name = handler.call(this, s);
   },
   getPrimitiveName(s) {
-    const { instance: { members: [member] }, flags = 0 } = s;
+    const { instance: { members: [ member ] }, flags = 0 } = s;
     switch (member.type) {
       case MemberType.Bool:
         return `bool`;
@@ -7237,12 +7260,17 @@ var structureAcquisition = mixin({
         return `f${member.bitSize}`;
       case MemberType.Void:
         return 'void';
+    }
+  },
+  getComptimeName(s) {
+    const { instance: { members: [ member ] }, flags = 0 } = s;
+    switch (member.type) {
       case MemberType.Literal:
-        return 'enum_literal';
+        return '@TypeOf(.enum_literal)';
       case MemberType.Null:
-        return 'null';
+        return '@TypeOf(null)';
       case MemberType.Undefined:
-        return 'undefined';
+        return '@TypeOf(undefined)';
       case MemberType.Type:
         return 'type';
       case MemberType.Object:
@@ -7252,7 +7280,7 @@ var structureAcquisition = mixin({
     }
   },
   getArrayName(s) {
-    const { instance: { members: [element] }, length } = s;
+    const { instance: { members: [ element ] }, length } = s;
     return `[${length}]${element.structure.name}`;
   },
   getStructName(s) {
@@ -7265,7 +7293,7 @@ var structureAcquisition = mixin({
     return `U${this.structureCounters.union++}`;
   },
   getErrorUnionName(s) {
-    const { instance: { members: [payload, errorSet] } } = s;
+    const { instance: { members: [ payload, errorSet ] } } = s;
     return `${errorSet.structure.name}!${payload.structure.name}`;
   },
   getErrorSetName(s) {
@@ -7275,11 +7303,11 @@ var structureAcquisition = mixin({
     return `EN${this.structureCounters.enum++}`;
   },
   getOptionalName(s) {
-    const { instance: { members: [payload] } } = s;
+    const { instance: { members: [ payload ] } } = s;
     return `?${payload.structure.name}`;
   },
   getPointerName(s) {
-    const { instance: { members: [target] }, flags } = s;
+    const { instance: { members: [ target ] }, flags } = s;
     let prefix = '*';
     let targetName = target.structure.name;
     if (target.structure.type === StructureType.Slice) {
@@ -7307,11 +7335,11 @@ var structureAcquisition = mixin({
     return prefix + targetName;
   },
   getSliceName(s) {
-    const { instance: { members: [element] }, flags } = s;
+    const { instance: { members: [ element ] }, flags } = s;
     return (flags & SliceFlag.IsOpaque) ? 'anyopaque' : `[_]${element.structure.name}`;
   },
   getVectorName(s) {
-    const { instance: { members: [element] }, length } = s;
+    const { instance: { members: [ element ] }, length } = s;
     return `@Vector(${length}, ${element.structure.name})`;
   },
   getOpaqueName(s) {
@@ -8451,6 +8479,23 @@ var sentinel = mixin({
   } ),
 });
 
+var stringArray = mixin({
+  defineStringArray(structure) {
+    return markAsSpecial({
+      get() {
+        const array = [];
+        for (const child of this) {
+          array.push(child.string);
+        }
+        return array;
+      },
+      set(array, allocator) {
+        this[INITIALIZE](array, allocator);
+      },
+    });
+  },
+});
+
 var string = mixin({
   defineString(structure) {
     const thisEnv = this;
@@ -8980,7 +9025,7 @@ var all$1 = mixin({
                         : (type === MemberType.Int) ? 'Int' : 'Uint';
           const prefix = (byteSize > 4 && type !== MemberType.Float) ? 'Big' : '';
           const arrayName = prefix + intType + (byteSize * 8) + 'Array';
-          return globalThis[arrayName];
+          return globalThis[arrayName] ?? throwNoSupport.bind(null, arrayName);
         }        case StructureType.Array:
         case StructureType.Slice:
         case StructureType.Vector:
@@ -9001,6 +9046,22 @@ var argStruct = mixin({
     } = structure;
     const thisEnv = this;
     const argMembers = members.slice(1);
+    let lastArgOptional = false;
+    if (argMembers.length > 0) {
+      const lastArgMember = argMembers[argMembers.length - 1];
+      if (lastArgMember.structure?.type == StructureType.Struct) {
+        let isOptional = true;
+        for (const member of lastArgMember.structure.instance.members) {
+          if (member.flags & MemberFlag.IsRequired) {
+            isOptional = false;
+            break;
+          }
+        }
+        if (isOptional) {
+          lastArgOptional = true;
+        }
+      }
+    }
     const constructor = function(args, argAlloc) {
       const creating = this instanceof constructor;
       let self, dv;
@@ -9024,7 +9085,11 @@ var argStruct = mixin({
         }
         // length holds the minimum number of arguments
         if (args.length !== length) {
-          throw new ArgumentCountMismatch(length, args.length);
+          if (args.length === length - 1 && lastArgOptional) {
+            args = [ ...args, {} ];
+          } else {
+            throw new ArgumentCountMismatch(length, args.length);
+          }
         }
         if (flags & ArgStructFlag.IsAsync) {
           self[FINALIZE] = null;
@@ -9098,6 +9163,30 @@ var arrayLike = mixin({
     };
     return { value };
   },
+  hasStringProperty(structure) {
+    switch (structure.type) {
+      case StructureType.Array:
+        if (structure.flags & ArrayFlag.IsString) {
+          return true;
+        }
+      case StructureType.Slice:
+        if (structure.flags & SliceFlag.IsString) {
+          return true;
+        }
+    }
+    switch (structure.type) {
+      case StructureType.Array:
+      case StructureType.Slice:
+      case StructureType.Optional:
+      case StructureType.ErrorUnion:
+      case StructureType.Pointer:
+        const childStructure = structure.instance.members?.[0]?.structure;
+        if (childStructure) {
+          return this.hasStringProperty(childStructure);
+        }
+    }  
+    return false;
+  }  
 });
 
 var array = mixin({
@@ -9154,6 +9243,9 @@ var array = mixin({
         descriptors.clampedArray = this.defineClampedArray(structure);
       }
     }
+    if (!(flags & ArrayFlag.IsString) && this.hasStringProperty(structure)) {
+      descriptors.string = this.defineStringArray(structure);
+    }
     descriptors[Symbol.iterator] = this.defineArrayIterator();
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);
@@ -9174,6 +9266,26 @@ var array = mixin({
     } = structure;
     staticDescriptors.child = defineValue(member.structure.constructor);
     staticDescriptors[SENTINEL] = (flags & ArrayFlag.HasSentinel) && this.defineSentinel(structure);
+  },
+});
+
+var comptime = mixin({
+  defineComptime(structure, descriptors) {
+    const {
+      instance: { members: [ member ] },
+    } = structure;
+    const { get } = this.defineMember(member);
+    const constructor = this.createConstructor(structure);
+    descriptors.$ = { get, set: throwReadOnly };
+    descriptors[INITIALIZE] = defineValue(throwReadOnly);
+    descriptors[Symbol.toPrimitive] = defineValue(get);
+    return constructor;
+  },
+  finalizeComptime(structure, staticDescriptors) {
+    const {
+      instance: { members: [ member ] },
+    } = structure;
+    staticDescriptors[BIT_SIZE] = defineValue(member.bitSize);
   },
 });
 
@@ -9255,7 +9367,7 @@ var _enum = mixin({
               // write the value into memory
               set.call(item, arg);
               // attach the new item to the enum set
-              const name = `${arg}`;
+              const name = `@enumFromInt(${arg})`;
               defineProperty(item, NAME, defineValue(name));
               defineProperty(constructor, name, defineValue(item));
               itemsByIndex[arg] = item;
@@ -9751,33 +9863,16 @@ var pointer = mixin({
     const {
       flags,
       byteSize,
-      instance: { members: [ member ] },
+      instance: { members },
     } = structure;
-    const { structure: targetStructure } = member;
+    const { structure: targetStructure } = members[0];
     const {
       type: targetType,
       flags: targetFlags,
       byteSize: targetSize = 1
     } = targetStructure;
-    // length for slice can be zero or undefined
-    const addressSize = (flags & PointerFlag.HasLength) ? byteSize / 2 : byteSize;
-    const { get: readAddress, set: writeAddress } = this.defineMember({
-      type: MemberType.Uint,
-      bitOffset: 0,
-      bitSize: addressSize * 8,
-      byteSize: addressSize,
-      structure: { byteSize: addressSize },
-    });
-    const { get: readLength, set: writeLength } = (flags & PointerFlag.HasLength) ? this.defineMember({
-      type: MemberType.Uint,
-      bitOffset: addressSize * 8,
-      bitSize: addressSize * 8,
-      byteSize: addressSize,
-      structure: {
-        flags: PrimitiveFlag.IsSize,
-        byteSize: addressSize
-      },
-    }) : {};
+    const { get: readAddress, set: writeAddress } = this.defineMember(members[1]);
+    const { get: readLength, set: writeLength } = (flags & PointerFlag.HasLength) ? this.defineMember(members[2]) : {};
     const updateTarget = function(context, all = true, active = true) {
       if (all || this[MEMORY][ZIG]) {
         if (active) {
@@ -10023,10 +10118,12 @@ var pointer = mixin({
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[FINALIZE] = (targetType === StructureType.Function) && {
       value() {
-        const self = function(...args) {
-          const f = self['*'];
-          return f.call(this, ...args);
-        };
+        const self = (() => (
+          function(...args) {
+            const f = self['*'];
+            return f.call(this, ...args);
+          }
+        ))();
         self[MEMORY] = this[MEMORY];
         self[SLOTS] = this[SLOTS];
         Object.setPrototypeOf(self, constructor.prototype);
@@ -10255,6 +10352,9 @@ var slice = mixin({
         descriptors.clampedArray = this.defineClampedArray(structure);
       }
     }
+    if (!(flags & SliceFlag.IsString) && this.hasStringProperty(structure)) {
+      descriptors.string = this.defineStringArray(structure);
+    }
     descriptors.entries = descriptors[ENTRIES] = this.defineArrayEntries();
     descriptors.subarray = {
       value(begin, end) {
@@ -10358,7 +10458,13 @@ var struct = mixin({
     const backingIntMember = members.find(m => m.flags & MemberFlag.IsBackingInt);
     const backingInt = backingIntMember && this.defineMember(backingIntMember);
     const propApplier = this.createApplier(structure);
+    const thisEnv = this;
     const initializer = this.createInitializer(function(arg, allocator) {
+      if (purpose === StructurePurpose.File) {
+        arg = thisEnv.createFile(arg);
+      } else if (purpose == StructurePurpose.Directory) {
+        arg = thisEnv.createDirectory(arg);
+      }
       if (isCompatibleInstanceOf(arg, constructor)) {
         copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
@@ -10454,7 +10560,16 @@ var union = mixin({
         setSelector.call(this, index);
       };
     const propApplier = this.createApplier(structure);
-    const initializer = this.createInitializer(function(arg, allocator) {
+    const initializer = this.createInitializer(function(arg, allocator) {      
+      if (purpose == StructurePurpose.AnyImage && typeof(arg) === 'object') {
+        // not using instanceof just in case we're getting objects created in other contexts
+        switch (arg.data?.[Symbol.toStringTag]) {
+          case 'Uint8Array':
+          case 'Uint8ClampedArray':
+            arg = { web: arg };
+            break;
+        }
+      }      
       if (isCompatibleInstanceOf(arg, constructor)) {
         copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
@@ -10470,6 +10585,7 @@ var union = mixin({
         if (found > 1) {
           throw new MultipleUnionInitializers(structure);
         }
+        debugger;
         if (propApplier.call(this, arg, allocator) === 0) {
           throw new MissingUnionInitializer(structure, arg, exclusion);
         }
@@ -10763,6 +10879,8 @@ var vector = mixin({
   },
 });
 
+var fdCopyFileRange = undefined;
+
 var fdLockGet = mixin({
   fdLockGet(fd, flockAddress, canWait) {
     const le = this.littleEndian;
@@ -10819,7 +10937,31 @@ var fdLockSet = mixin({
   },
 });
 
-var fdSendfile = undefined;
+var pathFilestatSetSize = mixin({
+  pathFilestatSetSize(dirFd, pathAddress, pathLen, newSize, canWait) {
+    return catchPosixError(canWait, PosixError.EPERM, () => {
+      const loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
+      const rights = { write: true };
+      const flags = {
+        exclusive: true,
+        sync: true,
+      };
+      return this.triggerEvent('open', { ...loc, rights, flags });
+    }, (openResult) => {
+        if (openResult === undefined) {
+          return PosixError.ENOTSUP;
+        } else if (openResult === false) {
+          return PosixError.ENOENT;
+        }
+        const stream = this.convertWriter(openResult);
+        if (!stream) {
+          throw new InvalidStream(PosixDescriptorRight.fd_write, openResult);
+        }
+        checkStreamMethod(stream, 'truncate', PosixError.EINVAL);
+        return stream.truncate(safeInt(newSize));
+    });
+  },
+});
 
 var all = mixin({
   defineVisitor() {
@@ -10951,7 +11093,8 @@ var inOptional = mixin({
 
 var inStruct = mixin({
   defineVisitorStruct(members) {
-    const slots = members.filter(m => m.structure?.flags & StructureFlag.HasPointer).map(m => m.slot);
+    // TODO: handle non-byte-aligned pointers
+    const slots = members.filter(m => (m.structure?.flags & StructureFlag.HasPointer) && !(m.bitOffset & 7)).map(m => m.slot);
     return {
       value(cb, flags, src) {
         for (const slot of slots) {
@@ -11067,6 +11210,7 @@ var mixins = /*#__PURE__*/Object.freeze({
   MemberRetval: retval,
   MemberSentinel: sentinel,
   MemberString: string,
+  MemberStringArray: stringArray,
   MemberToJson: toJson,
   MemberType: type,
   MemberTypedArray: typedArray,
@@ -11081,6 +11225,7 @@ var mixins = /*#__PURE__*/Object.freeze({
   StructureArgStruct: argStruct,
   StructureArray: array,
   StructureArrayLike: arrayLike,
+  StructureComptime: comptime,
   StructureDir: dir,
   StructureEnum: _enum,
   StructureErrorSet: errorSet,
@@ -11108,11 +11253,13 @@ var mixins = /*#__PURE__*/Object.freeze({
   SyscallFdAdvise: fdAdvise,
   SyscallFdAllocate: fdAllocate,
   SyscallFdClose: fdClose,
+  SyscallFdCopyFileRange: fdCopyFileRange,
   SyscallFdDatasync: fdDatasync,
   SyscallFdFdstatGet: fdFdstatGet,
   SyscallFdFdstatSetFlags: fdFdstatSetFlags,
   SyscallFdFdstatSetRights: fdFdstatSetRights,
   SyscallFdFilestatGet: fdFilestatGet,
+  SyscallFdFilestatSetSize: fdFileStatSetSize,
   SyscallFdFilestatSetTimes: fdFileStatSetTimes,
   SyscallFdLockGet: fdLockGet,
   SyscallFdLockSet: fdLockSet,
@@ -11123,12 +11270,12 @@ var mixins = /*#__PURE__*/Object.freeze({
   SyscallFdRead: fdRead,
   SyscallFdReaddir: fdReaddir,
   SyscallFdSeek: fdSeek,
-  SyscallFdSendfile: fdSendfile,
   SyscallFdSync: fdSync,
   SyscallFdTell: fdTell,
   SyscallFdWrite: fdWrite,
   SyscallPathCreateDirectory: pathCreateDirectory,
   SyscallPathFilestatGet: pathFilestatGet,
+  SyscallPathFilestatSetSize: pathFilestatSetSize,
   SyscallPathFilestatSetTimes: pathFilestatSetTimes,
   SyscallPathOpen: pathOpen,
   SyscallPathReadlink: pathReadlink,
@@ -11553,13 +11700,13 @@ function parseBinary(binary) {
         return { type, imports };
       }
       case SectionType.Export: {
-        const exports$1 = readArray(() => {
+        const exports = readArray(() => {
           const name = readString();
           const type = readU8();
           const index = readU32Leb128();
           return { name, type, index };
         });
-        return { type, exports: exports$1 };
+        return { type, exports };
       }
       case SectionType.Function: {
         const types = readArray(readU32Leb128);
@@ -12598,7 +12745,7 @@ async function transpile(srcPath, options) {
       binarySource = await wasmLoader(srcPath, dv);
     }
   }
-  const { code, exports: exports$1, structures } = generateCode(definition, {
+  const { code, exports, structures } = generateCode(definition, {
     runtimeURL,
     binarySource,
     topLevelAwait,
@@ -12606,7 +12753,7 @@ async function transpile(srcPath, options) {
     moduleOptions,
     mixinPaths,
   });
-  return { code, exports: exports$1, structures, sourcePaths };
+  return { code, exports, structures, sourcePaths };
 }
 
 function embed(path, dv) {

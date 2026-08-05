@@ -990,7 +990,12 @@ describe('Structure: all', function() {
           }
         };
         const f = env.getTypedArray(structure);
-        expect(f).to.equal(types[index++]);
+        const expected = types[index++];
+        if (expected) {
+          expect(f).to.equal(expected);
+        } else {
+          expect(f).to.throw(Error);
+        }
       }
     })
     it('should return type array constructor of child elements', function() {
