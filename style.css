@@ -120,6 +120,6 @@ a:hover {
     }
 
     .demo-list .tag.bun {
-        display: inherit;
+        display: inline-block;
     }
 }
