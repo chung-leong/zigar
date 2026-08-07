@@ -101,24 +101,17 @@ pub const ZigClassEntry = struct {
     const SlotUsage = enum(u2) { none, single, multiple };
     const StaticData = define: {
         const fields = std.meta.fields(@TypeOf(structure.by_enum));
-        var new_fields: [fields.len]std.builtin.Type.UnionField = undefined;
+        var field_names: [fields.len][]const u8 = undefined;
+        var field_types: [fields.len]type = undefined;
+        var field_attrs: [fields.len]std.builtin.Type.StructField.Attributes = undefined;
         for (fields, 0..) |field, i| {
             const S = @field(structure.by_enum, field.name);
             const StructureStatic = if (@hasDecl(S, "Static")) S.Static else void;
-            new_fields[i] = .{
-                .name = field.name,
-                .type = StructureStatic,
-                .alignment = @alignOf(StructureStatic),
-            };
+            field_names[i] = field.name;
+            field_types[i] = StructureStatic;
+            field_attrs[i] = .{};
         }
-        break :define @Type(.{
-            .@"union" = .{
-                .layout = .auto,
-                .decls = &.{},
-                .fields = &new_fields,
-                .tag_type = null,
-            },
-        });
+        break :define @Struct(.auto, null, &field_names, &field_types, &field_attrs);
     };
 
     pub inline fn entry(self: *@This()) *ClassEntry {

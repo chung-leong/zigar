@@ -44,7 +44,7 @@ pub fn build(b: *std.Build) !void {
     try c_flags.append(b.allocator, "-DZEND_COMPILE_DL_EXT");
     try c_flags.append(b.allocator, if (php_debug) "-DZEND_DEBUG=1" else "-DZEND_DEBUG=0");
     if (php_ts) try c_flags.append(b.allocator, "-DZTS");
-    lib.addCSourceFile(.{
+    mod.addCSourceFile(.{
         .file = b.path("src/extension.c"),
         .flags = c_flags.items,
     });

@@ -77,19 +77,20 @@ fn Ptr(comptime name: []const u8) type {
     const T = @TypeOf(@field(c, name));
     if (@hasField(ZendFastCall, name)) {
         const info = @typeInfo(T).@"fn";
-        const F = @Type(.{
-            .@"fn" = .{
-                .calling_convention = switch (builtin.target.cpu.arch) {
-                    .x86_64 => .{ .x86_64_vectorcall = .{} },
-                    .x86 => .{ .x86_vectorcall = .{} },
-                    else => .c,
-                },
-                .is_generic = false,
-                .is_var_args = info.is_var_args,
-                .params = info.params,
-                .return_type = info.return_type,
+        var param_types: [info.params.len]type = undefined;
+        var param_attrs: [info.params.len]std.builtin.Type.StructField.Attributes = undefined;
+        for (info.params, 0..) |param, i| {
+            param_types[i] = param.type;
+            param_attrs[i] = .{};
+        }
+        const attrs: std.builtin.Type.Fn.Attributes = .{
+            .@"callconv" = switch (builtin.target.cpu.arch) {
+                .x86_64 => .{ .x86_64_vectorcall = .{} },
+                .x86 => .{ .x86_vectorcall = .{} },
+                else => .c,
             },
-        });
+        };
+        const F = @Fn(param_types, param_attrs, info.return_type, attrs);
         return *const F;
     } else {
         return *const T;

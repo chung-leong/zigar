@@ -30,28 +30,24 @@ pub fn Controller(comptime Host: type) type {
                 const Elf_Shdr = if (bits == 64) elf.Elf64_Shdr else elf.Elf32_Shdr;
                 const Elf_Sym = if (bits == 64) elf.Elf64_Sym else elf.Elf32_Sym;
                 const Elf_Rel = if (bits == 64) elf.Elf64_Rela else elf.Elf32_Rel;
-                const file = try std.fs.openFileAbsolute(lib.path, .{});
-                defer file.close();
+                const file = try std.Io.Dir.openFileAbsolute(host.io, lib.path, .{});
+                defer file.close(host.io);
                 // read ELF header
-                const header = try readStruct(Elf_Ehdr, file);
-                try file.seekTo(header.e_phoff);
-                const segments = try readStructs(Elf_Phdr, allocator, file, header.e_phnum);
+                const header = try readStruct(host, Elf_Ehdr, file, 0);
+                const segments = try readStructs(host, Elf_Phdr, allocator, file, header.e_phnum, header.e_phoff);
                 defer allocator.free(segments);
-                try file.seekTo(header.e_shoff);
-                const sections = try readStructs(Elf_Shdr, allocator, file, header.e_shnum);
+                const sections = try readStructs(host, Elf_Shdr, allocator, file, header.e_shnum, header.e_shoff);
                 defer allocator.free(sections);
                 // find symbol table
                 const dynsym = for (sections) |s| {
                     if (s.sh_type == elf.SHT_DYNSYM) break s;
                 } else return error.Unexpected;
                 const symbol_count = dynsym.sh_size / @sizeOf(Elf_Sym);
-                try file.seekTo(dynsym.sh_offset);
-                const symbols = try readStructs(Elf_Sym, allocator, file, symbol_count);
+                const symbols = try readStructs(host, Elf_Sym, allocator, file, symbol_count, dynsym.sh_offset);
                 defer allocator.free(symbols);
                 // get string table
                 const link = sections[dynsym.sh_link];
-                try file.seekTo(link.sh_offset);
-                const symbol_strs = try readStructs(u8, allocator, file, link.sh_size);
+                const symbol_strs = try readStructs(host, u8, allocator, file, link.sh_size, link.sh_offset);
                 defer allocator.free(symbol_strs);
                 // find base address of library
                 const base_address = for (symbols) |s| {
@@ -105,9 +101,9 @@ pub fn Controller(comptime Host: type) type {
                 const SegmentCommand = if (bits == 64) macho.segment_command_64 else macho.segment_command;
                 const NList = if (bits == 64) macho.nlist_64 else macho.nlist;
 
-                const file = try std.fs.openFileAbsolute(lib.path, .{});
-                defer file.close();
-                const header = try readStruct(MachHeader, file);
+                const file = try std.Io.Dir.openFileAbsolute(host.io, lib.path, .{});
+                defer file.close(host.io);
+                const header = try readStruct(host, MachHeader, file, 0);
                 // process mach-o commands
                 const DataSegment = struct {
                     index: usize,
@@ -127,13 +123,11 @@ pub fn Controller(comptime Host: type) type {
                 var bindings: []Binding = bindings_buffer[0..0];
                 var pos: usize = @sizeOf(MachHeader);
                 for (0..header.ncmds) |_| {
-                    try file.seekTo(pos);
-                    const load_cmd = try readStruct(LoadCommand, file);
-                    try file.seekBy(-@sizeOf(LoadCommand));
+                    const load_cmd = try readStruct(host, LoadCommand, file, pos);
                     switch (load_cmd.cmd) {
                         if (bits == 64) std.macho.LC.SEGMENT_64 else std.macho.LC.SEGMENT => {
                             // look for data sections
-                            const segment_cmd = try readStruct(SegmentCommand, file);
+                            const segment_cmd = try readStruct(host, SegmentCommand, file, pos);
                             const index = data_segments.len;
                             if ((segment_cmd.initprot & std.macho.PROT.WRITE) != 0 and index < 8) {
                                 data_segments.len = index + 1;
@@ -144,14 +138,13 @@ pub fn Controller(comptime Host: type) type {
                         },
                         std.macho.LC.SYMTAB => {
                             // load symbols
-                            const symtab_cmd = try readStruct(SymtabCommand, file);
+                            const symtab_cmd = try readStruct(host, SymtabCommand, file, pos);
                             try file.seekTo(symtab_cmd.symoff);
-                            symbols = try readStructs(NList, allocator, file, symtab_cmd.nsyms);
-                            try file.seekTo(symtab_cmd.stroff);
-                            symbol_strs = try readStructs(u8, allocator, file, symtab_cmd.strsize);
+                            symbols = try readStructs(host, NList, allocator, file, symtab_cmd.nsyms, symtab_cmd.symoff);
+                            symbol_strs = try readStructs(host, u8, allocator, file, symtab_cmd.strsize, symtab_cmd.stroff);
                         },
                         std.macho.LC.DYLD_INFO, std.macho.LC.DYLD_INFO_ONLY => {
-                            const dyld_info_cmd = try readStruct(DyldInfoCommand, file);
+                            const dyld_info_cmd = try readStruct(host, DyldInfoCommand, file, pos);
                             bindings.len = 3;
                             bindings[0].offset = dyld_info_cmd.bind_off;
                             bindings[0].size = dyld_info_cmd.bind_size;
@@ -160,8 +153,7 @@ pub fn Controller(comptime Host: type) type {
                             bindings[2].offset = dyld_info_cmd.lazy_bind_off;
                             bindings[2].size = dyld_info_cmd.lazy_bind_size;
                             for (bindings) |*binding_ptr| {
-                                try file.seekTo(binding_ptr.offset);
-                                binding_ptr.byte_codes = try readStructs(u8, allocator, file, binding_ptr.size);
+                                binding_ptr.byte_codes = try readStructs(host, u8, allocator, file, binding_ptr.size, binding_ptr.offset);
                             }
                         },
                         else => {},
@@ -172,7 +164,7 @@ pub fn Controller(comptime Host: type) type {
                 defer if (symbol_strs.len > 0) allocator.free(symbol_strs);
                 defer for (bindings) |b| allocator.free(b.byte_codes);
                 const base_address: usize = for (symbols) |s| {
-                    if (s.n_type.bits.ext) {
+                    if (s.n_type & std.macho.N_EXT != 0) {
                         const symbol_name_ptr: [*:0]const u8 = @ptrCast(&symbol_strs[s.n_strx]);
                         const symbol_name_len = std.mem.len(symbol_name_ptr);
                         const symbol_name: [:0]const u8 = @ptrCast(symbol_name_ptr[0..symbol_name_len]);
@@ -326,34 +318,15 @@ pub fn Controller(comptime Host: type) type {
             if (ptr.* == target) return null;
             if (read_only) {
                 const page = getPageSlice(address);
-                try protect(page, std.c.PROT.READ | std.c.PROT.WRITE);
-                defer protect(page, std.c.PROT.READ) catch {};
+                if (std.c.mprotect(page.ptr, page.len, .{ .READ = true, .WRITE = true }) == -1) {
+                    return error.AccessDenied;
+                }
+                defer _ = std.c.mprotect(page.ptr, page.len, .{ .READ = true });
                 ptr.* = target;
             } else {
                 ptr.* = target;
             }
             return original;
-        }
-
-        fn protect(memory: []align(std.heap.page_size_min) u8, protection: u32) !void {
-            switch (os) {
-                .windows => {
-                    const win_prot: windows_h.DWORD = switch (@as(u3, @truncate(protection))) {
-                        0b000 => windows_h.PAGE_NOACCESS,
-                        0b001 => windows_h.PAGE_READONLY,
-                        0b010 => unreachable, // +w -r not allowed
-                        0b011 => windows_h.PAGE_READWRITE,
-                        0b100 => windows_h.PAGE_EXECUTE,
-                        0b101 => windows_h.PAGE_EXECUTE_READ,
-                        0b110 => unreachable, // +w -r not allowed
-                        0b111 => windows_h.PAGE_EXECUTE_READWRITE,
-                    };
-                    var old: windows_h.DWORD = undefined;
-                    if (windows_h.VirtualProtect(memory.ptr, memory.len, win_prot, &old) == 0)
-                        return error.Unexpected;
-                },
-                else => try std.posix.mprotect(memory, protection),
-            }
         }
 
         const HandlerEntry = struct {
@@ -367,14 +340,14 @@ pub fn Controller(comptime Host: type) type {
             .{ .start_address = 0, .end_address = 0, .vtable = undefined, .host = undefined },
         };
         var syscall_vtables: [*]const HandlerEntry = empty_list;
-        var syscall_vtables_mutex: std.Thread.Mutex = .{};
+        var syscall_vtables_mutex: std.Io.Mutex = .init;
 
         pub fn addSyscallVtable(host: *Host, pos: LibExtent, vtable: *const Host.HandlerVTable) !void {
             if (syscall_user_dispatch) {
                 // the list is a many pointer that we can update atomically
                 // in order to expand it we need to determine the new length first
-                syscall_vtables_mutex.lock();
-                defer syscall_vtables_mutex.unlock();
+                syscall_vtables_mutex.lock(host.io) catch unreachable;
+                defer syscall_vtables_mutex.unlock(host.io);
                 const list = syscall_vtables;
                 const old_len = count: {
                     var index: usize = 0;
@@ -407,8 +380,8 @@ pub fn Controller(comptime Host: type) type {
 
         pub fn removeSyscallVtable(host: *Host, vtable: *const Host.HandlerVTable) !void {
             if (syscall_user_dispatch) {
-                syscall_vtables_mutex.lock();
-                defer syscall_vtables_mutex.unlock();
+                syscall_vtables_mutex.lock(host.io) catch unreachable;
+                defer syscall_vtables_mutex.unlock(host.io);
                 const list = syscall_vtables;
                 const old_len = count: {
                     var index: usize = 0;
@@ -461,12 +434,12 @@ pub fn Controller(comptime Host: type) type {
             return null;
         }
 
-        pub fn installSyscallTrap(ptr: *const bool) !void {
+        pub fn installSyscallTrap(host: *Host, ptr: *const bool) !void {
             if (syscall_user_dispatch) {
                 // enable syscall user dispatch, excluding the memory region where libc sits; the signal
                 // trampoline is also inside this range, allowing us to reenable trapping from within
                 // the signal handler (otherwise sigreturn() would trigger SIGSYS inside a SIGSYS)
-                const libc = try getLibcExtent();
+                const libc = try getLibcExtent(host);
                 if (std.c.prctl(
                     c.PR_SET_SYSCALL_USER_DISPATCH,
                     c.PR_SYS_DISPATCH_ON,
@@ -524,7 +497,7 @@ pub fn Controller(comptime Host: type) type {
 
         var libc_extent: ?LibExtent = null;
 
-        fn getLibcExtent() !LibExtent {
+        fn getLibcExtent(host: *Host) !LibExtent {
             if (os != .linux) @compileError("Unsupported");
             return libc_extent orelse {
                 const elf = std.elf;
@@ -542,11 +515,10 @@ pub fn Controller(comptime Host: type) type {
                 // scan the .so to determine its extent in memory
                 var sfb = std.heap.stackFallback(4096, c_allocator);
                 const allocator = sfb.get();
-                const file = try std.fs.openFileAbsolute(libc_path, .{});
-                defer file.close();
-                const header = try readStruct(Elf_Ehdr, file);
-                try file.seekTo(header.e_phoff);
-                const segments = try readStructs(Elf_Phdr, allocator, file, header.e_phnum);
+                const file = try std.Io.Dir.openFileAbsolute(host.io, libc_path, .{});
+                defer file.close(host.io);
+                const header = try readStruct(host, Elf_Ehdr, file, 0);
+                const segments = try readStructs(host, Elf_Phdr, allocator, file, header.e_phnum, header.e_phoff);
                 defer allocator.free(segments);
                 var max_vaddr: ?usize = null;
                 for (segments) |segment| {
@@ -558,7 +530,7 @@ pub fn Controller(comptime Host: type) type {
             };
         }
 
-        fn handleSigsysSignal(_: i32, _: *const std.c.siginfo_t, ucontext: ?*anyopaque) callconv(.c) void {
+        fn handleSigsysSignal(_: std.os.linux.SIG, _: *const std.c.siginfo_t, ucontext: ?*anyopaque) callconv(.c) void {
             if (os != .linux) @compileError("Unsupported");
             if (@TypeOf(syscall.table) == void) return;
             @setEvalBranchQuota(2000000);
@@ -656,20 +628,22 @@ pub fn Controller(comptime Host: type) type {
             } else error.Unexpected;
         }
 
-        fn readStructs(comptime T: type, allocator: std.mem.Allocator, file: std.fs.File, count: usize) ![]T {
+        fn readStructs(host: *Host, comptime T: type, allocator: std.mem.Allocator, file: std.Io.File, count: usize, offset: usize) ![]T {
             const buffer = try allocator.alloc(T, count);
             errdefer allocator.free(buffer);
             const len = @sizeOf(T) * count;
             const bytes: [*]u8 = @ptrCast(buffer.ptr);
-            if (try file.read(bytes[0..len]) != len) return error.Unexpected;
+            const slice: []u8 = bytes[0..len];
+            if (try file.readPositionalAll(host.io, slice, offset) != len) return error.Unexpected;
             return buffer;
         }
 
-        fn readStruct(comptime T: type, file: std.fs.File) !T {
+        fn readStruct(host: *Host, comptime T: type, file: std.Io.File, offset: usize) !T {
             var buffer: T = undefined;
             const len = @sizeOf(T);
             const bytes: [*]u8 = @ptrCast(&buffer);
-            if (try file.read(bytes[0..len]) != len) return error.Unexpected;
+            const slice: []u8 = bytes[0..len];
+            if (try file.readPositionalAll(host.io, slice, offset) != len) return error.Unexpected;
             return buffer;
         }
     };

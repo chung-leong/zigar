@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #define _BSD_SOURCE
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 #include <node_api.h>

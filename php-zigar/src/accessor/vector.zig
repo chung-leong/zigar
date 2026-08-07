@@ -21,13 +21,15 @@ const Attributes = union(enum) {
     pub fn bitSize(comptime self: @This(), is_packed: bool) usize {
         const T = switch (self) {
             .bool => bool,
-            .int => |int| @Type(.{
-                .int = .{ .bits = int.bit_size, .signedness = int.signedness },
-            }),
+            .int => |int| @Int(int.signedness, int.bit_size),
             .gmp => return null,
-            .float => |float| @Type(.{
-                .float = .{ .bits = float.bit_size },
-            }),
+            .float => |float| switch (float.bit_size) {
+                16 => f16,
+                32 => f32,
+                64 => f64,
+                80 => f80,
+                128 => f128,
+            },
         };
         return if (is_packed) @bitSizeOf(T) else @sizeOf(T) * 8;
     }

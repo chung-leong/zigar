@@ -49,7 +49,11 @@ pub fn removeRequestShutdownCallback(ptr: *anyopaque, fn_ptr: *const fn (*anyopa
     }
 }
 
+var io: std.Io = undefined;
+var gpa: std.heap.DebugAllocator(.{}) = .init; 
+
 export fn php_zigar_mod_init(_: c_int, module_number: c_int) php.Result {
+    io = std.Io.Threaded.init(gpa.allocator(), .{});
     dyn_lib.fixEnvironment();
     Options.setup(module_number) catch return php.FAILURE;
     ModuleHost.setup() catch return php.FAILURE;
@@ -72,7 +76,7 @@ export fn php_zigar_req_init(_: c_int, _: c_int) php.Result {
         options = default_options.*;
         options_set = true;
     }
-    CallDispatcher.installHandler() catch return php.FAILURE;
+    CallDispatcher.installHandler(io) catch return php.FAILURE;
     return php.SUCCESS;
 }
 

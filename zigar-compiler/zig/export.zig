@@ -64,8 +64,8 @@ fn Factory(comptime host: type, comptime module: type) type {
         pub fn getStructurePurpose(comptime T: type) StructurePurpose {
             return switch (T) {
                 std.mem.Allocator => .allocator,
-                std.fs.File => .file,
-                std.fs.Dir => .directory,
+                std.Io.File => .file,
+                std.Io.Dir => .directory,
                 else => get: {
                     if (util.IteratorReturnValue(T) != null) break :get .iterator;
                     if (util.getInternalType(T)) |it| break :get switch (it) {
@@ -375,7 +375,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 try host.beginStructure(structure);
                 // add static variables and functions, excluding internal util and problematic namespaces
                 const ignore = switch (T) {
-                    std.fs.File, std.fs.Dir => true,
+                    std.Io.File, std.Io.Dir => true,
                     else => comptime util.getInternalType(T) != null,
                 };
                 if (!ignore) {
@@ -480,9 +480,7 @@ fn Factory(comptime host: type, comptime module: type) type {
             });
             // JavaScript code allows usize to be number instead of bigint, so we use
             // u32 and u64 for the address instead
-            const Address = @Type(.{
-                .int = .{ .bits = @bitSizeOf(*anyopaque), .signedness = .unsigned },
-            });
+            const Address = @Int(.unsigned, @bitSizeOf(*anyopaque));
             const address_structure = try self.getStructure(Address);
             try appendList(list, .{
                 .type = getMemberType(Address, false),

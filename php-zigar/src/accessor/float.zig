@@ -12,9 +12,13 @@ const Attributes = struct {
     use_bit_offset: bool = false,
 
     pub fn Type(self: @This()) type {
-        return @Type(.{
-            .float = .{ .bits = self.bit_size },
-        });
+        return switch (self.bit_size) {
+            16 => f16,
+            32 => f32,
+            64 => f64,
+            80 => f80,
+            128 => f128,
+        };
     }
 };
 

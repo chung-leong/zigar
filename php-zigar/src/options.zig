@@ -93,18 +93,15 @@ pub const Options = struct {
         }
     };
     pub const Platform = enum {
-        aix,
         darwin,
         freebsd,
         linux,
         @"linux-musl",
         openbsd,
-        sunos,
         win32,
         other,
 
         pub const this = switch (builtin.target.os.tag) {
-            .aix => .aix,
             .macos, .ios, .tvos, .visionos, .watchos => .darwin,
             .freebsd => .freebsd,
             .linux => switch (builtin.target.isMuslLibC()) {
@@ -112,7 +109,6 @@ pub const Options = struct {
                 false => .linux,
             },
             .openbsd => .openbsd,
-            .solaris => .sunos,
             .windows => .win32,
             else => .other,
         };
@@ -123,7 +119,6 @@ pub const Options = struct {
 
         pub fn zigName(self: @This()) []const u8 {
             return switch (self) {
-                .aix => "aix",
                 .darwin => "macos",
                 .freebsd => "freebsd",
                 .linux => "linux-gnu",

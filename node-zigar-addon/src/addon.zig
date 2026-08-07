@@ -16,10 +16,6 @@ const ThreadsafeFunction = napi.ThreadsafeFunction;
 const redirection = @import("redirection.zig");
 const fn_transform = @import("zigft/fn-transform.zig");
 
-const windows_h = @cImport({
-    @cInclude("windows.h");
-});
-
 comptime {
     napi.createAddon(ModuleHost.attachExports);
 }
@@ -41,6 +37,7 @@ const ModuleHost = struct {
     const redirection_controller = redirection.Controller(@This());
 
     env: Env,
+    io: std.Io,
     ref_count: isize = 1,
     module: ?*Module = null,
     library: ?DynLib = null,
@@ -53,8 +50,8 @@ const ModuleHost = struct {
     hooks_installed: bool = false,
     syscall_trap_installed: bool = false,
     syscall_trap_count: usize = 0,
-    thread_syscall_trap_list: std.ArrayList(*bool) = .{},
-    thread_syscall_trap_list_mutex: std.Thread.Mutex = .{},
+    thread_syscall_trap_list: std.ArrayList(*bool) = .empty,
+    thread_syscall_trap_list_mutex: std.Io.Mutex = .init,
     env_variable_deferred: Deferred = .{},
     env_variable_list: ?[]?[*:0]const u8 = null,
     env_variable_bytes: ?[]const u8 = null,
@@ -125,24 +122,26 @@ const ModuleHost = struct {
     pub threadlocal var main_thread_syscall_trap_count: usize = 0;
     pub threadlocal var in_main_thread: bool = false;
 
-    var host_list: std.ArrayList(*@This()) = .{};
-    var host_list_mutex: std.Thread.Mutex = .{};
+    var host_list: std.ArrayList(*@This()) = .empty;
+    var host_list_mutex: std.Io.Mutex = .init;
 
     var module_count: i32 = 0;
     var buffer_count: i32 = 0;
     var function_count: i32 = 0;
 
+    var threaded_io = std.Io.Threaded.init_single_threaded;
+
     const Module = interface.Module(Value);
 
     fn register(self: *@This()) !void {
-        host_list_mutex.lock();
-        defer host_list_mutex.unlock();
+        host_list_mutex.lock(self.io) catch unreachable;
+        defer host_list_mutex.unlock(self.io);
         try host_list.append(c_allocator, self);
     }
 
     fn unregister(self: *@This()) void {
-        host_list_mutex.lock();
-        defer host_list_mutex.unlock();
+        host_list_mutex.lock(self.io) catch unreachable;
+        defer host_list_mutex.unlock(self.io);
         for (host_list.items, 0..) |module, index| {
             if (module == self) {
                 _ = host_list.orderedRemove(index);
@@ -175,7 +174,7 @@ const ModuleHost = struct {
         // create the environment
         const js_env = try env.callFunction(try env.getNull(), create_env, &.{});
         const self = try c_allocator.create(@This());
-        self.* = .{ .env = env };
+        self.* = .{ .env = env, .io = threaded_io.io() };
         defer self.release();
         try self.register();
         // import functions from the environment
@@ -326,9 +325,9 @@ const ModuleHost = struct {
         self.base_address = get: {
             switch (builtin.target.os.tag) {
                 .windows => {
-                    const MBI = windows_h.MEMORY_BASIC_INFORMATION;
+                    const MBI = std.os.windows.MEMORY_BASIC_INFORMATION;
                     var mbi: MBI = undefined;
-                    if (windows_h.VirtualQuery(module, &mbi, @sizeOf(MBI)) == 0) return error.Unexpected;
+                    _ = try std.os.windows.VirtualQuery(module, &mbi, @sizeOf(MBI));
                     break :get @intFromPtr(mbi.AllocationBase);
                 },
                 else => {
@@ -349,7 +348,7 @@ const ModuleHost = struct {
                     const vtable: *const HandlerVTable = @ptrCast(@alignCast(hook.handler));
                     try redirection_controller.addSyscallVtable(self, pos, vtable);
                     errdefer redirection_controller.removeSyscallVtable(self, vtable) catch {};
-                    if (redirection_controller.installSyscallTrap(&trapping_syscalls)) {
+                    if (redirection_controller.installSyscallTrap(self, &trapping_syscalls)) {
                         self.syscall_trap_installed = true;
                     } else |_| {}
                 }
@@ -361,16 +360,16 @@ const ModuleHost = struct {
 
     pub fn initializeThread(self: *@This()) !void {
         if (self.syscall_trap_installed) {
-            try redirection_controller.installSyscallTrap(&trapping_syscalls);
-            self.thread_syscall_trap_list_mutex.lock();
-            defer self.thread_syscall_trap_list_mutex.unlock();
+            try redirection_controller.installSyscallTrap(self, &trapping_syscalls);
+            self.thread_syscall_trap_list_mutex.lock(self.io) catch unreachable;
+            defer self.thread_syscall_trap_list_mutex.unlock(self.io);
             try self.thread_syscall_trap_list.append(c_allocator, &trapping_syscalls);
             if (self.syscall_trap_count > 0) {
                 trapping_syscalls = true;
             }
         }
-        host_list_mutex.lock();
-        defer host_list_mutex.unlock();
+        host_list_mutex.lock(self.io) catch unreachable;
+        defer host_list_mutex.unlock(self.io);
         for (host_list.items) |host| {
             if (host.env == self.env) {
                 // the same JavaScript environment, meaning that the thread can potential call a
@@ -383,8 +382,8 @@ const ModuleHost = struct {
 
     pub fn deinitializeThread(self: *@This()) !void {
         if (self.syscall_trap_installed) {
-            self.thread_syscall_trap_list_mutex.lock();
-            defer self.thread_syscall_trap_list_mutex.unlock();
+            self.thread_syscall_trap_list_mutex.lock(self.io) catch unreachable;
+            defer self.thread_syscall_trap_list_mutex.unlock(self.io);
             const index = for (self.thread_syscall_trap_list.items, 0..) |ptr, i| {
                 if (ptr == &trapping_syscalls) break i;
             } else return;
@@ -627,11 +626,11 @@ const ModuleHost = struct {
         const len = try env.getValueUint32(amount);
         const opaque_ptr, const buffer = try env.createArraybuffer(len);
         const u8_ptr: [*]u8 = @ptrCast(opaque_ptr);
-        const u8_slice = u8_ptr[0..len];
+        const u8_slices: [1][]u8 = .{u8_ptr[0..len]};
         const read = if (env.getValueUsize(position)) |pos|
-            try file.pread(u8_slice, pos)
+            try file.readPositional(self.io, u8_slices[0..], pos)
         else |_|
-            try file.read(u8_slice);
+            try file.readStreaming(self.io, u8_slices[0..]);
         return try env.createTypedarray(.uint8_array, read, buffer, 0);
     }
 
@@ -640,11 +639,11 @@ const ModuleHost = struct {
         const file = try self.getFile(handle);
         _, const len, const opaque_ptr, _, _ = try env.getTypedarrayInfo(chunk);
         const u8_ptr: [*]const u8 = @ptrCast(opaque_ptr);
-        const u8_slice = u8_ptr[0..len];
+        const u8_slices: [1][]const u8 = .{u8_ptr[0..len]};
         _ = if (env.getValueUsize(position)) |pos|
-            try file.pwrite(u8_slice, pos)
+            try file.writePositional(self.io, u8_slices[0..], pos)
         else |_|
-            try file.write(u8_slice);
+            try file.writeStreaming(self.io, &.{}, u8_slices[0..], 1);
     }
 
     fn getFileHandle(self: *@This(), fd: Value) !Value {
@@ -660,16 +659,17 @@ const ModuleHost = struct {
         }
     }
 
-    fn getFile(self: *@This(), handle: Value) !std.fs.File {
+    fn getFile(self: *@This(), handle: Value) !std.Io.File {
         const env = self.env;
         const handle_value = try env.getValueInt32(handle);
-        const Handle = @FieldType(std.fs.File, "handle");
+        const Handle = @FieldType(std.Io.File, "handle");
         return .{
             .handle = switch (@typeInfo(Handle)) {
                 .int => handle_value,
                 .pointer => @ptrFromInt(@as(u32, @bitCast(handle_value))),
                 else => @compileError("Unknown handle type"),
             },
+            .flags = .{ .nonblocking = false },
         };
     }
 
@@ -767,8 +767,8 @@ const ModuleHost = struct {
             main_thread_syscall_trap_count += 1;
             if (main_thread_syscall_trap_count == 1) trapping_syscalls = true;
             // turn on all syscall traps in threads belonging to this module
-            self.thread_syscall_trap_list_mutex.lock();
-            defer self.thread_syscall_trap_list_mutex.unlock();
+            self.thread_syscall_trap_list_mutex.lock(self.io) catch unreachable;
+            defer self.thread_syscall_trap_list_mutex.unlock(self.io);
             for (self.thread_syscall_trap_list.items) |ptr| ptr.* = true;
         }
     }
@@ -779,8 +779,8 @@ const ModuleHost = struct {
         if (self.syscall_trap_count == 0) {
             main_thread_syscall_trap_count -= 1;
             if (main_thread_syscall_trap_count == 0) trapping_syscalls = false;
-            self.thread_syscall_trap_list_mutex.lock();
-            defer self.thread_syscall_trap_list_mutex.unlock();
+            self.thread_syscall_trap_list_mutex.lock(self.io) catch unreachable;
+            defer self.thread_syscall_trap_list_mutex.unlock(self.io);
             for (self.thread_syscall_trap_list.items) |ptr| ptr.* = false;
         }
     }
@@ -1042,7 +1042,7 @@ const ModuleHost = struct {
         } else {
             const func = self.ts.handle_jscall orelse return error.Disabled;
             var futex: Futex = undefined;
-            call.futex_handle = futex.init();
+            call.futex_handle = futex.init(self.io);
             try napi.callThreadsafeFunction(func, @constCast(call), .nonblocking);
             return futex.wait();
         }
@@ -1097,7 +1097,7 @@ const ModuleHost = struct {
         } else {
             const func = self.ts.handle_syscall orelse return error.Disabled;
             var futex: Futex = undefined;
-            call.futex_handle = futex.init();
+            call.futex_handle = futex.init(self.io);
             if (call.cmd == .write and call.u.write.fd == 2) {
                 const len: usize = call.u.write.len;
                 const bytes = call.u.write.bytes;
@@ -1677,29 +1677,36 @@ const Futex = struct {
     value: std.atomic.Value(u32) = .init(initial_value),
     handle: usize,
     timeout: usize = 0,
+    io: std.Io,
 
-    pub fn init(self: *@This()) usize {
-        self.* = .{ .handle = @intFromPtr(self) };
+    pub fn init(self: *@This(), io: std.Io) usize {
+        self.* = .{ .handle = @intFromPtr(self), .io = io };
         return self.handle;
     }
 
     pub fn wait(self: *@This()) E {
         if (self.timeout != 0) {
-            std.Thread.Futex.timedWait(&self.value, initial_value, self.timeout) catch {
+            const timeout: std.Io.Timeout = .{
+                .duration = .{
+                    .raw = .fromNanoseconds(self.timeout),
+                    .clock = .real,
+                },
+            };
+            std.Io.futexWaitTimeout(self.io, u32, &self.value.raw, initial_value, timeout) catch {
                 return E.SUCCESS;
             };
         } else {
-            std.Thread.Futex.wait(&self.value, initial_value);
+            std.Io.futexWait(self.io, u32, &self.value.raw, initial_value) catch unreachable;
         }
         const final_value = self.value.load(.acquire);
         return std.enums.fromInt(E, final_value) orelse .FAULT;
     }
 
     pub fn wake(handle: usize, result: E) !void {
-        const ptr: *Futex = @ptrFromInt(handle);
-        if (ptr.handle != handle) return error.Unexpected;
-        ptr.value.store(@intFromEnum(result), .release);
-        std.Thread.Futex.wake(&ptr.value, 1);
+        const self: *@This() = @ptrFromInt(handle);
+        if (self.handle != handle) return error.Unexpected;
+        self.value.store(@intFromEnum(result), .release);
+        std.Io.futexWake(self.io, u32, &self.value.raw, 1);
     }
 };
 

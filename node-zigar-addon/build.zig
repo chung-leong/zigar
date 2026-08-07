@@ -31,6 +31,7 @@ pub fn build(b: *std.Build) !void {
                 .module = translate_c.createModule(),
             },
         },
+        .link_libc = true,
     });
 
     const lib = b.addLibrary(.{
@@ -44,7 +45,6 @@ pub fn build(b: *std.Build) !void {
         .macos => lib.linker_allow_shlib_undefined = true,
         else => {},
     }
-    lib.linkLibC();
 
     const wf = b.addUpdateSourceFiles();
     wf.addCopyFileToSource(lib.getEmittedBin(), output_path);

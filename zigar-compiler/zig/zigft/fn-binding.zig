@@ -1061,7 +1061,7 @@ pub fn BoundFnWithCallConv(comptime T: type, comptime CT: type, call_conv: ?std.
         }
     }
     return @Fn(&param_types, &param_attrs, f.return_type.?, .{
-        .@"callconv" = cc orelse f.calling_convention,
+        .@"callconv" = call_conv orelse f.calling_convention,
     });
 }
 

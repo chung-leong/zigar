@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #define _BSD_SOURCE
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -10,6 +11,7 @@
     #include <dirent.h>
     #include <errno.h>
     #include <dlfcn.h>
+    #include <sys/stat.h>
 #endif
 
 #ifdef __APPLE__

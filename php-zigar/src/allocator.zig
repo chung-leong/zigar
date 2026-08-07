@@ -277,38 +277,23 @@ pub fn Arg(comptime _: @TypeOf(.enum_literal), comptime T: type) type {
         }
         break :get count;
     };
-    const RT = if (f.return_type) |RT| switch (RT) {
+    var field_names: [count][]const u8 = undefined;
+    var field_types: [count]type = undefined;
+    var field_attrs: [count]std.builtin.Type.StructField.Attributes = undefined;
+    field_names[0] = "retval";
+    field_types[0] = if (f.return_type) |RT| switch (RT) {
         noreturn => void,
         else => RT,
     } else void;
-    var fields: [count]std.builtin.Type.StructField = undefined;
-    fields[0] = .{
-        .name = "retval",
-        .type = RT,
-        .is_comptime = false,
-        .alignment = @alignOf(RT),
-        .default_value_ptr = null,
-    };
+    field_attrs[0] = .{};
     var arg_index = 0;
     for (f.params) |param| {
         if (param.type != null) {
-            const name = std.fmt.comptimePrint("{d}", .{arg_index});
-            fields[arg_index + 1] = .{
-                .name = name,
-                .type = param.type.?,
-                .is_comptime = false,
-                .alignment = @alignOf(param.type.?),
-                .default_value_ptr = null,
-            };
+            field_names[arg_index + 1] = std.fmt.comptimePrint("{d}", .{arg_index});
+            field_types[arg_index + 1] = param.type.?;
+            field_attrs[arg_index + 1] = .{};
             arg_index += 1;
         }
     }
-    return @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .decls = &.{},
-            .fields = &fields,
-            .is_tuple = false,
-        },
-    });
+    return @Struct(.auto, null, field_names, field_types, field_attrs);
 }

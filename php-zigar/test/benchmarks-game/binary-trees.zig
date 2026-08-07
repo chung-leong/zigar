@@ -53,7 +53,7 @@ var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
 pub fn binaryTree(n: usize) !void {
     var stdout_buffer: [1024]u8 = undefined;
-    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    var stdout_writer = std.Io.File.stdout().writer(&stdout_buffer);
     const stdout = &stdout_writer.interface;
     const allocator = gpa.allocator();
 

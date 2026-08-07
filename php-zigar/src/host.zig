@@ -144,23 +144,19 @@ pub const ModuleHost = struct {
             const extra = if (Payload == void or Payload == E) 0 else 1;
             const NewArgs = comptime define: {
                 const fields = std.meta.fields(Args);
-                var new_fields: [fields.len + extra]std.builtin.Type.StructField = undefined;
-                var new_args_info = @typeInfo(Args);
-                new_args_info.@"struct".fields = &new_fields;
-                for (&new_fields, 0..) |*field_ptr, i| {
-                    const Arg = switch (i) {
+                var field_names: [fields.len + extra][]const u8 = undefined;
+                var field_types: [fields.len + extra]type = undefined;
+                var field_attrs: [fields.len + extra]std.builtin.Type.StructField.Attributes = undefined;
+                for (0..field_names.len) |i| {
+                    field_names[i] = std.fmt.comptimePrint("{d}", .{i});
+                    field_types[i] = switch (i) {
                         0 => *Module.Host,
-                        else => if (extra == 1 and i == new_fields.len - 1) *Payload else fields[i].type,
+                        else => if (extra == 1 and i == field_names.len - 1) *Payload else fields[i].type,
                     };
-                    field_ptr.* = .{
-                        .name = std.fmt.comptimePrint("{d}", .{i}),
-                        .type = Arg,
-                        .default_value_ptr = null,
-                        .is_comptime = false,
-                        .alignment = @alignOf(Arg),
-                    };
+                    field_attrs[i] = .{};
                 }
-                break :define @Type(new_args_info);
+
+                break :define @Struct(.auto, null, &field_names, &field_types, &field_attrs);
             };
             const ns = struct {
                 fn call(new_args: NewArgs) E {

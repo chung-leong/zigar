@@ -14,7 +14,7 @@ pub fn startup() !void {
 pub const sha1 = work_queue.promisify(worker.sha1);
 
 const worker = struct {
-    pub fn sha1(file: std.fs.File) ![std.crypto.hash.Sha1.digest_length * 2]u8 {
+    pub fn sha1(file: std.Io.File) ![std.crypto.hash.Sha1.digest_length * 2]u8 {
         defer file.close();
         var hash: std.crypto.hash.Sha1 = .init(.{});
         var buffer: [1024 * 4]u8 = undefined;

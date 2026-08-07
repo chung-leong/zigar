@@ -15,9 +15,7 @@ const Attributes = struct {
     use_bit_offset: bool = false,
 
     pub fn Type(self: @This()) type {
-        return @Type(.{
-            .int = .{ .bits = self.bit_size, .signedness = self.signedness },
-        });
+        return @Int(self.signedness, self.bit_size);
     }
 };
 

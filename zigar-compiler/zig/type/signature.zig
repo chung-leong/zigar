@@ -25,8 +25,10 @@ fn calculate(comptime T: type, comptime checking: anytype) u64 {
                     xxhash.update(field.name);
                     xxhash.update(": ");
                     xxhash.update(std.mem.asBytes(&calculate(field.type, checking ++ .{T})));
-                    if (field.alignment != @alignOf(field.type)) {
-                        xxhash.update(std.fmt.comptimePrint(" align({d})\n", .{field.alignment}));
+                    if (field.alignment) |al| {
+                        if (al != @alignOf(field.type)) {
+                            xxhash.update(std.fmt.comptimePrint(" align({d})", .{al}));
+                        }
                     }
                     xxhash.update(", ");
                 }
@@ -48,8 +50,10 @@ fn calculate(comptime T: type, comptime checking: anytype) u64 {
                 xxhash.update(field.name);
                 xxhash.update(": ");
                 xxhash.update(std.mem.asBytes(&calculate(field.type, checking ++ .{T})));
-                if (field.alignment != @alignOf(field.type)) {
-                    xxhash.update(std.fmt.comptimePrint(" align({d})", .{field.alignment}));
+                if (field.alignment) |al| {
+                    if (al != @alignOf(field.type)) {
+                        xxhash.update(std.fmt.comptimePrint(" align({d})", .{al}));
+                    }
                 }
                 xxhash.update(", ");
             }

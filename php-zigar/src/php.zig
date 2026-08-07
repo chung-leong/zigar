@@ -265,13 +265,11 @@ fn TransformPointer(comptime T: type) type {
 fn Transformed(comptime func: anytype) type {
     const func_info = @typeInfo(@TypeOf(func)).@"fn";
     const len = func_info.params.len;
-    var params: [len]std.builtin.Type.Fn.Param = undefined;
+    var param_types: [len]type = undefined;
+    var param_attrs: [len]std.builtin.Type.Fn.Param.Attributes = undefined;
     inline for (func_info.params, 0..) |param, i| {
-        params[i] = .{
-            .type = TransformPointer(param.type.?),
-            .is_generic = param.is_generic,
-            .is_noalias = param.is_noalias,
-        };
+        param_types[i] = TransformPointer(param.type.?);
+        param_attrs[i] = .{};
     }
     const RT = func_info.return_type.?;
     // remove error
@@ -279,15 +277,9 @@ fn Transformed(comptime func: anytype) type {
         .error_union => |eu| eu.payload,
         else => RT,
     };
-    return @Type(.{
-        .@"fn" = .{
-            .calling_convention = .c,
-            .is_generic = false,
-            .is_var_args = func_info.is_var_args,
-            .params = &params,
-            .return_type = TransformPointer(RTNE),
-        },
-    });
+    const RTT = TransformPointer(RTNE);
+    const attrs: std.builtin.Type.Fn.Attributes = .{ .@"callconv" = .c };
+    return @Fn(&param_types, &param_attrs, RTT, attrs);
 }
 
 pub fn transform(comptime func: anytype) Transformed(func) {
@@ -1341,24 +1333,15 @@ pub const FunctionCallCache = struct {
 
 pub fn MethodCallCaches(comptime names: anytype) type {
     const Entries = init: {
-        var fields: [names.len]std.builtin.Type.StructField = undefined;
+        var field_names: [names.len][]const u8 = undefined;
+        var field_types: [names.len]type = undefined;
+        var field_attrs: [names.len]std.builtin.Type.StructField.Attributes = undefined;
         inline for (names, 0..) |name, i| {
-            fields[i] = .{
-                .name = @tagName(name),
-                .type = FunctionCallCache,
-                .default_value_ptr = null,
-                .is_comptime = false,
-                .alignment = @alignOf(FunctionCallCache),
-            };
+            field_names[i] = @tagName(name);
+            field_types[i] = FunctionCallCache;
+            field_attrs[i] = .{};
         }
-        break :init @Type(.{
-            .@"struct" = .{
-                .layout = .auto,
-                .decls = &.{},
-                .fields = &fields,
-                .is_tuple = false,
-            },
-        });
+        break :init @Struct(.auto, null, &field_names, &field_types, &field_attrs);
     };
     return struct {
         method: Entries,

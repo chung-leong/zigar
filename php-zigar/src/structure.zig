@@ -988,7 +988,7 @@ pub fn invokeMethod(obj: *Object, comptime name: []const u8, args: anytype) RT: 
         }
     }
     if (payload == null) @compileError("No matching function: " ++ name);
-    break :RT @Type(.{ .error_union = .{ .error_set = error_set, .payload = payload.? } });
+    break :RT error_set!payload.?;
 } {
     const class = ZigClassEntry.fromObject(obj);
     switch (class.type) {

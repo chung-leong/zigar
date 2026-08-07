@@ -10,7 +10,7 @@ pub fn get(comptime T: type) ?usize {
     }
     return switch (@typeInfo(T)) {
         .null, .undefined, .@"fn" => 0,
-        .@"opaque" => null,
+        .@"opaque", .type => null,
         .error_set => @sizeOf(anyerror),
         else => return @sizeOf(T),
     };

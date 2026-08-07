@@ -34,6 +34,7 @@ const structure = @import("structure.zig");
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 
 pub const CallDispatcher = struct {
+    io: std.Io,
     redirection_mask: Syscall.Mask = .{
         .open = true,
         .mkdir = true,
@@ -76,7 +77,7 @@ pub const CallDispatcher = struct {
     threadlocal var pipes: [2]c_int = undefined;
     threadlocal var total_multithread_count: usize = 0;
 
-    var pipe_list_mutex: std.Thread.Mutex = .{};
+    var pipe_list_mutex: std.Io.Mutex = .init;
     var pipe_list: std.ArrayList(c_int) = .empty;
 
     pub const HookEntry = interface.HookEntry;
@@ -279,7 +280,11 @@ pub const CallDispatcher = struct {
     pub fn init(host: *ModuleHost) !*@This() {
         const self = try php.allocator.create(@This());
         errdefer php.allocator.destroy(self);
-        self.* = .{ .host = host, .pipe_ptr = &pipes };
+        self.* = .{
+            .host = host,
+            .io = host.io,
+            .pipe_ptr = &pipes,
+        };
         try extension.addRequestShutdownCallback(self, onRequestShutdown);
         return self;
     }
@@ -301,13 +306,13 @@ pub const CallDispatcher = struct {
         php.allocator.destroy(self);
     }
 
-    pub fn installHandler() !void {
+    pub fn installHandler(io: std.Io) !void {
         if (!thread_initialized) {
             in_main_thread = true;
             redirection_controller.installSignalHandler() catch {};
             try createPipes();
-            pipe_list_mutex.lock();
-            defer pipe_list_mutex.unlock();
+            pipe_list_mutex.lock(io) catch unreachable;
+            defer pipe_list_mutex.unlock(io);
             for (pipes) |fd| try pipe_list.append(std.heap.c_allocator, fd);
         }
     }
@@ -667,8 +672,8 @@ pub const CallDispatcher = struct {
         in_main_thread = false;
         if (self.syscall_trap_installed) {
             try redirection_controller.installSyscallTrap(&trapping_syscalls);
-            self.thread_syscall_trap_list_mutex.lock();
-            defer self.thread_syscall_trap_list_mutex.unlock();
+            self.thread_syscall_trap_list_mutex.lock(self.host.io) catch unreachable;
+            defer self.thread_syscall_trap_list_mutex.unlock(self.host.io);
             try self.thread_syscall_trap_list.append(std.heap.c_allocator, &trapping_syscalls);
             if (self.syscall_trap_count > 0) {
                 trapping_syscalls = true;
@@ -680,8 +685,8 @@ pub const CallDispatcher = struct {
 
     pub fn deinitializeThread(self: *@This()) !void {
         if (self.syscall_trap_installed) {
-            self.thread_syscall_trap_list_mutex.lock();
-            defer self.thread_syscall_trap_list_mutex.unlock();
+            self.thread_syscall_trap_list_mutex.lock(self.host.io) catch unreachable;
+            defer self.thread_syscall_trap_list_mutex.unlock(self.host.io);
             const index = for (self.thread_syscall_trap_list.items, 0..) |ptr, i| {
                 if (ptr == &trapping_syscalls) break i;
             } else return;

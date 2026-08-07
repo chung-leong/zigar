@@ -6,21 +6,14 @@ const String = php.String;
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 
 pub fn IdFromTags(comptime tags: anytype) type {
-    var fields: [tags.len]std.builtin.Type.EnumField = undefined;
+    const TagType = std.math.IntFittingRange(0, tags.len);
+    var field_names: [tags.len][]const u8 = undefined;
+    var field_values: [tags.len]TagType = undefined;
     inline for (tags, 0..) |tag, i| {
-        fields[i] = .{
-            .name = @tagName(tag),
-            .value = i,
-        };
+        field_names[i] = @tagName(tag);
+        field_values[i] = i;
     }
-    return @Type(.{
-        .@"enum" = .{
-            .fields = &fields,
-            .decls = &.{},
-            .is_exhaustive = true,
-            .tag_type = std.math.IntFittingRange(0, tags.len),
-        },
-    });
+    return @Enum(null, .exhaustive, &field_names, &field_values);
 }
 
 pub fn IdCache(comptime tags: anytype, comptime prefix: []const u8, comptime aliases: anytype) type {

@@ -7,7 +7,7 @@ var work_queue: zigar.thread.WorkQueue(worker) = .{};
 pub const save = work_queue.promisify(worker.save);
 
 const worker = struct {
-    pub fn save(file: std.fs.File) !void {
+    pub fn save(file: std.Io.File) !void {
         var buffer: [4096]u8 = undefined;
         var writer = file.writer(&buffer);
         const interface = &writer.interface;

@@ -8,14 +8,14 @@ pub const shutdown = work_queue.promisify(.shutdown);
 pub const extract = work_queue.asyncify(worker.extract);
 
 const worker = struct {
-    pub fn extract(file: std.fs.File) !Iterator {
+    pub fn extract(file: std.Io.File) !Iterator {
         return .{ .file = file };
     }
 
     const Iterator = struct {
-        file: std.fs.File,
+        file: std.Io.File,
         started: bool = false,
-        reader: std.fs.File.Reader = undefined,
+        reader: std.Io.File.Reader = undefined,
         read_buffer: [4096]u8 = undefined,
         decompressor: std.compress.flate.Decompress = undefined,
         decompress_buffer: [std.compress.flate.max_window_len]u8 = undefined,

@@ -13,9 +13,7 @@ const Attributes = struct {
     use_bit_offset: bool = false,
 
     pub fn Type(self: @This()) type {
-        return @Type(.{
-            .int = .{ .bits = self.bit_size, .signedness = self.signedness },
-        });
+        return @Int(self.signedness, self.use_bit_size);
     }
 };
 
@@ -41,7 +39,7 @@ pub fn Gmp(comptime attrs: Attributes) type {
                 const msb_bits = self.bit_size - (byte_count - 1) * 8;
                 inline for (.{ 1, 2, 3, 4, 5, 6, 7, 8 }) |bits| {
                     if (msb_bits == bits) {
-                        const T = @Type(.{ .int = .{ .bits = bits, .signedness = attrs.signedness } });
+                        const T = @Int(attrs.signedness, bits);
                         const ptr: *align(1) const T = @ptrCast(&bytes[offset]);
                         var int = ptr.*;
                         if (attrs.signedness == .signed and int < 0) {
@@ -86,7 +84,7 @@ pub fn Gmp(comptime attrs: Attributes) type {
                 const msb_bits = self.bit_size - (byte_count - 1) * 8;
                 inline for (.{ 1, 2, 3, 4, 5, 6, 7, 8 }) |bits| {
                     if (msb_bits == bits) {
-                        const T = @Type(.{ .int = .{ .bits = bits, .signedness = attrs.signedness } });
+                        const T = @Int(attrs.signedness, bits);
                         const ptr: *align(1) T = @ptrCast(&bytes[offset]);
                         const byte = if (src_offset >= blk_offset) src[src_offset - blk_offset] else 0;
                         if (byte > std.math.maxInt(T)) return error.IntegerOverflow;
@@ -147,7 +145,7 @@ pub fn Gmp(comptime attrs: Attributes) type {
                 const msb_bits = self.bit_size - (byte_count - 1) * 8;
                 inline for (.{ 1, 2, 3, 4, 5, 6, 7, 8 }) |bits| {
                     if (msb_bits == bits) {
-                        const T = @Type(.{ .int = .{ .bits = bits, .signedness = attrs.signedness } });
+                        const T = @Int(attrs.signedness, bits);
                         const AT = accessor.WithBitOffset(T, bit_offset);
                         const ptr: *align(1) const AT = @ptrCast(&bytes[offset]);
                         var int = ptr.value;
@@ -204,7 +202,7 @@ pub fn Gmp(comptime attrs: Attributes) type {
                 const msb_bits = self.bit_size - (byte_count - 1) * 8;
                 inline for (.{ 1, 2, 3, 4, 5, 6, 7, 8 }) |bits| {
                     if (msb_bits == bits) {
-                        const T = @Type(.{ .int = .{ .bits = bits, .signedness = attrs.signedness } });
+                        const T = @Int(attrs.signedness, bits);
                         const AT = accessor.WithBitOffset(T, bit_offset);
                         const ptr: *align(1) AT = @ptrCast(&bytes[offset]);
                         const byte = if (src_offset >= blk_offset) src[src_offset - blk_offset] else 0;

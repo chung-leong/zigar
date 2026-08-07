@@ -77,32 +77,10 @@ pub const Transform = enum {
 };
 
 pub fn WithBitOffset(comptime T: type, comptime bit_offset: u3) type {
-    const fields: [2]std.builtin.Type.StructField = .{
-        .{
-            .name = "padding",
-            .type = @Type(.{
-                .int = .{ .bits = bit_offset, .signedness = .unsigned },
-            }),
-            .alignment = 0,
-            .default_value_ptr = null,
-            .is_comptime = false,
-        },
-        .{
-            .name = "value",
-            .type = T,
-            .alignment = 0,
-            .default_value_ptr = null,
-            .is_comptime = false,
-        },
-    };
-    return @Type(.{
-        .@"struct" = .{
-            .layout = .@"packed",
-            .decls = &.{},
-            .fields = &fields,
-            .is_tuple = false,
-        },
-    });
+    const field_names: [2][]const u8 = .{ "padding", "value" };
+    const field_types: [2]type = .{ @Int(.unsigned, bit_offset), T };
+    const field_attrs: [2]std.builtin.Type.StructField.Attributes = .{ .{}, .{} };
+    return @Struct(.@"packed", null, &field_names, &field_types, &field_attrs);
 }
 
 pub fn getOpaqueTarget(comptime T: type, value: *const Value) !*T {
