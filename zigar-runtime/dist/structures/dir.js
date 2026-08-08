@@ -7,14 +7,14 @@ var dir = mixin({
   // create Dir struct for outbound call
   createDirectory(arg) {
     if (typeof(arg) === 'object' && typeof(arg?.fd) === 'number') {
-      return arg;
+      return { handle: arg.fd };
     }
     const dir = this.convertDirectory(arg);
     if (!dir) {
       throw new InvalidStream(PosixDescriptorRight.fd_readdir, arg);
     }
-    let fd = this.createStreamHandle(dir, this.getDefaultRights('dir'));
-    return { fd };
+    let handle = this.createStreamHandle(dir, this.getDefaultRights('dir'));
+    return { handle };
   },
 });
 

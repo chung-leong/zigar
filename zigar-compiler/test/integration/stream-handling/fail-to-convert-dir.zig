@@ -1,3 +1,3 @@
 const std = @import("std");
 
-pub fn call(_: std.fs.Dir) void {}
+pub fn call(_: std.Io.Dir) void {}

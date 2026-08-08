@@ -232,9 +232,10 @@ pub fn getInternalType(comptime OT: ?type) ?InternalType {
 }
 
 test "getInternalType" {
-    try expectEqual(.promise, getInternalType(struct {
-        pub const internal_type = .promise;
-    }));
+    const internal_type = getInternalType(struct {
+        pub const internal_type: InternalType = .promise;
+    });
+    try expectEqual(.promise, internal_type);
 }
 
 pub fn Any(comptime T: type) type {

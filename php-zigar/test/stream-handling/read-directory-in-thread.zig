@@ -21,7 +21,7 @@ pub fn shutdown(promise: zigar.function.Promise(void)) void {
 pub const print = work_queue.promisify(ns.print);
 
 const ns = struct {
-    pub fn print(dir: std.fs.Dir) !void {
+    pub fn print(dir: std.Io.Dir) !void {
         var iter = dir.iterate();
         while (try iter.next()) |entry| {
             std.debug.print("{s} {s}\n", .{ entry.name, @tagName(entry.kind) });

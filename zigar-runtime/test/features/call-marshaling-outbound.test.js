@@ -1272,7 +1272,7 @@ describe('Feature: call-marshaling-outbound', function() {
       }      
       env.copyArguments(dest, src, members, {});
       expect(dest[0]).to.equal(2n);
-      expect(dest[1]).to.have.property('fd').that.is.a('number');
+      expect(dest[1]).to.have.property('handle').that.is.a('number');
     })
   })
   describe('invokeThunk', function() {

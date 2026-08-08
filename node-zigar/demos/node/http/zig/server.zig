@@ -39,6 +39,7 @@ const ServerThread = struct {
             self.last_error = err;
         }
         futex_ptr.store(1, .release);
+        std.Io.futexWait(u32, &futex_ptr.raw, )
         std.Thread.Futex.wake(futex_ptr, 1);
         const server = self.server orelse return;
         while (true) {

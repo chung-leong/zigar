@@ -6,6 +6,7 @@ import { hasMethod, usize } from '../utils.js';
 export default mixin({
   // create File struct for outbound call
   createFile(arg) {
+    const flags = { nonblocking: false };
     if (process.env.TARGET === 'node') {
       if (typeof(arg) === 'object' && typeof(arg?.fd) === 'number') {
         let { fd } = arg;
@@ -16,7 +17,7 @@ export default mixin({
           fd = this.obtainZigView(address, 0, false);
         }
         /* c8 ignore end */
-        return { handle: fd  };
+        return { handle: fd, flags };
       }
     }
     if (typeof(arg) === 'object' && typeof(arg?.handle) === 'number') {
@@ -47,7 +48,7 @@ export default mixin({
       fd = this.obtainZigView(usize(fd << 1), 0, false);
     }
     /* c8 ignore end */
-    return { handle: fd };
+    return { handle: fd, flags };
   },
   ...(process.env.TARGET === 'node' ? {
     imports: {

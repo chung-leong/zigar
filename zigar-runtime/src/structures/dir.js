@@ -6,20 +6,20 @@ import { usize } from '../utils.js';
 export default mixin({
   // create Dir struct for outbound call
   createDirectory(arg) {
-    if (typeof(arg) === 'object' && typeof(arg?.fd) === 'number') {
+    if (typeof(arg) === 'object' && typeof(arg?.handle) === 'number') {
       return arg;
     }
     const dir = this.convertDirectory(arg);
     if (!dir) {
       throw new InvalidStream(PosixDescriptorRight.fd_readdir, arg);
     }
-    let fd = this.createStreamHandle(dir, this.getDefaultRights('dir'));
+    let handle = this.createStreamHandle(dir, this.getDefaultRights('dir'));
     /* c8 ignore start */
     if (process.env.TARGET === 'node' && process.platform === 'win32') {
       // handle is pointer
-      fd = this.obtainZigView(usize(fd << 1), 0);
+      handle = this.obtainZigView(usize(fd << 1), 0);
     }
     /* c8 ignore end */
-    return { fd };
+    return { handle };
   },
 });

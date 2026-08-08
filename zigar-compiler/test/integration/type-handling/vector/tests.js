@@ -63,9 +63,8 @@ export function addTests(importModule, options) {
       const [ after ] = await capture(() => print());
       expect(after).to.equal('.{ .vector1 = { 1, 2, 3, 4 }, .vector2 = { 5, 6, 7, 8 } }');
     })
-    it('should handle vector in packed struct', async function() {
-      const { default: module } = await importTest('in-packed-struct');
-      expect(() => module.struct_a.valueOf()).to.throw(TypeError);
+    it('should not compile code with vector in packed struct', async function() {
+      await expect(importTest('in-packed-struct')).to.eventually.be.rejected;
     })
     it('should handle vector as comptime field', async function() {
       const { default: module, StructA, print } = await importTest('as-comptime-field');

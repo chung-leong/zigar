@@ -256,27 +256,33 @@ test "getJscallHandler (error handling)" {
     try expectError(ES2.Unexpected, result3);
 }
 
-fn findError(comptime T: type, comptime errors: anytype) ?anyerror {
-    switch (@typeInfo(T)) {
-        .error_union => |eu| {
-            inline for (errors) |err| {
-                if (@typeInfo(eu.error_set).error_set == null) {
-                    return err;
-                }
-                const name = @errorName(err);
-                if (@typeInfo(eu.error_set).error_set) |es| {
-                    inline for (es) |e| {
-                        if (std.mem.eql(u8, e.name, name)) return err;
-                    }
-                }
-            }
-        },
-        else => {},
-    }
-    return null;
+fn findError(comptime T: type, comptime errors: anytype) RT: {
+    break :RT if (findErrorIndex(T, errors)) |index|
+        ?@TypeOf(errors[index])
+    else
+        ?anyerror;
+} {
+    return if (findErrorIndex(T, errors)) |index|
+        errors[index]
+    else
+        null;
 }
 
-test "hasError" {
+fn findErrorIndex(comptime T: type, comptime errors: anytype) ?usize {
+    return switch (@typeInfo(T)) {
+        .error_union => |eu| inline for (errors, 0..) |err, i| {
+            const name = @errorName(err);
+            if (@typeInfo(eu.error_set).error_set) |available_set| {
+                break inline for (available_set) |available| {
+                    if (std.mem.eql(u8, available.name, name)) break i;
+                } else null;
+            } else break null;
+        } else null,
+        else => null,
+    };
+}
+
+test "findError" {
     try expect(findError(error{ Hello, World }!i32, .{error.Hello}) != null);
     try expect(findError(anyerror!i32, .{error.Cow}) != null);
     try expect(findError(error{ Hello, World }!i32, .{error.Cow}) == null);

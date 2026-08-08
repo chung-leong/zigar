@@ -23,7 +23,7 @@ describe('Feature: dir', function() {
       if (process.env.TARGET === 'node') {
         env.setSyscallTrap = () => {};
       }
-      const object = { fd: 1234 };
+      const object = { handle: 1234 };
       const dir = env.createDirectory(object);
       expect(dir).to.equal(object);
     })

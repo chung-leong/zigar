@@ -2054,7 +2054,7 @@ describe('Structure: struct', function() {
         instance: {
           members: [
             {
-              name: 'fd',
+              name: 'handle',
               type: MemberType.Int,
               bitSize: 32,
               bitOffset: 0,
@@ -2068,7 +2068,7 @@ describe('Structure: struct', function() {
       env.beginStructure(structure);
       env.finishStructure(structure);
       const Hello = structure.constructor;
-      const object = new Hello({ fd: 1234 });
+      const object = new Hello({ handle: 1234 });
     })
   })
 })

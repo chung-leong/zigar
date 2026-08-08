@@ -300,6 +300,9 @@ test "Multithreaded: push() + shift()" {
         var sum: std.atomic.Value(isize) = .init(0);
         var list: LinkedList(isize) = .init(gpa.allocator());
 
+        var thread_io = std.Io.Threaded.init_single_threaded;
+        const io = thread_io.io();
+
         fn run() !void {
             for (0..pushers) |i| {
                 const thread = try std.Thread.spawn(.{}, runPush, .{i});
@@ -309,7 +312,7 @@ test "Multithreaded: push() + shift()" {
                 const thread = try std.Thread.spawn(.{}, runPull, .{i});
                 thread.detach();
             }
-            std.Thread.Futex.wait(&finish_futex, 0);
+            std.Io.futexWait(io, u32, &finish_futex.raw, 0) catch unreachable;
         }
 
         fn runPush(_: usize) !void {
@@ -342,16 +345,16 @@ test "Multithreaded: push() + shift()" {
             const prev_count = thread_count.fetchAdd(1, .monotonic);
             if (prev_count == pushers + pullers - 1) {
                 ready_futex.store(1, .unordered);
-                std.Thread.Futex.wake(&ready_futex, std.math.maxInt(u32));
+                std.Io.futexWake(io, u32, &ready_futex.raw, std.math.maxInt(u32));
             }
-            std.Thread.Futex.wait(&ready_futex, 0);
+            std.Io.futexWait(io, u32, &ready_futex.raw, 0) catch unreachable;
         }
 
         fn done() void {
             const prev_count = finish_count.fetchAdd(1, .monotonic);
             if (prev_count == pushers + pullers - 1) {
                 finish_futex.store(1, .unordered);
-                std.Thread.Futex.wake(&finish_futex, std.math.maxInt(u32));
+                std.Io.futexWake(io, u32, &finish_futex.raw, std.math.maxInt(u32));
             }
         }
     };
@@ -379,6 +382,9 @@ test "Multithreaded: push() + shift() + remove()" {
         var sum: std.atomic.Value(isize) = .init(0);
         var list: LinkedList(isize) = .init(gpa.allocator());
 
+        var thread_io = std.Io.Threaded.init_single_threaded;
+        const io = thread_io.io();
+
         fn run() !void {
             for (0..pushers) |i| {
                 const thread = try std.Thread.spawn(.{}, runPush, .{i});
@@ -392,7 +398,7 @@ test "Multithreaded: push() + shift() + remove()" {
                 const thread = try std.Thread.spawn(.{}, runRemove, .{i});
                 thread.detach();
             }
-            std.Thread.Futex.wait(&finish_futex, 0);
+            std.Io.futexWait(io, u32, &finish_futex.raw, 0) catch unreachable;
         }
 
         fn runPush(_: usize) !void {
@@ -442,22 +448,23 @@ test "Multithreaded: push() + shift() + remove()" {
             const prev_count = thread_count.fetchAdd(1, .monotonic);
             if (prev_count == pushers + pullers + removers - 1) {
                 ready_futex.store(1, .unordered);
-                std.Thread.Futex.wake(&ready_futex, std.math.maxInt(u32));
+                std.Io.futexWake(io, u32, &ready_futex.raw, std.math.maxInt(u32));
             }
-            std.Thread.Futex.wait(&ready_futex, 0);
+            std.Io.futexWait(io, u32, &ready_futex.raw, 0) catch unreachable;
         }
 
         fn done() void {
             const prev_count = finish_count.fetchAdd(1, .monotonic);
             if (prev_count == pushers + pullers + removers - 1) {
                 finish_futex.store(1, .unordered);
-                std.Thread.Futex.wake(&finish_futex, std.math.maxInt(u32));
+                std.Io.futexWake(io, u32, &finish_futex.raw, std.math.maxInt(u32));
             }
         }
     };
     try test_ns.run();
     const count = test_ns.count.load(.unordered);
     const sum = test_ns.sum.load(.unordered);
+    try std.Io.sleep(test_ns.io, .fromMilliseconds(10), .real);
     try expectEqual(0, count);
     try expectEqual(0, sum);
 }

@@ -8,15 +8,16 @@ pub fn Queue(comptime T: type) type {
         list: LinkedList(T),
         stopped: bool = false,
         item_futex: std.atomic.Value(u32) = std.atomic.Value(u32).init(0),
+        io: std.Io,
 
-        pub fn init(allocator: std.mem.Allocator) @This() {
-            return .{ .list = .init(allocator) };
+        pub fn init(allocator: std.mem.Allocator, io: std.Io) @This() {
+            return .{ .list = .init(allocator), .io = io };
         }
 
         pub fn push(self: *@This(), value: T) !void {
             _ = try self.list.push(value);
             self.item_futex.store(1, .release);
-            std.Thread.Futex.wake(&self.item_futex, 1);
+            std.Io.futexWake(self.io, u32, &self.item_futex.raw, 1);
         }
 
         pub fn pull(self: *@This()) ?T {
@@ -26,7 +27,7 @@ pub fn Queue(comptime T: type) type {
         }
 
         pub fn wait(self: *@This()) void {
-            std.Thread.Futex.wait(&self.item_futex, 0);
+            std.Io.futexWait(self.io, u32, &self.item_futex.raw, 0) catch unreachable;
         }
 
         pub fn stop(self: *@This()) void {
@@ -35,7 +36,7 @@ pub fn Queue(comptime T: type) type {
             while (self.pull()) |_| {}
             // wake up awaking threads and prevent them from sleep again
             self.item_futex.store(1, .release);
-            std.Thread.Futex.wake(&self.item_futex, std.math.maxInt(u32));
+            std.Io.futexWake(self.io, u32, &self.item_futex.raw, std.math.maxInt(u32));
         }
 
         pub fn deinit(self: *@This()) void {
@@ -46,7 +47,8 @@ pub fn Queue(comptime T: type) type {
 
 test "Queue.pull()" {
     var gpa = std.heap.DebugAllocator(.{}).init;
-    var queue: Queue(i32) = .init(gpa.allocator());
+    var thread_io = std.Io.Threaded.init_single_threaded;
+    var queue: Queue(i32) = .init(gpa.allocator(), thread_io.io());
     defer queue.deinit();
     try queue.push(123);
     try queue.push(456);

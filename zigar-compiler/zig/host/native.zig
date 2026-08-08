@@ -18,6 +18,7 @@ pub const Promise = @import("../type/promise.zig").Promise;
 pub const PromiseOf = @import("../type/promise.zig").PromiseOf;
 pub const PromiseArgOf = @import("../type/promise.zig").PromiseArgOf;
 const util = @import("../type/util.zig");
+const work_queue = @import("../type/work-queue.zig");
 const fn_transform = @import("../zigft/fn-transform.zig");
 const hooks = @import("native/hooks.zig");
 const interface = @import("native/interface.zig");
@@ -239,6 +240,7 @@ pub fn setHostInstance(ptr: *Module.Host, io_ptr: *std.Io) callconv(.c) E {
     instance = ptr;
     initialized = true;
     hooks.io = io_ptr.*;
+    // work_queue.io = io_ptr.*;
     return E.SUCCESS;
 }
 

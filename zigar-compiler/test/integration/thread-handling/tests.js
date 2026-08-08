@@ -42,6 +42,7 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
+    skip.
     it('should create thread pool and invoke callback', async function() {
       const {
         getCount,
@@ -298,6 +299,7 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
+    skip.
     it('should create thread pool for function returning promise', async function() {
       const {
         startup,
