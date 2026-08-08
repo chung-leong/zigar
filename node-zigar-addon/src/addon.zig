@@ -337,7 +337,7 @@ const ModuleHost = struct {
                 },
             }
         };
-        _ = module.exports.set_host_instance(@ptrCast(self));
+        _ = module.exports.set_host_instance(@ptrCast(self), &self.io);
         try self.exportFunctionsToModule();
         if (env.getValueBool(redirectingIO) catch true) {
             // hooks are installed even when io redirection is disabled, because they're needed for
@@ -375,7 +375,7 @@ const ModuleHost = struct {
                 // the same JavaScript environment, meaning that the thread can potential call a
                 // function handled by this host; we need to initialize the threadlocal instance
                 // pointer in its module
-                _ = if (host.module) |m| m.exports.set_host_instance(@ptrCast(self));
+                _ = if (host.module) |m| m.exports.set_host_instance(@ptrCast(self), &self.io);
             }
         }
     }

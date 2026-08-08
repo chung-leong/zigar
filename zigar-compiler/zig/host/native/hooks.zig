@@ -523,7 +523,7 @@ const fd_root = -1;
 const fd_min = 0xf_ffff;
 const fd_temp_min = 0x1fff_ffff;
 
-var io: std.Io = undefined;
+pub var io: std.Io = undefined;
 
 pub fn SyscallRedirector(comptime ModuleHost: type) type {
     return struct {

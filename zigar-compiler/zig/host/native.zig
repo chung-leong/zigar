@@ -223,7 +223,7 @@ pub fn getInstance() *anyopaque {
     return instance;
 }
 
-pub fn setHostInstance(ptr: *Module.Host) callconv(.c) E {
+pub fn setHostInstance(ptr: *Module.Host, io_ptr: *std.Io) callconv(.c) E {
     if (builtin.link_libc and builtin.target.os.tag != .windows) {
         if (@hasDecl(c, "RTLD_DEEPBIND")) {
             // fix missing environ due to RTLD_DEEPBIND option given to dlopen()
@@ -238,6 +238,7 @@ pub fn setHostInstance(ptr: *Module.Host) callconv(.c) E {
     }
     instance = ptr;
     initialized = true;
+    hooks.io = io_ptr.*;
     return E.SUCCESS;
 }
 

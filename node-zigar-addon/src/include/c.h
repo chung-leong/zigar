@@ -13,6 +13,7 @@
     #include <dlfcn.h>
     #include <dirent.h>
     #include <errno.h>
+    #include <sys/stat.h>
 #endif
 
 #ifdef linux

@@ -6,9 +6,13 @@ const nfds_t = std.c.nfds_t;
 const builtin = @import("builtin");
 
 const c = @import("c");
+const off_t = c.off_t;
+const off64_t = c.off64_t;
 
 const fn_transform = @import("../../zigft/fn-transform.zig");
 
+const size_t = usize;
+const ssize_t = isize;
 const os = switch (builtin.target.os.tag) {
     .linux => .linux,
     .driverkit, .ios, .macos, .tvos, .visionos, .watchos => .darwin,
@@ -307,10 +311,6 @@ const ThreadInfo = struct {
     arg: ?*anyopaque,
     instance: *anyopaque,
 };
-const size_t = c_ulong;
-const ssize_t = c_long;
-const off_t = c_long;
-const off64_t = i64;
 const Dirent = switch (os) {
     .windows => extern struct {
         ino: c_long,
@@ -340,6 +340,25 @@ const Stat = switch (os) {
         mtime: c_longlong,
         ctime: c_longlong,
     },
+    .linux => extern struct {
+        dev: c.dev_t,
+        ino: c.ino_t,
+        nlink: c.nlink_t,
+
+        mode: c.mode_t,
+        uid: c.uid_t,
+        gid: c.gid_t,
+        __pad0: u32,
+        rdev: c.dev_t,
+        size: off_t,
+        blksize: off_t,
+        blocks: c.blksize_t,
+
+        atim: std.os.linux.timespec,
+        mtim: std.os.linux.timespec,
+        ctim: std.os.linux.timespec,
+        __unused: [3]isize,
+    },
     else => std.c.Stat,
 };
 const Stat64 = switch (os) {
@@ -355,6 +374,25 @@ const Stat64 = switch (os) {
         atime: c_longlong,
         mtime: c_longlong,
         ctime: c_longlong,
+    },
+    .linux => extern struct {
+        dev: c.dev_t,
+        ino: c.ino64_t,
+        nlink: c.nlink_t,
+
+        mode: c.mode_t,
+        uid: c.uid_t,
+        gid: c.gid_t,
+        __pad0: u32,
+        rdev: c.dev_t,
+        size: off64_t,
+        blksize: off64_t,
+        blocks: c.blksize_t,
+
+        atim: std.os.linux.timespec,
+        mtim: std.os.linux.timespec,
+        ctim: std.os.linux.timespec,
+        __unused: [3]isize,
     },
     else => std.c.Stat,
 };
@@ -484,7 +522,8 @@ const fd_cwd = AT.FDCWD;
 const fd_root = -1;
 const fd_min = 0xf_ffff;
 const fd_temp_min = 0x1fff_ffff;
-var io: std.Io = undefined;
+
+pub var io: std.Io = undefined;
 
 pub fn SyscallRedirector(comptime ModuleHost: type) type {
     return struct {
@@ -1812,11 +1851,13 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
         fn copyStatx(dest: *std.os.linux.Statx, src: *const std.os.wasi.filestat_t, mask: c_uint) void {
             dest.* = std.mem.zeroes(std.os.linux.Statx);
-            dest.mask = @intCast(mask);
+            dest.mask = @bitCast(@as(u32, @intCast(mask)));
             dest.ino = src.ino;
             dest.size = src.size;
-            if (mask & std.os.linux.STATX_MODE != 0) {}
-            if (mask & std.os.linux.STATX_TYPE != 0) {
+            if (dest.mask.MODE) {
+                // TODO: is something supposed to happen here?
+            }
+            if (dest.mask.TYPE) {
                 dest.mode |= switch (src.filetype) {
                     .BLOCK_DEVICE => std.os.linux.S.IFBLK,
                     .CHARACTER_DEVICE => std.os.linux.S.IFCHR,
@@ -1827,19 +1868,19 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     else => 0,
                 };
             }
-            if (mask & std.os.linux.STATX_NLINK != 0) {
+            if (dest.mask.NLINK) {
                 dest.nlink = @intCast(src.nlink);
             }
-            if (mask & std.os.linux.STATX_ATIME != 0) {
+            if (dest.mask.ATIME) {
                 copyTime(&dest.atime, src.atim);
             }
-            if (mask & std.os.linux.STATX_BTIME != 0) {
+            if (dest.mask.BTIME) {
                 copyTime(&dest.btime, src.ctim);
             }
-            if (mask & std.os.linux.STATX_CTIME != 0) {
+            if (dest.mask.CTIME) {
                 copyTime(&dest.ctime, src.ctim);
             }
-            if (mask & std.os.linux.STATX_MTIME != 0) {
+            if (dest.mask.MTIME) {
                 copyTime(&dest.mtime, src.mtim);
             }
         }
@@ -1886,7 +1927,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                 if (relative) {
                     self.dirfd = fd_root;
                     // resolve the path
-                    const cwd = try std.process.getCwdAlloc(self.allocator);
+                    const cwd = try std.process.currentPathAlloc(io, self.allocator);
                     defer self.allocator.free(cwd);
                     var buf = try std.fs.path.resolve(self.allocator, &.{ cwd, path });
                     // add sentinel
@@ -2301,10 +2342,10 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             if (tb) |t| {
                 ts = .{ .{ .sec = t.actime, .nsec = 0 }, .{ .sec = t.modtime, .nsec = 0 } };
             } else {
-                const now = std.time.nanoTimestamp();
+                const now = std.Io.Timestamp.now(io, .real);
                 const nps = 1_000_000_000;
-                const s: c_long = @intCast(@divTrunc(now, nps));
-                const ns: c_long = @intCast(now - s * nps);
+                const s: c_long = @intCast(@divTrunc(now.nanoseconds, nps));
+                const ns: c_long = @intCast(now.nanoseconds - s * nps);
                 ts = .{ .{ .sec = s, .nsec = ns }, .{ .sec = s, .nsec = ns } };
             }
             var result: c_int = undefined;
@@ -2319,10 +2360,10 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             if (tb) |t| {
                 ts = .{ .{ .sec = t.actime, .nsec = 0 }, .{ .sec = t.modtime, .nsec = 0 } };
             } else {
-                const now = std.time.nanoTimestamp();
+                const now = std.Io.Timestamp.now(io, .real);
                 const nps = 1_000_000_000;
-                const s: c_long = @intCast(@divTrunc(now, nps));
-                const ns: c_long = @intCast(now - s * nps);
+                const s: c_long = @intCast(@divTrunc(now.nanoseconds, nps));
+                const ns: c_long = @intCast(now.nanoseconds - s * nps);
                 ts = .{ .{ .sec = s, .nsec = ns }, .{ .sec = s, .nsec = ns } };
             }
             var result: c_int = undefined;
@@ -2703,7 +2744,7 @@ const RedirectedFile = struct {
 
     pub const signature = 0x4C49_4652_4147_495A;
     pub const BufferMode = enum { read, write };
-    pub var list: std.ArrayList(*@This()) = .{};
+    pub var list: std.ArrayList(*@This()) = .empty;
 
     pub fn cast(s: *std.c.FILE) ?*@This() {
         if (!std.mem.isAligned(@intFromPtr(s), @alignOf(u64))) return null;
@@ -4847,7 +4888,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
             return fromDescriptor(fd);
         }
 
-        fn destroyTemporaryHandle(handle: HANDLE) void {
+        fn destroyTemporaryHandle(handle: HANDLE) !void {
             mutex.lock(io) catch unreachable;
             defer mutex.unlock(io);
             const fd = toDescriptor(handle);
@@ -4861,7 +4902,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
             }
         }
 
-        fn getTemporaryHandleInfo(handle: HANDLE) ?TemporaryHandleInfo {
+        fn getTemporaryHandleInfo(handle: HANDLE) !?TemporaryHandleInfo {
             mutex.lock(io) catch unreachable;
             defer mutex.unlock(io);
             const fd = toDescriptor(handle);
@@ -4875,7 +4916,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
             return fd >= fd_temp_min;
         }
 
-        fn isSeekable(fd: c_int) !bool {
+        fn isSeekable(fd: c_int) bool {
             switch (fd) {
                 0, 1, 2 => return true,
                 else => if (unseekable_descriptor_list.items.len == 0) return true,
@@ -4887,7 +4928,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
             } else true;
         }
 
-        fn addUnseekable(fd: c_int) !void {
+        fn addUnseekable(fd: c_int) void {
             mutex.lock(io) catch unreachable;
             defer mutex.unlock(io);
             unseekable_descriptor_list.append(c_allocator, fd) catch {};

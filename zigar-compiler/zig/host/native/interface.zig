@@ -21,7 +21,7 @@ pub fn Module(comptime Value: type) type {
         imports: *Imports,
         exports: *const Exports,
 
-        pub const current_version = 7;
+        pub const current_version = 8;
         pub const Attributes = packed struct(u32) {
             little_endian: bool,
             runtime_safety: bool,
@@ -61,7 +61,7 @@ pub fn Module(comptime Value: type) type {
             redirect_syscalls: *const fn (*Host, *const anyopaque) callconv(.c) E,
         };
         pub const Exports = extern struct { // vtable that's used by the addon
-            set_host_instance: *const fn (*Host) callconv(.c) E,
+            set_host_instance: *const fn (*Host, *std.Io) callconv(.c) E,
             get_export_address: *const fn (usize, *usize) callconv(.c) E,
             get_factory_thunk: *const fn (*usize) callconv(.c) E,
             run_thunk: *const fn (usize, usize, usize) callconv(.c) E,
