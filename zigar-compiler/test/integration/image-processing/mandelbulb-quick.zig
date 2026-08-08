@@ -845,104 +845,67 @@ pub fn KernelImage(comptime Impl: type, comptime channels: comptime_int, comptim
 }
 
 pub fn KernelInput(comptime Kernel: type) type {
-    const input_fields = std.meta.fields(@TypeOf(Kernel.inputImages));
-    comptime var struct_fields: [input_fields.len]std.builtin.Type.StructField = undefined;
-    inline for (input_fields, 0..) |field, index| {
-        struct_fields[index] = .{
-            .name = field.name,
-            .type = zigar.image.Any(.ro),
-            .default_value_ptr = null,
-            .is_comptime = false,
-            .alignment = @alignOf(zigar.image.Any(.ro)),
-        };
+    const fields = std.meta.fields(@TypeOf(Kernel.inputImages));
+    var field_names: [fields.len][]const u8 = undefined;
+    var field_types: [fields.len]type = undefined;
+    var field_attrs: [fields.len]std.builtin.Type.StructField.Attributes = undefined;
+    inline for (fields, 0..) |field, index| {
+        field_names[index] = field.name;
+        field_types[index] = zigar.image.Any(.ro);
+        field_attrs[index] = .{};
     }
-    return @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .fields = &struct_fields,
-            .decls = &.{},
-            .is_tuple = false,
-        },
-    });
+    return @Struct(.auto, null, &field_names, &field_types, &field_attrs);
 }
 
 pub fn KernelInputImpl(comptime Impl: type, comptime Kernel: type) type {
-    const input_fields = std.meta.fields(@TypeOf(Kernel.inputImages));
-    comptime var struct_fields: [input_fields.len]std.builtin.Type.StructField = undefined;
-    inline for (input_fields, 0..) |field, index| {
+    const fields = std.meta.fields(@TypeOf(Kernel.inputImages));
+    var field_names: [fields.len][]const u8 = undefined;
+    var field_types: [fields.len]type = undefined;
+    var field_attrs: [fields.len]std.builtin.Type.StructField.Attributes = undefined;
+    inline for (fields, 0..) |field, index| {
         const input = @field(Kernel.inputImages, field.name);
-        const KernelImageImpl = KernelImage(Impl, input.channels, false);
-        struct_fields[index] = .{
-            .name = field.name,
-            .type = KernelImageImpl,
-            .default_value_ptr = null,
-            .is_comptime = false,
-            .alignment = @alignOf(KernelImageImpl),
-        };
+        field_names[index] = field.name;
+        field_types[index] = KernelImage(Impl, input.channels, false);
+        field_attrs[index] = .{};
     }
-    return @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .fields = &struct_fields,
-            .decls = &.{},
-            .is_tuple = false,
-        },
-    });
+    return @Struct(.auto, null, &field_names, &field_types, &field_attrs);
 }
 
 pub fn KernelOutput(comptime Kernel: type) type {
-    const output_fields = std.meta.fields(@TypeOf(Kernel.outputImages));
-    comptime var struct_fields: [output_fields.len]std.builtin.Type.StructField = undefined;
-    inline for (output_fields, 0..) |field, index| {
-        struct_fields[index] = .{
-            .name = field.name,
-            .type = zigar.image.Any(.rw),
-            .default_value_ptr = null,
-            .is_comptime = false,
-            .alignment = @alignOf(zigar.image.Any(.rw)),
-        };
+    const fields = std.meta.fields(@TypeOf(Kernel.outputImages));
+    var field_names: [fields.len][]const u8 = undefined;
+    var field_types: [fields.len]type = undefined;
+    var field_attrs: [fields.len]std.builtin.Type.StructField.Attributes = undefined;
+    inline for (fields, 0..) |field, index| {
+        field_names[index] = field.name;
+        field_types[index] = zigar.image.Any(.rw);
+        field_attrs[index] = .{};
     }
-    return @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .fields = &struct_fields,
-            .decls = &.{},
-            .is_tuple = false,
-        },
-    });
+    return @Struct(.auto, null, &field_names, &field_types, &field_attrs);
 }
 
 pub fn KernelOutputImpl(comptime Impl: type, comptime Kernel: type) type {
-    const output_fields = std.meta.fields(@TypeOf(Kernel.outputImages));
-    comptime var struct_fields: [output_fields.len]std.builtin.Type.StructField = undefined;
-    inline for (output_fields, 0..) |field, index| {
+    const fields = std.meta.fields(@TypeOf(Kernel.outputImages));
+    var field_names: [fields.len][]const u8 = undefined;
+    var field_types: [fields.len]type = undefined;
+    var field_attrs: [fields.len]std.builtin.Type.StructField.Attributes = undefined;
+    inline for (fields, 0..) |field, index| {
         const output = @field(Kernel.outputImages, field.name);
-        const KernelImageImpl = KernelImage(Impl, output.channels, true);
-        const default_value: KernelImageImpl = undefined;
-        struct_fields[index] = .{
-            .name = field.name,
-            .type = KernelImageImpl,
-            .default_value_ptr = @ptrCast(&default_value),
-            .is_comptime = false,
-            .alignment = @alignOf(KernelImageImpl),
-        };
+        field_names[index] = field.name;
+        field_types[index] = KernelImage(Impl, output.channels, true);
+        field_attrs[index] = .{};
     }
-    return @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .fields = &struct_fields,
-            .decls = &.{},
-            .is_tuple = false,
-        },
-    });
+    return @Struct(.auto, null, &field_names, &field_types, &field_attrs);
 }
 
 pub fn KernelParameters(comptime Kernel: type) type {
-    const param_fields = std.meta.fields(@TypeOf(Kernel.parameters));
-    comptime var struct_fields: [param_fields.len]std.builtin.Type.StructField = undefined;
-    inline for (param_fields, 0..) |field, index| {
+    const fields = std.meta.fields(@TypeOf(Kernel.parameters));
+    var field_names: [fields.len][]const u8 = undefined;
+    var field_types: [fields.len]type = undefined;
+    var field_attrs: [fields.len]std.builtin.Type.StructField.Attributes = undefined;
+    inline for (fields, 0..) |field, index| {
         const param = @field(Kernel.parameters, field.name);
-        const default_value: ?*const anyopaque = get_def: {
+        const default_value_ptr: ?*const anyopaque = get_def: {
             const value: param.type = switch (@hasField(@TypeOf(param), "defaultValue")) {
                 true => param.defaultValue,
                 false => switch (@typeInfo(param.type)) {
@@ -954,20 +917,11 @@ pub fn KernelParameters(comptime Kernel: type) type {
             };
             break :get_def @ptrCast(&value);
         };
-        struct_fields[index] = .{
-            .name = field.name,
-            .type = param.type,
-            .default_value_ptr = default_value,
-            .is_comptime = false,
-            .alignment = @alignOf(param.type),
+        field_names[index] = field.name;
+        field_types[index] = param.type;
+        field_attrs[index] = .{
+            .default_value_ptr = default_value_ptr,
         };
     }
-    return @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .fields = &struct_fields,
-            .decls = &.{},
-            .is_tuple = false,
-        },
-    });
+    return @Struct(.auto, null, &field_names, &field_types, &field_attrs);
 }
