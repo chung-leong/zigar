@@ -1,6 +1,9 @@
 const std = @import("std");
+var threaded_io = std.Io.Threaded.init_single_threaded;
 
 const zigar = @import("zigar");
+
+const io = threaded_io.io();
 
 var gpa = std.heap.DebugAllocator(.{}).init;
 
@@ -23,7 +26,7 @@ pub const print = work_queue.promisify(ns.print);
 const ns = struct {
     pub fn print(dir: std.Io.Dir) !void {
         var iter = dir.iterate();
-        while (try iter.next()) |entry| {
+        while (try iter.next(io)) |entry| {
             std.debug.print("{s} {s}\n", .{ entry.name, @tagName(entry.kind) });
         }
     }

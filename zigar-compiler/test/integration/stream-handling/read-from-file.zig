@@ -1,10 +1,13 @@
 const std = @import("std");
+var threaded_io = std.Io.Threaded.init_single_threaded;
 
 const zigar = @import("zigar");
 
 var gpa = std.heap.DebugAllocator(.{}).init;
 
 var work_queue: zigar.thread.WorkQueue(ns) = .{};
+
+const io = threaded_io.io();
 
 pub fn startup(thread_count: usize) !void {
     try work_queue.init(.{
@@ -26,8 +29,11 @@ const ns = struct {
         var sha1: std.crypto.hash.Sha1 = .init(.{});
         var count: u32 = 0;
         while (true) {
-            const read = try file.read(&buffer);
-            if (read == 0) break;
+            const slices: [1][]u8 = .{&buffer};
+            const read = file.readStreaming(io, slices[0..]) catch |err| switch (err) {
+                error.EndOfStream => break,
+                else => return err,
+            };
             sha1.update(buffer[0..read]);
             count += 1;
         }
