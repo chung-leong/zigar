@@ -1,6 +1,7 @@
 const std = @import("std");
 const expectEqual = std.testing.expectEqual;
 
+const byte_size = @import("byte-size.zig");
 const selector = @import("selector.zig");
 
 pub fn get(comptime T: type) comptime_int {
@@ -22,7 +23,7 @@ pub fn get(comptime T: type) comptime_int {
         },
         .optional => |op| switch (@typeInfo(op.child)) {
             .pointer, .error_set => 0, // offset of the pointer/error itself
-            else => @sizeOf(op.child) * 8,
+            else => if (byte_size.get(op.child)) |sz| sz * 8 else 0,
         },
         else => @compileError("Not a union or optional"),
     };

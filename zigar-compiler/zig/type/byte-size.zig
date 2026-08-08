@@ -1,12 +1,18 @@
 const std = @import("std");
 const expectEqual = std.testing.expectEqual;
 
+const comptime_only = @import("comptime-only.zig");
+const ComptimeFree = @import("comptime-free.zig").ComptimeFree;
 const slice = @import("slice.zig");
 
 pub fn get(comptime T: type) ?usize {
     if (comptime slice.is(T) and T.is_opaque) {
         // opaque types have unknown size
         return null;
+    }
+    if (comptime comptime_only.is(T)) {
+        const CT = ComptimeFree(T);
+        return @sizeOf(CT);
     }
     return switch (@typeInfo(T)) {
         .null, .undefined, .@"fn" => 0,

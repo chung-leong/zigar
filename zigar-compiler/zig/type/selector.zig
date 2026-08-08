@@ -27,7 +27,7 @@ pub fn get(comptime T: type) ?type {
         },
         .optional => |op| switch (@typeInfo(op.child)) {
             .pointer => usize, // size of the pointer itself
-            .error_set => @Int(@bitSizeOf(anyerror), .unsigned),
+            .error_set => @Int(.unsigned, @bitSizeOf(anyerror)),
             else => u8,
         },
         else => @compileError("Not a union or optional"),

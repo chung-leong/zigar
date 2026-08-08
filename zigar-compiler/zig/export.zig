@@ -15,6 +15,7 @@ const alignment = @import("type/alignment.zig");
 const arg_struct = @import("type/arg-struct.zig");
 const bit_size = @import("type/bit-size.zig");
 const byte_size = @import("type/byte-size.zig");
+const ComptimeFree = @import("type/comptime-free.zig").ComptimeFree;
 const comptime_only = @import("type/comptime-only.zig");
 const content_offset = @import("type/content-offset.zig");
 const error_offset = @import("type/error-offset.zig");
@@ -709,7 +710,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                         memory = try self.exportPointerTarget(&s.value, false);
                     }
                 } else if (!comptime arg_struct.is(T, null)) {
-                    if (@sizeOf(T) > 0) {
+                    if (comptime !comptime_only.is(T) and @sizeOf(T) > 0) {
                         const default_values = comptime init: {
                             var values: T = undefined;
                             for (st.fields) |field| {
@@ -1246,48 +1247,6 @@ pub fn getFactoryThunk(comptime host: type, comptime module: type) zig_fn.Thunk 
         }
     };
     return ns.exportStructures;
-}
-
-fn ComptimeFree(comptime T: type) type {
-    return switch (@typeInfo(T)) {
-        .comptime_float,
-        .comptime_int,
-        .enum_literal,
-        .type,
-        .null,
-        .undefined,
-        => void,
-        .array => |ar| [ar.len]ComptimeFree(ar.child),
-        .@"struct" => |st| derive: {
-            var field_names: [st.fields.len][]const u8 = undefined;
-            var field_types: [st.fields.len]type = undefined;
-            var field_attrs: [st.fields.len]std.builtin.Type.StructField.Attributes = undefined;
-            inline for (st.fields, 0..) |field, i| {
-                field_names[i] = field.name;
-                field_types[i] = if (field.is_comptime) void else ComptimeFree(field.type);
-                field_attrs[i] = .{
-                    .default_value_ptr = null,
-                    .@"comptime" = false,
-                    .@"align" = if (st.layout != .@"packed") @alignOf(field_types[i]) else 0,
-                };
-            }
-            break :derive @Struct(st.layout, st.backing_integer, &field_names, &field_types, &field_attrs);
-        },
-        .@"union" => |un| derive: {
-            var field_names: [un.fields.len][]const u8 = undefined;
-            var field_types: [un.fields.len]type = undefined;
-            var field_attrs: [un.fields.len]std.builtin.Type.UnionField.Attributes = undefined;
-            inline for (un.fields, 0..) |field, i| {
-                field_names[i] = field.name;
-                field_types[i] = ComptimeFree(field.type);
-                field_attrs[i] = .{};
-            }
-            break :derive @Union(un.layout, un.tag_type, &field_names, &field_types, &field_attrs);
-        },
-        .optional => |op| ?ComptimeFree(op.child),
-        .error_union => |eu| eu.error_set!ComptimeFree(eu.payload),
-        else => T,
-    };
 }
 
 fn removeComptimeValues(comptime value: anytype) ComptimeFree(@TypeOf(value)) {

@@ -1,8 +1,6 @@
 const std = @import("std");
 const expectEqual = std.testing.expectEqual;
 
-const comptime_only = @import("./comptime-only");
-
 pub fn is(comptime T: type) bool {
     return check(T, .{});
 }
