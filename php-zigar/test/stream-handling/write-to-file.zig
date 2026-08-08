@@ -2,7 +2,7 @@ const std = @import("std");
 
 const zigar = @import("zigar");
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.DebugAllocator(.{}).init;
 
 var work_queue: zigar.thread.WorkQueue(ns) = .{};
 
@@ -21,7 +21,7 @@ pub fn shutdown(promise: zigar.function.Promise(void)) void {
 pub const save = work_queue.promisify(ns.save);
 
 const ns = struct {
-    pub fn save(data: []const u8, file: std.fs.File) !usize {
+    pub fn save(data: []const u8, file: std.Io.File) !usize {
         return try file.write(data);
     }
 };

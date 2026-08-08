@@ -2,7 +2,7 @@ const std = @import("std");
 
 const zigar = @import("zigar");
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.DebugAllocator(.{}).init;
 
 var work_queue: zigar.thread.WorkQueue(ns) = .{};
 
@@ -21,7 +21,7 @@ pub fn shutdown(promise: zigar.function.Promise(void)) void {
 pub const decompress = work_queue.promisify(ns.decompress);
 
 const ns = struct {
-    pub fn decompress(in_file: std.fs.File, out_file: std.fs.File) !usize {
+    pub fn decompress(in_file: std.Io.File, out_file: std.Io.File) !usize {
         var read_buffer: [4096]u8 = undefined;
         var reader = in_file.reader(&read_buffer);
         var deflate: std.compress.flate.Decompress = .init(&reader.interface, .gzip, &.{});

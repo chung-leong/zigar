@@ -76,7 +76,7 @@ pub fn Promise(comptime T: type) type {
                         test_value = value;
                     }
                 };
-                var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+                var gpa = std.heap.DebugAllocator(.{}).init;
                 const promise1: @This() = @This().init(null, ns.resolve);
                 const multipart_promise1 = try promise1.partition(gpa.allocator(), 3);
                 multipart_promise1.resolve(1);

@@ -2,16 +2,16 @@ const std = @import("std");
 
 const zigar = @import("zigar");
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.DebugAllocator(.{}).init;
 
-pub fn print(file: std.fs.File, promise: zigar.function.Promise(void)) !void {
+pub fn print(file: std.Io.File, promise: zigar.function.Promise(void)) !void {
     const thread = try std.Thread.spawn(.{
         .allocator = gpa.allocator(),
     }, run, .{ file, promise });
     thread.detach();
 }
 
-pub fn run(file: std.fs.File, promise: zigar.function.Promise(void)) !void {
+pub fn run(file: std.Io.File, promise: zigar.function.Promise(void)) !void {
     const fd = file.handle;
     var buffer: [4096]u8 = undefined;
     var start: usize = 0;

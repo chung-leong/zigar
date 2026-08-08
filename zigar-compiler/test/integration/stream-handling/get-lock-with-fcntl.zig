@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub fn check(file: std.fs.File) !?std.c.Flock {
+pub fn check(file: std.Io.File) !?std.c.Flock {
     var flock: std.c.Flock = undefined;
     flock.type = std.c.F.WRLCK;
     flock.whence = 0;

@@ -1,6 +1,6 @@
 const std = @import("std");
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.DebugAllocator(.{}).init;
 var allocator = gpa.allocator();
 
 pub fn floatToString(num: f64) ![]const u8 {

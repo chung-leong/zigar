@@ -2,7 +2,7 @@ const std = @import("std");
 
 const c = @import("c");
 
-pub fn print(file: std.fs.File) !void {
+pub fn print(file: std.Io.File) !void {
     var info: c.BY_HANDLE_FILE_INFORMATION = undefined;
     if (c.GetFileInformationByHandle(file.handle, &info) == 0) return error.UnableToGetFileInfo;
     std.debug.print("size = {d}\n", .{info.nFileSizeLow});

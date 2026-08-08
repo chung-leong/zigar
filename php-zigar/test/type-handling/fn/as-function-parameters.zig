@@ -1,4 +1,5 @@
 const std = @import("std");
+
 const zigar = @import("zigar");
 
 pub fn hello() void {
@@ -28,7 +29,7 @@ pub fn call3(cb: *const fn (i32) i32) i32 {
 
 pub var call4_result: i32 = 0;
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.DebugAllocator(.{}).init;
 var allocator = gpa.allocator();
 
 pub fn startup() !void {

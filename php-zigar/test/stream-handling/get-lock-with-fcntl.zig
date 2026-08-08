@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub fn check(file: std.fs.File, exclusive: bool) !bool {
+pub fn check(file: std.Io.File, exclusive: bool) !bool {
     var flock: std.c.Flock = .{
         .type = if (exclusive) std.c.F.WRLCK else std.c.F.RDLCK,
         .whence = 0,
@@ -13,7 +13,7 @@ pub fn check(file: std.fs.File, exclusive: bool) !bool {
     return flock.type == std.c.F.UNLCK;
 }
 
-pub fn lock(file: std.fs.File, exclusive: bool) !void {
+pub fn lock(file: std.Io.File, exclusive: bool) !void {
     const flock: std.c.Flock = .{
         .type = if (exclusive) std.c.F.WRLCK else std.c.F.RDLCK,
         .whence = 0,

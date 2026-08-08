@@ -1,7 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-pub fn copy(src: std.fs.File, dest: std.fs.File, len: usize) !usize {
+pub fn copy(src: std.Io.File, dest: std.Io.File, len: usize) !usize {
     if (builtin.target.os.tag == .linux) {
         const sent = std.c.sendfile(dest.handle, src.handle, null, len);
         if (sent < 0) return error.UnableToSendFile;

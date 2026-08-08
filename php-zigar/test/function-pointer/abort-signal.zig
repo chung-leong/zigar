@@ -5,7 +5,7 @@ const zigar = @import("zigar");
 pub const Callback = *const fn (signal: zigar.function.AbortSignal) void;
 
 var int: i32 = 0;
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.DebugAllocator(.{}).init;
 const allocator = gpa.allocator();
 
 pub fn call(f: Callback) !void {

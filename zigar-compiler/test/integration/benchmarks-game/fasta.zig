@@ -80,7 +80,7 @@ fn generateAndWrap(out: anytype, comptime nucleotides: []const AminoAcid, count:
 
 pub fn fasta(n: usize) !void {
     var stdout_buffer: [1024]u8 = undefined;
-    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    var stdout_writer = std.Io.File.stdout().writer(&stdout_buffer);
     const stdout = &stdout_writer.interface;
 
     const homo_sapiens_alu = "GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGGGAGGCCGAGGCGGGCGGATCACCTGAGGTC" ++

@@ -1,7 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-pub fn copy(src: std.fs.File, dest: std.fs.File) !usize {
+pub fn copy(src: std.Io.File, dest: std.Io.File) !usize {
     var read_buffer: [1024]u8 = undefined;
     var reader = src.reader(&read_buffer);
     var write_buffer: [1024]u8 = undefined;

@@ -2,7 +2,7 @@ const std = @import("std");
 
 const zigar = @import("zigar");
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.DebugAllocator(.{}).init;
 
 var work_queue: zigar.thread.WorkQueue(ns) = .{};
 

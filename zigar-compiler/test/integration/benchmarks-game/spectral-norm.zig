@@ -31,7 +31,7 @@ fn eval_ata_times_u(atau: []f64, u: []const f64, scratch: []f64) void {
     eval_a_times_u(true, atau, scratch);
 }
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.DebugAllocator(.{}).init;
 var allocator = gpa.allocator();
 
 pub fn spectralNorm(n: usize) !f64 {

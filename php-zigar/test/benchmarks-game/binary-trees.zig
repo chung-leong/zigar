@@ -49,7 +49,7 @@ fn deleteTree(a: Allocator, node: *TreeNode) void {
     a.destroy(node);
 }
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.DebugAllocator(.{}).init;
 
 pub fn binaryTree(n: usize) !void {
     var stdout_buffer: [1024]u8 = undefined;

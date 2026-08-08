@@ -230,7 +230,7 @@ const ServerOptions = struct {
     thread_count: usize = 1,
 };
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.DebugAllocator(.{}).init;
 
 pub fn startServer(options: ServerOptions) !ServerOpaquePointer {
     const allocator = gpa.allocator();

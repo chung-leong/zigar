@@ -1,6 +1,6 @@
 const std = @import("std");
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.DebugAllocator(.{}).init;
 
 pub fn spawn() !i32 {
     const ns = struct {

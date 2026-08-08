@@ -2,7 +2,7 @@ const std = @import("std");
 
 const zigar = @import("zigar");
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.DebugAllocator(.{}).init;
 
 var work_queue: zigar.thread.WorkQueue(ns) = .{};
 
@@ -21,7 +21,7 @@ pub fn shutdown(promise: zigar.function.Promise(void)) void {
 pub const hash = work_queue.promisify(ns.hash);
 
 const ns = struct {
-    pub fn hash(file: std.fs.File) ![std.crypto.hash.Sha1.digest_length * 2]u8 {
+    pub fn hash(file: std.Io.File) ![std.crypto.hash.Sha1.digest_length * 2]u8 {
         var buffer: [128]u8 = undefined;
         var sha1: std.crypto.hash.Sha1 = .init(.{});
         var count: u32 = 0;

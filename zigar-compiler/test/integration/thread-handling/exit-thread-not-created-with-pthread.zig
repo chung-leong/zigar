@@ -5,7 +5,7 @@ const pthread_t = c.pthread_t;
 const pthread_key_t = c.pthread_key_t;
 const zigar = @import("zigar");
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.DebugAllocator(.{}).init;
 var key: pthread_key_t = undefined;
 
 pub fn spawn() !void {

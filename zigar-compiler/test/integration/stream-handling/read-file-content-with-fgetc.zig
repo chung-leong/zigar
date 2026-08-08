@@ -2,7 +2,7 @@ const std = @import("std");
 
 const c = @import("c");
 
-pub fn print(f: std.fs.File) !void {
+pub fn print(f: std.Io.File) !void {
     const fd = switch (@typeInfo(@TypeOf(f.handle))) {
         .pointer => c._open_osfhandle(@bitCast(@intFromPtr(f.handle)), c.O_RDONLY),
         .int => f.handle,

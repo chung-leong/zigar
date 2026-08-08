@@ -2,7 +2,7 @@ const std = @import("std");
 
 const sqlite = @import("sqlite");
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.DebugAllocator(.{}).init;
 const allocator = gpa.allocator();
 
 pub const Album = struct {

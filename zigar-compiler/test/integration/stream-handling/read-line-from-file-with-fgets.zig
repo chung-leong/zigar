@@ -3,9 +3,9 @@ const std = @import("std");
 const c = @import("c");
 const zigar = @import("zigar");
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.DebugAllocator(.{}).init;
 
-pub fn print(file: std.fs.File, promise: zigar.function.Promise(void)) !void {
+pub fn print(file: std.Io.File, promise: zigar.function.Promise(void)) !void {
     const fd = switch (@typeInfo(@TypeOf(file.handle))) {
         .pointer => c._open_osfhandle(@bitCast(@intFromPtr(file.handle)), c.O_RDONLY),
         .int => file.handle,

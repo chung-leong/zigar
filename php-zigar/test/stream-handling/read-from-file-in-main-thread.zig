@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub fn hash(file: std.fs.File) ![std.crypto.hash.Sha1.digest_length * 2]u8 {
+pub fn hash(file: std.Io.File) ![std.crypto.hash.Sha1.digest_length * 2]u8 {
     var buffer: [128]u8 = undefined;
     var sha1: std.crypto.hash.Sha1 = .init(.{});
     var count: u32 = 0;

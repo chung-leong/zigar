@@ -458,7 +458,7 @@ test "WorkQueue.push()" {
             std.Thread.Futex.wake(futex, 1);
         }
     };
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.DebugAllocator(.{}).init;
     var queue: WorkQueue(test_ns, struct {}) = .{};
     try queue.init(.{ .allocator = gpa.allocator(), .n_jobs = 1 });
     try queue.push(test_ns.hello, .{123}, null);
@@ -518,7 +518,7 @@ test "WorkQueue.promisify()" {
         pub const hello = queue.promisify(test_ns1.hello);
         pub const world = queue.promisify(test_ns1.world);
     };
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.DebugAllocator(.{}).init;
     try test_ns2.init(gpa.allocator());
     const promise1: PromiseOf(test_ns1.hello) = .init(null, test_ns2.hello_callback);
     try test_ns2.hello(1234, promise1);

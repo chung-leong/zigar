@@ -53,7 +53,7 @@ fn process(buf: []u8, ifrom: usize, ito: usize) void {
     }
 }
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.DebugAllocator(.{}).init;
 var allocator = gpa.allocator();
 
 pub fn reverseComplement(buf: []u8) !void {

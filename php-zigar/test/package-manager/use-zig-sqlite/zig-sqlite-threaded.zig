@@ -3,7 +3,7 @@ const std = @import("std");
 const sqlite = @import("sqlite");
 const zigar = @import("zigar");
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.DebugAllocator(.{}).init;
 
 var work_queue: zigar.thread.WorkQueue(ns) = .{};
 var db: sqlite.Db = undefined;

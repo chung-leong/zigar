@@ -1,8 +1,9 @@
 const std = @import("std");
-const zuckdb = @import("zuckdb");
-const zigar = @import("zigar");
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+const zigar = @import("zigar");
+const zuckdb = @import("zuckdb");
+
+var gpa = std.heap.DebugAllocator(.{}).init;
 const allocator = gpa.allocator();
 
 pub fn run() !void {

@@ -1,7 +1,7 @@
 const std = @import("std");
 pub const get = std.process.getEnvVarOwned;
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.DebugAllocator(.{}).init;
 const allocator = gpa.allocator();
 
 pub fn print() !void {

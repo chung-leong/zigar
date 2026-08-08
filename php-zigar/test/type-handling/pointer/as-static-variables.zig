@@ -19,7 +19,7 @@ pub fn printText() void {
     std.debug.print("{s}\n", .{text});
 }
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.DebugAllocator(.{}).init;
 var allocator = gpa.allocator();
 
 pub fn allocText(src: []const u8) ![]const u8 {

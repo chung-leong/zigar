@@ -1,7 +1,8 @@
 const std = @import("std");
+
 const zigar = @import("zigar");
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.DebugAllocator(.{}).init;
 
 pub var count: u64 = 0;
 

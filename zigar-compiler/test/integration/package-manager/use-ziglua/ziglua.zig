@@ -3,7 +3,7 @@ const std = @import("std");
 const zlua = @import("zlua");
 
 pub fn run(code: [:0]const u8) !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.DebugAllocator(.{}).init;
     const allocator = gpa.allocator();
     defer _ = gpa.deinit();
 

@@ -2,7 +2,7 @@ const std = @import("std");
 
 const sqlite = @import("sqlite");
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.DebugAllocator(.{}).init;
 
 const SqliteOpaquePtr = *align(@alignOf(sqlite.Db)) opaque {};
 

@@ -2,7 +2,7 @@ const std = @import("std");
 
 const zlua = @import("zlua");
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.DebugAllocator(.{}).init;
 const allocator = gpa.allocator();
 const LuaOpaque = opaque {};
 const LuaOpaquePtr = *align(@alignOf(zlua.Lua)) LuaOpaque;

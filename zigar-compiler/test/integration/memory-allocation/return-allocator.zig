@@ -1,6 +1,6 @@
 const std = @import("std");
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.DebugAllocator(.{}).init;
 
 pub const Struct = struct { number1: i32, number2: i32 };
 pub var ptr_maybe: ?*Struct = null;

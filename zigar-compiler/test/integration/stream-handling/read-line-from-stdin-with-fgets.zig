@@ -11,7 +11,7 @@ const os = switch (builtin.target.os.tag) {
     else => .unknown,
 };
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.DebugAllocator(.{}).init;
 
 pub fn print(promise: zigar.function.Promise(void)) !void {
     const thread = try std.Thread.spawn(.{

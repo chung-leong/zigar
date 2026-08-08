@@ -1,4 +1,5 @@
 const std = @import("std");
+
 const zigar = @import("zigar");
 
 pub const JSError = error{Unexpected};
@@ -8,7 +9,7 @@ pub const Callback = *const fn (
     promise: zigar.function.Promise(JSError![]const u8),
 ) void;
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.DebugAllocator(.{}).init;
 const allocator = gpa.allocator();
 
 pub fn receive(_: ?*anyopaque, arg: JSError![]const u8) void {

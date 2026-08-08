@@ -13,7 +13,7 @@ pub const Callback = *const fn (
     generator: zigar.function.Generator(JSError!?Avenger, true),
 ) void;
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.DebugAllocator(.{}).init;
 
 pub fn receive(allocator: std.mem.Allocator, _: ?*anyopaque, arg: JSError!?Avenger) bool {
     if (arg) |object_maybe| {

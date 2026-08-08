@@ -1,6 +1,6 @@
 const std = @import("std");
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.DebugAllocator(.{}).init;
 
 pub fn printString(f: *const fn (std.mem.Allocator) []const u8) void {
     const allocator = gpa.allocator();
