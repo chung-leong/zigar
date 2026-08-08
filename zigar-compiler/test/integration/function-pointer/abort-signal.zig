@@ -1,6 +1,9 @@
 const std = @import("std");
+var threaded_io = std.Io.Threaded.init_single_threaded;
 
 const zigar = @import("zigar");
+
+const io = threaded_io.io();
 
 pub const Callback = *const fn (signal: zigar.function.AbortSignal) void;
 
@@ -14,7 +17,7 @@ pub fn call(f: Callback) !void {
     zigar.function.release(f);
     const ns = struct {
         fn run(ptr: *i32) void {
-            std.Thread.sleep(10 * 1000000);
+            std.Io.sleep(io, .fromMilliseconds(10), .real) catch unreachable;
             ptr.* = 1;
         }
     };

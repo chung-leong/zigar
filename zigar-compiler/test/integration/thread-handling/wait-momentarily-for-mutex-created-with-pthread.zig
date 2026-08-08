@@ -1,4 +1,5 @@
 const std = @import("std");
+var threaded_io = std.Io.Threaded.init_single_threaded;
 const builtin = @import("builtin");
 
 const c = @import("c");
@@ -6,6 +7,8 @@ const pthread_t = c.pthread_t;
 const pthread_mutex_t = c.pthread_mutex_t;
 const pthread_mutex_attr_t = c.pthread_mutex_attr_t;
 const zigar = @import("zigar");
+
+const io = threaded_io.io();
 
 const clock_id = switch (builtin.target.os.tag) {
     .windows => c.CLOCK_REALTIME_COARSE,
@@ -29,12 +32,12 @@ fn run1(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     _ = c.pthread_mutex_lock(&mutex);
     defer _ = c.pthread_mutex_unlock(&mutex);
     std.debug.print("Thread 1 acquired mutex\n", .{});
-    std.Thread.sleep(70 * 1000000);
+    std.Io.sleep(io, .fromMilliseconds(70), .real) catch unreachable;
     return null;
 }
 
 fn run2(_: ?*anyopaque) callconv(.c) ?*anyopaque {
-    std.Thread.sleep(10 * 1000000);
+    std.Io.sleep(io, .fromMilliseconds(10), .real) catch unreachable;
     var time: c.struct_timespec = undefined;
     _ = c.clock_gettime(clock_id, &time);
     add(&time, 150 * 1000000);
@@ -49,7 +52,7 @@ fn run2(_: ?*anyopaque) callconv(.c) ?*anyopaque {
 }
 
 fn run3(_: ?*anyopaque) callconv(.c) ?*anyopaque {
-    std.Thread.sleep(10 * 1000000);
+    std.Io.sleep(io, .fromMilliseconds(10), .real) catch unreachable;
     var time: c.struct_timespec = undefined;
     _ = c.clock_gettime(clock_id, &time);
     add(&time, 20 * 1000000);

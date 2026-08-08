@@ -6,6 +6,8 @@ const pthread_t = c.pthread_t;
 const sem_t = c.sem_t;
 const zigar = @import("zigar");
 
+const io = threaded_io.io();
+
 const clock_id = switch (builtin.target.os.tag) {
     .windows => c.CLOCK_REALTIME_COARSE,
     else => c.CLOCK_REALTIME,
