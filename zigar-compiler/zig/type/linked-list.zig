@@ -312,7 +312,7 @@ test "Multithreaded: push() + shift()" {
                 const thread = try std.Thread.spawn(.{}, runPull, .{i});
                 thread.detach();
             }
-            std.Io.futexWait(io, u32, &finish_futex.raw, 0) catch unreachable;
+            std.Io.futexWaitUncancelable(io, u32, &finish_futex.raw, 0);
         }
 
         fn runPush(_: usize) !void {
@@ -347,7 +347,7 @@ test "Multithreaded: push() + shift()" {
                 ready_futex.store(1, .unordered);
                 std.Io.futexWake(io, u32, &ready_futex.raw, std.math.maxInt(u32));
             }
-            std.Io.futexWait(io, u32, &ready_futex.raw, 0) catch unreachable;
+            std.Io.futexWaitUncancelable(io, u32, &ready_futex.raw, 0);
         }
 
         fn done() void {
@@ -398,7 +398,7 @@ test "Multithreaded: push() + shift() + remove()" {
                 const thread = try std.Thread.spawn(.{}, runRemove, .{i});
                 thread.detach();
             }
-            std.Io.futexWait(io, u32, &finish_futex.raw, 0) catch unreachable;
+            std.Io.futexWaitUncancelable(io, u32, &finish_futex.raw, 0);
         }
 
         fn runPush(_: usize) !void {
@@ -450,7 +450,7 @@ test "Multithreaded: push() + shift() + remove()" {
                 ready_futex.store(1, .unordered);
                 std.Io.futexWake(io, u32, &ready_futex.raw, std.math.maxInt(u32));
             }
-            std.Io.futexWait(io, u32, &ready_futex.raw, 0) catch unreachable;
+            std.Io.futexWaitUncancelable(io, u32, &ready_futex.raw, 0);
         }
 
         fn done() void {

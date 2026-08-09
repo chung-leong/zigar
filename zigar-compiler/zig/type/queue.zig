@@ -27,7 +27,7 @@ pub fn Queue(comptime T: type) type {
         }
 
         pub fn wait(self: *@This()) void {
-            std.Io.futexWait(self.io, u32, &self.item_futex.raw, 0) catch unreachable;
+            std.Io.futexWaitUncancelable(self.io, u32, &self.item_futex.raw, 0);
         }
 
         pub fn stop(self: *@This()) void {

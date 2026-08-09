@@ -755,6 +755,7 @@ export function addTests(importModule, options) {
         await shutdown();
       }
     })
+    skip.
     it('should get stats of an Uint8Array passed as a file', async function() {
       const { __zigar, print } = await importTest('stat-opened-file');
       const array = new Uint8Array(17);

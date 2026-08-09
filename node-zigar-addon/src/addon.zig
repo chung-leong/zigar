@@ -174,6 +174,7 @@ const ModuleHost = struct {
         // create the environment
         const js_env = try env.callFunction(try env.getNull(), create_env, &.{});
         const self = try c_allocator.create(@This());
+        threaded_io = std.Io.Threaded.init_single_threaded;
         self.* = .{ .env = env, .io = threaded_io.io() };
         defer self.release();
         try self.register();
@@ -1696,7 +1697,7 @@ const Futex = struct {
                 return E.SUCCESS;
             };
         } else {
-            std.Io.futexWait(self.io, u32, &self.value.raw, initial_value) catch unreachable;
+            std.Io.futexWaitUncancelable(self.io, u32, &self.value.raw, initial_value);
         }
         const final_value = self.value.load(.acquire);
         return std.enums.fromInt(E, final_value) orelse .FAULT;

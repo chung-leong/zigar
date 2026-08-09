@@ -114,7 +114,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
         }
 
         pub fn wait(self: *@This()) WaitResult {
-            std.Io.futexWait(io, u32, &self.init_futex.raw, 0) catch unreachable;
+            std.Io.futexWaitUncancelable(io, u32, &self.init_futex.raw, 0);
             return self.init_result;
         }
 
@@ -473,7 +473,7 @@ test "WorkQueue.push()" {
     var futex: std.atomic.Value(u32) = .init(0);
     queue.deinitAsync(.init(&futex, test_ns.shutdown));
     // wait for thread shutdown
-    std.Io.futexWait(io, u32, &futex.raw, 0) catch unreachable;
+    std.Io.futexWaitUncancelable(io, u32, &futex.raw, 0);
 }
 
 // test "WorkQueue.promisify()" {

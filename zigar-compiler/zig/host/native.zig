@@ -240,7 +240,7 @@ pub fn setHostInstance(ptr: *Module.Host, io_ptr: *std.Io) callconv(.c) E {
     instance = ptr;
     initialized = true;
     hooks.io = io_ptr.*;
-    // work_queue.io = io_ptr.*;
+    work_queue.io = io_ptr.*;
     return E.SUCCESS;
 }
 
