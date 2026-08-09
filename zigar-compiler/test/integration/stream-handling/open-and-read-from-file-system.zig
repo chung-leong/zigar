@@ -4,8 +4,8 @@ var threaded_io = std.Io.Threaded.init_single_threaded;
 const io = threaded_io.io();
 
 pub fn hash(path: []const u8) ![std.crypto.hash.Sha1.digest_length * 2]u8 {
-    var file = try std.Io.Dir.openFileAbsolute(path, .{});
-    defer file.close();
+    var file = try std.Io.Dir.openFileAbsolute(io, path, .{});
+    defer file.close(io);
     var buffer: [128]u8 = undefined;
     var sha1: std.crypto.hash.Sha1 = .init(.{});
     while (true) {
