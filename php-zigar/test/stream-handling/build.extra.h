@@ -1,14 +1,14 @@
 #define _GNU_SOURCE
-#define _POSIX
 #include <stdio.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <dirent.h>
-#include <sys/stat.h>
-#include <sys/file.h>
-#include <sys/time.h>
+#include <utime.h>
 
 #ifdef _WIN32
     #include <windows.h>
-    #include <utime.h>
+#else
+    #include <unistd.h>
+    #include <dirent.h>
+    #include <fcntl.h>
+    #include <sys/file.h>
+    #include <sys/stat.h>
+    #include <sys/time.h>
 #endif

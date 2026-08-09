@@ -1,6 +1,9 @@
 const std = @import("std");
+var threaded_io = std.Io.Threaded.init_single_threaded;
 
 const zigar = @import("zigar");
+
+const io = threaded_io.io();
 
 var gpa = std.heap.DebugAllocator(.{}).init;
 
@@ -21,10 +24,11 @@ pub fn shutdown(promise: zigar.function.Promise(void)) void {
 pub const read = work_queue.promisify(ns.read);
 
 const ns = struct {
-    pub fn read(allocator: std.mem.Allocator, file: std.Io.File, offset: usize, len: usize) ![]u8 {
-        try file.seekTo(offset);
-        const buffer: []u8 = try allocator.alloc(u8, len);
-        const bytes_read = try file.read(buffer);
-        return buffer[0..bytes_read];
+    pub fn read(allocator: std.mem.Allocator, file: std.Io.File, offset: i64, len: usize) ![]u8 {
+        var buffer: [1024]u8 = undefined;
+        var reader = file.reader(io, &buffer);
+        try reader.seekBy(offset);
+        const ri = &reader.interface;
+        return try ri.readAlloc(allocator, len);
     }
 };

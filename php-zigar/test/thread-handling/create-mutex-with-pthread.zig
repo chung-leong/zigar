@@ -1,9 +1,12 @@
 const std = @import("std");
+var threaded_io = std.Io.Threaded.init_single_threaded;
 
 const c = @import("c");
 const pthread_t = c.pthread_t;
 const pthread_mutex_t = c.pthread_mutex_t;
 const zigar = @import("zigar");
+
+const io = threaded_io.io();
 
 var mutex: pthread_mutex_t = undefined;
 
@@ -20,12 +23,12 @@ fn run1(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     _ = c.pthread_mutex_lock(&mutex);
     defer _ = c.pthread_mutex_unlock(&mutex);
     std.debug.print("Thread 1 acquired mutex\n", .{});
-    std.Thread.sleep(50 * 1000000);
+    std.Io.sleep(io, .fromMilliseconds(50), .real) catch unreachable;
     return null;
 }
 
 fn run2(_: ?*anyopaque) callconv(.c) ?*anyopaque {
-    std.Thread.sleep(10 * 1000000);
+    std.Io.sleep(io, .fromMilliseconds(10), .real) catch unreachable;
     _ = c.pthread_mutex_lock(&mutex);
     defer _ = c.pthread_mutex_unlock(&mutex);
     std.debug.print("Thread 2 acquired mutex\n", .{});

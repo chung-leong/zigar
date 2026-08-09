@@ -1,25 +1,13 @@
 const std = @import("std");
 
-pub fn check(file: std.Io.File, exclusive: bool) !bool {
-    var flock: std.c.Flock = .{
-        .type = if (exclusive) std.c.F.WRLCK else std.c.F.RDLCK,
-        .whence = 0,
-        .pid = 123,
-        .start = 1234,
-        .len = 8000,
-    };
+pub fn check(file: std.Io.File) !?std.c.Flock {
+    var flock: std.c.Flock = undefined;
+    flock.type = std.c.F.WRLCK;
+    flock.whence = 0;
+    flock.pid = 123;
+    flock.start = 1234;
+    flock.len = 8000;
     const result = std.c.fcntl(file.handle, std.c.F.GETLK, @intFromPtr(&flock));
     if (result < 0) return error.UnableToGetLock;
-    return flock.type == std.c.F.UNLCK;
-}
-
-pub fn lock(file: std.Io.File, exclusive: bool) !void {
-    const flock: std.c.Flock = .{
-        .type = if (exclusive) std.c.F.WRLCK else std.c.F.RDLCK,
-        .whence = 0,
-        .pid = 123,
-        .start = 1234,
-        .len = 8000,
-    };
-    if (std.c.fcntl(file.handle, std.c.F.SETLK, @intFromPtr(&flock)) != 0) return error.UnableToSetLock;
+    return if (flock.type != std.c.F.UNLCK) flock else null;
 }

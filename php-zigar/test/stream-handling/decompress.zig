@@ -1,6 +1,9 @@
 const std = @import("std");
+var threaded_io = std.Io.Threaded.init_single_threaded;
 
 const zigar = @import("zigar");
+
+const io = threaded_io.io();
 
 var gpa = std.heap.DebugAllocator(.{}).init;
 
@@ -23,10 +26,10 @@ pub const decompress = work_queue.promisify(ns.decompress);
 const ns = struct {
     pub fn decompress(in_file: std.Io.File, out_file: std.Io.File) !usize {
         var read_buffer: [4096]u8 = undefined;
-        var reader = in_file.reader(&read_buffer);
+        var reader = in_file.reader(io, &read_buffer);
         var deflate: std.compress.flate.Decompress = .init(&reader.interface, .gzip, &.{});
         var write_buffer: [4096]u8 = undefined;
-        var writer = out_file.writer(&write_buffer);
+        var writer = out_file.writer(io, &write_buffer);
         const interface = &writer.interface;
         defer interface.flush() catch {};
         return try deflate.reader.stream(interface, .unlimited);

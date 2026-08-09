@@ -1,10 +1,13 @@
 const std = @import("std");
+var threaded_io = std.Io.Threaded.init_single_threaded;
 const builtin = @import("builtin");
 
 const c = @import("c");
 const pthread_t = c.pthread_t;
 const pthread_key_t = c.pthread_key_t;
 const zigar = @import("zigar");
+
+const io = threaded_io.io();
 
 var key1: pthread_key_t = undefined;
 var key2: pthread_key_t = undefined;
@@ -43,7 +46,7 @@ fn destructor2(ptr: ?*anyopaque) callconv(.c) void {
 fn run1(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     _ = c.pthread_setspecific(key1, @ptrFromInt(0x12345));
     _ = c.pthread_setspecific(key2, @ptrFromInt(0x67));
-    std.Thread.sleep(30 * 1000000);
+    std.Io.sleep(io, .fromMilliseconds(30), .real) catch unreachable;
     const value1 = c.pthread_getspecific(key1);
     const value2 = c.pthread_getspecific(key2);
     std.debug.print("Thread 1 found {?} and {?}\n", .{ value1, value2 });
@@ -53,7 +56,7 @@ fn run1(_: ?*anyopaque) callconv(.c) ?*anyopaque {
 
 fn run2(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     _ = c.pthread_setspecific(key1, @ptrFromInt(0x22222));
-    std.Thread.sleep(30 * 1000000);
+    std.Io.sleep(io, .fromMilliseconds(30), .real) catch unreachable;
     const value1 = c.pthread_getspecific(key1);
     const value2 = c.pthread_getspecific(key2);
     std.debug.print("Thread 2 found {?} and {?}\n", .{ value1, value2 });

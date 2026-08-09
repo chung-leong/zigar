@@ -1,4 +1,5 @@
 const std = @import("std");
+var threaded_io = std.Io.Threaded.init_single_threaded;
 const builtin = @import("builtin");
 
 const c = @import("c");
@@ -42,7 +43,7 @@ fn run1(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     var value: c_int = undefined;
     if (c.sem_getvalue(&semaphore, &value) != 0) return null;
     std.debug.print("Thread 1 acquired semaphore: {d}\n", .{value});
-    std.Thread.sleep(100 * 1000000);
+    std.Io.sleep(io, .fromMilliseconds(100), .real) catch unreachable;
     return null;
 }
 
@@ -62,7 +63,7 @@ fn run2(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     var value: c_int = undefined;
     if (c.sem_getvalue(&semaphore, &value) != 0) return null;
     std.debug.print("Thread 2 acquired semaphore: {d}\n", .{value});
-    std.Thread.sleep(100 * 1000000);
+    std.Io.sleep(io, .fromMilliseconds(100), .real) catch unreachable;
     return null;
 }
 
@@ -82,7 +83,7 @@ fn run3(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     var value: c_int = undefined;
     if (c.sem_getvalue(&semaphore, &value) != 0) return null;
     std.debug.print("Thread 3 acquired semaphore: {d}\n", .{value});
-    std.Thread.sleep(100 * 1000000);
+    std.Io.sleep(io, .fromMilliseconds(100), .real) catch unreachable;
     return null;
 }
 
