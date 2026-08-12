@@ -94,23 +94,11 @@ final class VectorHandlingTest extends ZigarTestCase
         $m->print();
     }
 
-    public function testHandleVectorInPackedStruct(): void
+    public function testFailToCompileCodeWithVectorInPackedStruct(): void
     {
-        $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
-        $this->assertSame([ 10, 20, 30, 40 ], (array) $m->struct_a->vector1);
-        $this->assertSame([ 2, 3, 4, 5 ], (array) $m->struct_a->vector2);
-        $this->assertSame(200, $m->struct_a->number);
-        $this->assertSame([ 12, 22, 32, 42 ], (array) $m->struct_a->vector3);
-
-        $this->expectOutput(<<<OUTPUT
-        .{ .vector1 = { 10, 20, 30, 40 }, .vector2 = { 2, 3, 4, 5 }, .number = 200, .vector3 = { 12, 22, 32, 42 } }
-        .{ .vector1 = { 10, 20, 30, 40 }, .vector2 = { 2, 3, 4, 5 }, .number = 201, .vector3 = { 12, 22, 32, 43 } }
-
-        OUTPUT);
-        $m->print();
-        $m->struct_a->number = 201;
-        $m->struct_a->vector3[3] = 43;
-        $m->print();
+        $this->assertExceptionMessage('unable to create module', function() {
+            $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
+        });
     }
 
     public function testHandleVectorAsComptimeField(): void

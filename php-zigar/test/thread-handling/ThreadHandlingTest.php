@@ -32,6 +32,7 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testSpawnThreadPoolAndInvokeCallback(): void
     {
+        $this->markTestSkipped('thread pool is missing');
         $m = ZigImporter::load(__DIR__ . '/create-thread-pool.zig');
         $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup(4);
@@ -250,6 +251,7 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testCreateThreadPoolForFunctionReturningPromise(): void
     {
+        $this->markTestSkipped('thread pool is missing');
         $m = ZigImporter::load(__DIR__ . '/create-thread-pool-return-promise.zig');
         $this->inEventLoops([ 'temporary', 'revolt' ], function() use($m) {
             $m->startup(4);

@@ -2,6 +2,9 @@
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+var threaded_io = std.Io.Threaded.init_single_threaded;
+
+const io = threaded_io.io();
 
 const TreeNode = struct {
     l: ?*TreeNode,
@@ -53,7 +56,7 @@ var gpa = std.heap.DebugAllocator(.{}).init;
 
 pub fn binaryTree(n: usize) !void {
     var stdout_buffer: [1024]u8 = undefined;
-    var stdout_writer = std.Io.File.stdout().writer(&stdout_buffer);
+    var stdout_writer = std.Io.File.stdout().writer(io, &stdout_buffer);
     const stdout = &stdout_writer.interface;
     const allocator = gpa.allocator();
 

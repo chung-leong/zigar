@@ -43,6 +43,7 @@ final class UnionHandlingTest extends ZigarTestCase
         $m->useMonkey();
         $this->assertSame(777, $m->bare_union->monkey);
         $this->assertSame([ 'float' => 3.14 ], (array) $m->variant_c);
+        $this->assertEquals([ 'a' => 0xF, 'b' => 0xF, 'c' => 0xF ], (array) $m->packed_union);
     }
 
     public function testPrintUnionArguments(): void

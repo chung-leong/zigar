@@ -77,14 +77,10 @@ final class PointerHandlingTest extends ZigarTestCase
         ], $m->StructC->__plain);
     }
 
-    public function testHandlePointerInPackedStruct(): void
+    public function testFailToCompileCodeWithPointerInPackedStruct(): void
     {
-        $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
-        $m->init();
-        $this->assertSame(1234, $m->struct_a->ptr1->{'*'});
-        $this->assertSame(1234, $m->struct_a->ptr2->{'*'});
-        $this->assertExceptionMessage("not byte aligned", function() use($m) {
-            $value = $m->struct_a->ptr3->{'*'};
+        $this->assertExceptionMessage('unable to create module', function() {
+            $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
         });
     }
 

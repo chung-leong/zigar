@@ -12,7 +12,7 @@ pub fn printUnsigned(bits: u8, count: usize, ...) callconv(.c) void {
         inline for (.{ u8, u16, u32, u64, u128 }) |T| {
             if (bits == @bitSizeOf(T)) {
                 const number = @cVaArg(&va_list, T);
-                std.debug.print("{d}\n", .{number});
+                std.debug.print("{}: {d}\n", .{ T, number });
             }
         }
     }

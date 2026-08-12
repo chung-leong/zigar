@@ -1,6 +1,9 @@
 // Adopted from https://github.com/tiehuis/zig-benchmarks-game/blob/master/src/mandelbrot.zig
 
 const std = @import("std");
+var threaded_io = std.Io.Threaded.init_single_threaded;
+
+const io = threaded_io.io();
 
 var buffer: [256]u8 = undefined;
 var fixed_allocator = std.heap.FixedBufferAllocator.init(buffer[0..]);
@@ -8,7 +11,7 @@ var allocator = fixed_allocator.allocator();
 
 pub fn mandelbrot(w: usize) !void {
     var stdout_buffer: [1024]u8 = undefined;
-    var stdout_writer = std.Io.File.stdout().writer(&stdout_buffer);
+    var stdout_writer = std.Io.File.stdout().writer(io, &stdout_buffer);
     const stdout = &stdout_writer.interface;
     defer stdout.flush() catch {};
     const h = w;

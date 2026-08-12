@@ -1,6 +1,9 @@
 // Adopted from https://github.com/tiehuis/zig-benchmarks-game/blob/master/src/fasta.zig
 
 const std = @import("std");
+var threaded_io = std.Io.Threaded.init_single_threaded;
+
+const io = threaded_io.io();
 
 const max_line_length: usize = 60;
 
@@ -80,7 +83,7 @@ fn generateAndWrap(out: anytype, comptime nucleotides: []const AminoAcid, count:
 
 pub fn fasta(n: usize) !void {
     var stdout_buffer: [1024]u8 = undefined;
-    var stdout_writer = std.Io.File.stdout().writer(&stdout_buffer);
+    var stdout_writer = std.Io.File.stdout().writer(io, &stdout_buffer);
     const stdout = &stdout_writer.interface;
 
     const homo_sapiens_alu = "GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGGGAGGCCGAGGCGGGCGGATCACCTGAGGTC" ++

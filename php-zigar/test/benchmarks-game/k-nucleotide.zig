@@ -106,7 +106,7 @@ fn generateCount(allocator: std.mem.Allocator, poly: []const u8, comptime olig: 
 pub fn kNucleotide(allocator: std.mem.Allocator, lines: [][]const u8) ![][]const u8 {
     var gpa = std.heap.DebugAllocator(.{}).init;
     const gpa_allocator = gpa.allocator();
-    var poly: std.ArrayList(u8) = .{};
+    var poly: std.ArrayList(u8) = .empty;
     defer poly.deinit(gpa_allocator);
 
     for (lines) |line| {

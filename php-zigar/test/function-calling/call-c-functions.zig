@@ -6,6 +6,7 @@ pub const fopen = c.fopen;
 pub const fclose = c.fclose;
 pub const fprintf = c.fprintf;
 pub const puts = c.puts;
+pub const fflush = c.fflush;
 
 const enum_fn = if (@hasField(std.builtin.Type, "Fn")) .Fn else .@"fn";
 

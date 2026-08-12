@@ -75,7 +75,7 @@ final class OpaqueHandlingTest extends ZigarTestCase
         $m->print();
     }
 
-    public function testFailWithOpaqueInPackedStruct(): void
+    public function testFailToCompileCodeWithOpaqueInPackedStruct(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');

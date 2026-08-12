@@ -55,11 +55,9 @@ pub fn useMonkey() void {
 }
 
 const PackedUnion = packed union {
-    one_bit: bool,
-    four_bits: u4,
-    eight_bits: u8,
+    a: u4,
+    b: u4,
+    c: u4,
 };
 
-pub var packed_union: PackedUnion = .{
-    .eight_bits = 0xFF,
-};
+pub var packed_union: PackedUnion = .{ .c = 0xF };
