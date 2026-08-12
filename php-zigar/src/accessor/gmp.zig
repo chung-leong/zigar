@@ -246,7 +246,7 @@ fn gmpFromString(str: *String, negate: bool, comptime signedness: std.builtin.Si
     return try php.invokeFunction("gmp_neg", &.{pos_value});
 }
 
-fn stringFromGmp(value: *const Value) !std.meta.Tuple(&.{ *String, bool }) {
+fn stringFromGmp(value: *const Value) !@Tuple(&.{ *String, bool }) {
     const gmp_value = switch (php.getValueType(value)) {
         .object => use: {
             php.addRef(@constCast(value));

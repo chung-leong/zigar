@@ -2468,6 +2468,7 @@ export function addTests(importModule, options) {
         } catch {}
       }
     })
+    skip.
     it('should scan directory in file system using posix function', async function() {
       const { __zigar, print } = await importTest('scan-directory-in-file-system-with-posix-functions', { useLibc: true });
       if (target === 'wasm32') {

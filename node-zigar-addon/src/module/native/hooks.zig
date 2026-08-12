@@ -4767,7 +4767,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
                 .@"enum" => result,
                 .int => if (result >= 0) return 0 else convert: {
                     const num: u16 = @intCast(-result);
-                    break :convert std.meta.intToEnum(std.c.E, num) catch .FAULT;
+                    break :convert std.enums.fromInt(std.c.E, num) orelse .FAULT;
                 },
                 else => @compileError("Unexpected"),
             };
@@ -4839,7 +4839,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
             return @intCast(value);
         }
 
-        fn decodePath(path: []const u8) std.meta.Tuple(&.{ []const u8, c_int }) {
+        fn decodePath(path: []const u8) @Tuple(&.{ []const u8, c_int }) {
             if (std.mem.startsWith(u8, path, fd_path_prefix)) |index| {
                 const subpath = path[index..];
                 const slash_index = std.mem.indexOfScalar(u8, subpath, '\\') orelse subpath.len;
@@ -5374,7 +5374,7 @@ pub fn getHookTable(comptime Host: type, comptime redirect_io: bool) std.StaticS
         }
         break :init total;
     };
-    var table: [len]std.meta.Tuple(&.{ []const u8, Entry }) = undefined;
+    var table: [len]@Tuple(&.{ []const u8, Entry }) = undefined;
     if (redirect_io) {
         // make vtable available through the hook table
         table[0] = .{ "__sc_vtable", .{

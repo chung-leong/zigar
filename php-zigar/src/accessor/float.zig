@@ -18,6 +18,7 @@ const Attributes = struct {
             64 => f64,
             80 => f80,
             128 => f128,
+            else => @compileError("Unknow float type"),
         };
     }
 };

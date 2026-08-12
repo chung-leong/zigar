@@ -10,6 +10,7 @@ const DynLib = @import("dyn-lib.zig").DynLib;
 const EventLoop = @import("event-loop.zig").EventLoop;
 const extension = @import("extension.zig");
 const failure = @import("failure.zig");
+const io = @import("system.zig").io;
 const interface = @import("module/native/interface.zig");
 const Jscall = interface.Jscall;
 const Syscall = interface.Syscall;
@@ -34,7 +35,6 @@ const structure = @import("structure.zig");
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 
 pub const CallDispatcher = struct {
-    io: std.Io,
     redirection_mask: Syscall.Mask = .{
         .open = true,
         .mkdir = true,
@@ -59,7 +59,7 @@ pub const CallDispatcher = struct {
     syscall_trap_installed: bool = false,
     syscall_trap_count: usize = 0,
     thread_syscall_trap_list: std.ArrayList(*bool) = .empty,
-    thread_syscall_trap_list_mutex: std.Thread.Mutex = .{},
+    thread_syscall_trap_list_mutex: std.Io.Mutex = .init,
     env_variable_deferred: HookEntry.Deferred = .{},
     env_variable_list: ?[]?[*:0]const u8 = null,
     env_variable_bytes: ?[]const u8 = null,
@@ -69,7 +69,7 @@ pub const CallDispatcher = struct {
     pipe_ptr: [*]c_int,
     release_resources_called: bool = false,
 
-    pub threadlocal var trapping_syscalls: bool = true;
+    pub threadlocal var trapping_syscalls: bool = false;
     pub threadlocal var event_loop: EventLoop(runScheduledTask) = .{};
 
     threadlocal var thread_initialized: bool = false;
@@ -254,24 +254,28 @@ pub const CallDispatcher = struct {
 
         pub fn wait(self: *@This()) E {
             if (self.timeout != 0) {
-                std.Thread.Futex.timedWait(&self.value, initial_value, self.timeout) catch {
+                const timeout: std.Io.Timeout = .{
+                    .duration = .{
+                        .raw = .fromNanoseconds(self.timeout),
+                        .clock = .real,
+                    },
+                };
+                std.Io.futexWaitTimeout(io, u32, &self.value.raw, initial_value, timeout) catch {
                     return E.SUCCESS;
                 };
             } else {
-                std.Thread.Futex.wait(&self.value, initial_value);
+                std.Io.futexWaitUncancelable(io, u32, &self.value.raw, initial_value);
             }
             const final_value = self.value.load(.acquire);
-            return std.meta.intToEnum(E, final_value) catch E.FAULT;
+            return std.enums.fromInt(E, final_value) orelse .FAULT;
         }
 
         pub fn wake(handle: usize, result: E) void {
-            if (handle > 0) {
-                const ptr: *Futex = @ptrFromInt(handle);
-                if (ptr.handle == handle) {
-                    ptr.value.store(@intFromEnum(result), .release);
-                    std.Thread.Futex.wake(&ptr.value, 1);
-                }
-            }
+            if (handle == 0) return;
+            const self: *@This() = @ptrFromInt(handle);
+            if (self.handle != handle) return;
+            self.value.store(@intFromEnum(result), .release);
+            std.Io.futexWake(io, u32, &self.value.raw, 1);
         }
     };
     const fd_min = 0x00f0_0000;
@@ -280,11 +284,7 @@ pub const CallDispatcher = struct {
     pub fn init(host: *ModuleHost) !*@This() {
         const self = try php.allocator.create(@This());
         errdefer php.allocator.destroy(self);
-        self.* = .{
-            .host = host,
-            .io = host.io,
-            .pipe_ptr = &pipes,
-        };
+        self.* = .{ .host = host, .pipe_ptr = &pipes };
         try extension.addRequestShutdownCallback(self, onRequestShutdown);
         return self;
     }
@@ -306,12 +306,12 @@ pub const CallDispatcher = struct {
         php.allocator.destroy(self);
     }
 
-    pub fn installHandler(io: std.Io) !void {
+    pub fn installHandler() !void {
         if (!thread_initialized) {
             in_main_thread = true;
             redirection_controller.installSignalHandler() catch {};
             try createPipes();
-            pipe_list_mutex.lock(io) catch unreachable;
+            pipe_list_mutex.lockUncancelable(io);
             defer pipe_list_mutex.unlock(io);
             for (pipes) |fd| try pipe_list.append(std.heap.c_allocator, fd);
         }
@@ -672,21 +672,21 @@ pub const CallDispatcher = struct {
         in_main_thread = false;
         if (self.syscall_trap_installed) {
             try redirection_controller.installSyscallTrap(&trapping_syscalls);
-            self.thread_syscall_trap_list_mutex.lock(self.host.io) catch unreachable;
-            defer self.thread_syscall_trap_list_mutex.unlock(self.host.io);
+            self.thread_syscall_trap_list_mutex.lockUncancelable(io);
+            defer self.thread_syscall_trap_list_mutex.unlock(io);
             try self.thread_syscall_trap_list.append(std.heap.c_allocator, &trapping_syscalls);
             if (self.syscall_trap_count > 0) {
                 trapping_syscalls = true;
             }
         }
         const module = self.host.module;
-        _ = module.exports.set_host_instance(@ptrCast(self.host));
+        _ = module.exports.set_host_instance(@ptrCast(self.host), &io);
     }
 
     pub fn deinitializeThread(self: *@This()) !void {
         if (self.syscall_trap_installed) {
-            self.thread_syscall_trap_list_mutex.lock(self.host.io) catch unreachable;
-            defer self.thread_syscall_trap_list_mutex.unlock(self.host.io);
+            self.thread_syscall_trap_list_mutex.lockUncancelable(io);
+            defer self.thread_syscall_trap_list_mutex.unlock(io);
             const index = for (self.thread_syscall_trap_list.items, 0..) |ptr, i| {
                 if (ptr == &trapping_syscalls) break i;
             } else return;
@@ -958,7 +958,7 @@ pub const CallDispatcher = struct {
         }
     }
 
-    fn useStream(self: *@This(), fd: Long, mode: [*c]const u8) !std.meta.Tuple(&.{ *Stream, bool }) {
+    fn useStream(self: *@This(), fd: Long, mode: [*c]const u8) !@Tuple(&.{ *Stream, bool }) {
         switch (fd) {
             0, 1, 2, fd_min...fd_max => {
                 const entry = try self.findStream(fd);

@@ -3,6 +3,7 @@ const builtin = @import("builtin");
 
 const extension = @import("extension.zig");
 const failure = @import("failure.zig");
+const io = @import("system.zig").io;
 const Options = @import("options.zig").Options;
 const php = @import("php.zig");
 const HashTable = php.HashTable;
@@ -131,7 +132,6 @@ pub const ZigCompiler = struct {
 
     fn writeProject(self: *@This()) !void {
         const al = self.allocator();
-        // std.fs.deleteTreeAbsolute(self.module_build_dir) catch {};
         try makeDirectory(self.module_build_dir);
         try self.writeZigarLib();
         try self.writeBuildConfigFile();
@@ -139,37 +139,36 @@ pub const ZigCompiler = struct {
             self.module_build_dir,
             "build.zig",
         });
-        try std.fs.copyFileAbsolute(self.build_file_path, build_file_path, .{});
+        try std.Io.Dir.copyFileAbsolute(self.build_file_path, build_file_path, io, .{});
         const build_extra_file_path = try std.fs.path.resolve(al, &.{
             self.module_build_dir,
             "build.extra.zig",
         });
         if (self.extra_file_path) |path| {
-            try std.fs.copyFileAbsolute(path, build_extra_file_path, .{});
+            try std.Io.Dir.copyFileAbsolute(path, build_extra_file_path, io, .{});
         } else {
-            var file = try std.fs.createFileAbsolute(build_extra_file_path, .{});
-            defer file.close();
+            var file = try std.Io.Dir.createFileAbsolute(io, build_extra_file_path, .{});
+            defer file.close(io);
         }
         if (self.package_config_path) |path| {
             const package_config_path = try std.fs.path.resolve(al, &.{
                 self.module_build_dir,
                 "build.zig.zon",
             });
-            try std.fs.copyFileAbsolute(path, package_config_path, .{});
+            try std.Io.Dir.copyFileAbsolute(path, package_config_path, io, .{});
         }
     }
 
     fn writeBuildConfigFile(self: *@This()) !void {
-        errdefer |err| std.debug.print("writeBuildConfigFile => {}\n", .{err});
         const al = self.allocator();
         const config_path = try std.fs.path.resolve(al, &.{
             self.module_build_dir,
             "build.cfg.zig",
         });
-        var file = try std.fs.createFileAbsolute(config_path, .{});
-        defer file.close();
+        var file = try std.Io.Dir.createFileAbsolute(io, config_path, .{});
+        defer file.close(io);
         var buffer: [1024]u8 = undefined;
-        var writer = file.writer(&buffer);
+        var writer = file.writer(io, &buffer);
         const wi = &writer.interface;
         const cfg_fields = .{
             .module_name,
@@ -207,37 +206,43 @@ pub const ZigCompiler = struct {
     fn writeZigarLib(self: *@This()) !void {
         const signature: [:0]const u8 = @embedFile("./zig.tar.zstd.sha1");
         const has_existing = check: {
-            var dir = std.fs.openDirAbsolute(self.zigar_src_path, .{}) catch break :check false;
-            const match = if (dir.openFile(".sha1", .{})) |file| compare: {
-                defer file.close();
+            var dir = std.Io.Dir.openDirAbsolute(io, self.zigar_src_path, .{}) catch {
+                break :check false;
+            };
+            defer dir.close(io);
+            const match = if (dir.openFile(io, ".sha1", .{})) |file| compare: {
+                defer file.close(io);
                 var read_buffer: [64]u8 = undefined;
-                var reader = file.reader(&read_buffer);
+                var reader = file.reader(io, &read_buffer);
                 const ri = &reader.interface;
                 var bytes: [41]u8 = undefined;
                 ri.readSliceAll(&bytes) catch break :compare false;
                 break :compare std.mem.eql(u8, signature, &bytes);
             } else |_| false;
-            dir.close();
             if (match) {
                 break :check true;
             } else {
-                std.fs.deleteTreeAbsolute(self.zigar_src_path) catch {};
+                const parent_path = std.fs.path.dirname(self.zigar_src_path) orelse std.fs.path.sep_str;
+                var parent_dir = try std.Io.Dir.openDirAbsolute(io, parent_path, .{});
+                defer parent_dir.close(io);
+                try parent_dir.deleteTree(io, std.fs.path.basename(self.zigar_src_path));
             }
             break :check false;
         };
         if (has_existing) return;
         try makeDirectory(self.zigar_src_path);
         var input: std.Io.Reader = .fixed(@embedFile("./zig.tar.zstd"));
-        const buffer: []u8 = try php.allocator.alloc(u8, std.compress.zstd.default_window_len);
+        const buffer_len = std.compress.zstd.default_window_len + std.compress.zstd.block_size_max;
+        const buffer: []u8 = try php.allocator.alloc(u8, buffer_len);
         defer php.allocator.free(buffer);
         var decompressor: std.compress.zstd.Decompress = .init(&input, buffer, .{});
-        var dir = try std.fs.openDirAbsolute(self.zigar_src_path, .{});
-        defer dir.close();
-        try std.tar.pipeToFileSystem(dir, &decompressor.reader, .{});
-        const file = try dir.createFile(".sha1", .{});
-        defer file.close();
-        var write_buffer: [64]u8 = undefined;
-        var writer = file.writer(&write_buffer);
+        var dir = try std.Io.Dir.openDirAbsolute(io, self.zigar_src_path, .{});
+        defer dir.close(io);
+        try std.tar.pipeToFileSystem(io, dir, &decompressor.reader, .{});
+        const file = try dir.createFile(io, ".sha1", .{});
+        defer file.close(io);
+        var write_buffer: [1024]u8 = undefined;
+        var writer = file.writer(io, &write_buffer);
         const wi = &writer.interface;
         _ = try wi.write(signature);
         try wi.flush();
@@ -245,52 +250,43 @@ pub const ZigCompiler = struct {
 
     fn runCompiler(self: *@This()) !void {
         const al = self.allocator();
-        var child: std.process.Child = .init(self.compiler_args, al);
-        var env: std.process.EnvMap = undefined;
-        child.cwd = self.module_build_dir;
-        child.stderr_behavior = .Pipe;
-        child.stdout_behavior = .Pipe;
-        if (builtin.target.os.tag.isDarwin()) {
-            // work around for XCode 26.4 incompatibility
-            env = try std.process.getEnvMap(php.allocator);
-            errdefer env.deinit();
-            try env.put("DEVELOPER_DIR", "/dev/null");
-            child.env_map = &env;
-        }
-        defer {
-            if (builtin.target.os.tag.isDarwin()) {
-                env.deinit();
-            }
-        }
-        try child.spawn();
-        try child.waitForSpawn();
-        const max_output = 8 * 1024 * 1024;
         var finished: std.atomic.Value(u32) = .init(0);
         const thread = try std.Thread.spawn(.{}, showProgress, .{ self, &finished });
         defer {
             finished.store(1, .unordered);
             thread.join();
         }
-        var stdout: std.ArrayList(u8) = .empty;
-        var stderr: std.ArrayList(u8) = .empty;
-        child.collectOutput(al, &stdout, &stderr, max_output) catch {};
-        const term = try child.wait();
-        return switch (term) {
-            .Exited => |exit_code| switch (exit_code) {
+        var env: std.process.Environ.Map = .init(al);
+        const env_slice = std.mem.sliceTo(std.c.environ, null);
+        try env.putPosixBlock(.{ .slice = @ptrCast(env_slice) });
+        // work around for XCode 26.4 incompatibility
+        if (builtin.target.os.tag.isDarwin()) {
+            try env.put("DEVELOPER_DIR", "/dev/null");
+        }
+        const result = try std.process.run(al, io, .{
+            .argv = self.compiler_args,
+            .cwd = .{ .path = self.module_build_dir },
+            .environ_map = &env,
+        });
+        return switch (result.term) {
+            .exited => |exit_code| switch (exit_code) {
                 0 => {},
                 else => failure.report("unable to create module '{s}':\n\n{s}", .{
                     self.module_name,
-                    stderr.items,
+                    result.stderr,
                 }),
             },
-            .Stopped => error.CompilerStopped,
-            .Signal => error.CompilerInterrupted,
-            .Unknown => error.UnknownError,
+            .stopped => error.CompilerStopped,
+            .signal => error.CompilerInterrupted,
+            .unknown => error.UnknownError,
         };
     }
 
     fn deleteModuleBuildDirectory(self: *@This()) !void {
-        try std.fs.deleteTreeAbsolute(self.module_build_dir);
+        const parent_path = std.fs.path.dirname(self.module_build_dir) orelse std.fs.path.sep_str;
+        var parent_dir = try std.Io.Dir.openDirAbsolute(io, parent_path, .{});
+        defer parent_dir.close(io);
+        try parent_dir.deleteTree(io, std.fs.path.basename(self.module_build_dir));
     }
 
     fn cleanBuildDirectory(self: *@This()) !void {
@@ -306,27 +302,27 @@ pub const ZigCompiler = struct {
             }
         };
         var sub_dir_list: std.ArrayList(SubDir) = .empty;
-        var build_dir = try std.fs.openDirAbsolute(self.options.build_dir, .{ .iterate = true });
-        defer build_dir.close();
+        var build_dir = try std.Io.Dir.openDirAbsolute(io, self.options.build_dir, .{ .iterate = true });
+        defer build_dir.close(io);
         var build_dir_size: u64 = 0;
         var build_dir_iter = build_dir.iterateAssumeFirstIteration();
-        while (try build_dir_iter.next()) |entry| {
+        while (try build_dir_iter.next(io)) |entry| {
             if (entry.kind != .directory) continue;
-            var sub_dir = try build_dir.openDir(entry.name, .{ .iterate = true });
-            defer sub_dir.close();
+            var sub_dir = try build_dir.openDir(io, entry.name, .{ .iterate = true });
+            defer sub_dir.close(io);
             var sub_dir_size: u64 = 0;
             var walker = try sub_dir.walk(al);
             defer walker.deinit();
-            while (try walker.next()) |sub_entry| {
+            while (try walker.next(io)) |sub_entry| {
                 if (sub_entry.kind != .file) continue;
-                const sub_entry_info = try sub_entry.dir.statFile(sub_entry.basename);
+                const sub_entry_info = try sub_entry.dir.statFile(io, sub_entry.basename, .{});
                 sub_dir_size += sub_entry_info.size;
             }
-            const sub_dir_info = try sub_dir.stat();
+            const sub_dir_info = try sub_dir.stat(io);
             try sub_dir_list.append(al, .{
                 .name = try al.dupe(u8, entry.name),
                 .size = sub_dir_size,
-                .mtime = sub_dir_info.mtime,
+                .mtime = sub_dir_info.mtime.toMicroseconds(),
             });
             build_dir_size += sub_dir_size;
         }
@@ -334,7 +330,7 @@ pub const ZigCompiler = struct {
         // remove sub-directories until we lower the size to below the specified number
         std.mem.sort(SubDir, sub_dir_list.items, {}, SubDir.isOlder);
         for (sub_dir_list.items) |item| {
-            build_dir.deleteTree(item.name) catch continue;
+            build_dir.deleteTree(io, item.name) catch continue;
             if (build_dir_size < self.options.build_dir_size) break;
         }
     }
@@ -342,10 +338,10 @@ pub const ZigCompiler = struct {
     fn showProgress(self: *@This(), finished: *std.atomic.Value(u32)) !void {
         if (self.options.quiet) return;
         // don't print anything if stderr isn't a tty or doesn't support ANSI sequences
-        if (!std.Io.File.stderr().getOrEnableAnsiEscapeSupport()) return;
+        std.Io.File.stderr().enableAnsiEscapeCodes(io) catch return;
         if (builtin.target.os.tag != .windows) {
             // don't print anything if env variable is missing
-            if (std.posix.getenv("TERM") == null) return;
+            if (std.c.getenv("TERM") == null) return;
         }
         var message_buffer: [4096]u8 = undefined;
         const fmt = "Building module \"{s}\" at optimization level \"{s}\" ({s}/{s})";
@@ -359,10 +355,12 @@ pub const ZigCompiler = struct {
         var index: usize = 0;
         while (finished.load(.unordered) == 0) {
             std.debug.print("\r\x1b[33m{s}\x1b[0m {s}", .{ status_characters[index], message });
-            if (std.Thread.Futex.timedWait(finished, 0, 150_000_000) == error.Timeout) {
-                index += 1;
-                if (index >= status_characters.len) index = 0;
-            }
+            const timeout: std.Io.Timeout = .{
+                .duration = .{ .raw = .fromMilliseconds(150), .clock = .real },
+            };
+            std.Io.futexWaitTimeout(io, u32, &finished.raw, 0, timeout) catch {};
+            index += 1;
+            if (index >= status_characters.len) index = 0;
         }
         std.debug.print("\r\x1b[K", .{});
     }
@@ -388,12 +386,12 @@ fn comptimeImplode(comptime delim: []const u8, items: anytype, stringify: anytyp
 }
 
 fn makeDirectory(path: []const u8) !void {
-    std.fs.makeDirAbsolute(path) catch |err| {
+    std.Io.Dir.createDirAbsolute(io, path, .default_dir) catch |err| {
         return switch (err) {
             error.PathAlreadyExists => {},
             error.FileNotFound => {
                 try makeDirectory(std.fs.path.dirname(path) orelse return err);
-                try std.fs.makeDirAbsolute(path);
+                try std.Io.Dir.createDirAbsolute(io, path, .default_dir);
             },
             else => err,
         };
@@ -401,9 +399,9 @@ fn makeDirectory(path: []const u8) !void {
 }
 
 fn findFile(allocator: std.mem.Allocator, parent_path: []const u8, file_name: []const u8) !?[]const u8 {
-    var dir = std.fs.openDirAbsolute(parent_path, .{}) catch return null;
-    defer dir.close();
-    const stat = dir.statFile(file_name) catch return null;
+    var dir = std.Io.Dir.openDirAbsolute(io, parent_path, .{}) catch return null;
+    defer dir.close(io);
+    const stat = dir.statFile(io, file_name, .{}) catch return null;
     if (stat.kind != .file) return null;
     return try std.fs.path.resolve(allocator, &.{ parent_path, file_name });
 }

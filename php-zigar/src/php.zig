@@ -360,7 +360,7 @@ pub const ValueType = enum(u8) {
     number = c._IS_NUMBER, // 19
 
     pub fn fromInt(n: c_int) !@This() {
-        return std.meta.intToEnum(@This(), n);
+        return std.enums.fromInt(@This(), n) orelse error.InvalidEnumTag;
     }
 
     pub fn isBool(self: @This()) bool {
@@ -630,7 +630,7 @@ pub fn getValueLong(value: *const Value) !Long {
     return switch (value.u1.v.type) {
         c.IS_LONG => value.value.lval,
         c.IS_STRING => convert: {
-            const s: [*c]u8 = &value.value.str.*.val;
+            const s: [*c]u8 = @ptrCast(&value.value.str.*.val);
             const len = value.value.str.*.len;
             var long: Long = undefined;
             var double: f64 = undefined;
@@ -676,7 +676,7 @@ pub fn getValueDouble(value: *const Value) !f64 {
     return switch (value.u1.v.type) {
         c.IS_DOUBLE => value.value.dval,
         c.IS_STRING => convert: {
-            const s: [*c]u8 = &value.value.str.*.val;
+            const s: [*c]u8 = @ptrCast(&value.value.str.*.val);
             const len = value.value.str.*.len;
             var long: Long = undefined;
             var double: f64 = undefined;
@@ -1306,7 +1306,7 @@ pub const FunctionCallCache = struct {
 
     pub fn argumentInfo(self: *@This()) []c.zend_arg_info {
         const common = &self.fcc.function_handler.*.common;
-        return if (common.num_args > 0) common.arg_info[0..common.num_args] else &.{};
+        return if (common.*.num_args > 0) common.*.arg_info[0..common.*.num_args] else &.{};
     }
 
     pub fn useNamedArguments(self: *@This(), named_params: ?*HashTable) void {
@@ -1596,7 +1596,7 @@ pub const PropPurpose = enum(c_uint) {
     json = c.ZEND_PROP_PURPOSE_JSON,
 
     pub fn fromInt(n: c_uint) !@This() {
-        return std.meta.intToEnum(@This(), n);
+        return std.enums.fromInt(@This(), n) orelse error.InvalidEnumTag;
     }
 };
 
@@ -2135,7 +2135,7 @@ fn setMetadata(path: *String, op: c_int, param_ptr: ?*const anyopaque, context: 
     if (handler.?(wrapper, p.ptr, op, @constCast(param_ptr), context) == 0) return error.Failure;
 }
 
-fn findStreamWrapper(path: []const u8, comptime name: []const u8) !std.meta.Tuple(&.{
+fn findStreamWrapper(path: []const u8, comptime name: []const u8) !@Tuple(&.{
     *c.php_stream_wrapper,
     @FieldType(c.php_stream_wrapper_ops, name),
 }) {

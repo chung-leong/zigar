@@ -555,7 +555,7 @@ pub const getCbInfo: fn (
     cbinfo: CallbackInfo,
     argc: *usize,
     argv: [*]Value,
-) Error!std.meta.Tuple(&.{ Value, ?*anyopaque }) = c_to_zig.translate("napi_get_cb_info", true, false, .{ .@"3" = inout([*]Value), .@"5" = ?*anyopaque });
+) Error!@Tuple(&.{ Value, ?*anyopaque }) = c_to_zig.translate("napi_get_cb_info", true, false, .{ .@"3" = inout([*]Value), .@"5" = ?*anyopaque });
 
 /// https://nodejs.org/api/n-api.html#napi_get_new_target
 pub const getNewTarget: fn (
@@ -723,7 +723,7 @@ pub const isArraybuffer: fn (
 pub const createArraybuffer: fn (
     env: *@This(),
     byte_length: usize,
-) Error!std.meta.Tuple(&.{ *anyopaque, Value }) = c_to_zig.translate("napi_create_arraybuffer", true, false, .{});
+) Error!@Tuple(&.{ *anyopaque, Value }) = c_to_zig.translate("napi_create_arraybuffer", true, false, .{});
 
 /// https://nodejs.org/api/n-api.html#napi_create_external_arraybuffer
 pub const createExternalArraybuffer: fn (
@@ -739,7 +739,7 @@ pub const createExternalArraybuffer: fn (
 pub const getArraybufferInfo: fn (
     env: *@This(),
     arraybuffer: Value,
-) Error!std.meta.Tuple(&.{ *anyopaque, usize }) = c_to_zig.translate("napi_get_arraybuffer_info", true, false, .{});
+) Error!@Tuple(&.{ *anyopaque, usize }) = c_to_zig.translate("napi_get_arraybuffer_info", true, false, .{});
 
 /// https://nodejs.org/api/n-api.html#napi_is_typedarray
 pub const isTypedarray: fn (
@@ -760,7 +760,7 @@ pub const createTypedarray: fn (
 pub const getTypedarrayInfo: fn (
     env: *@This(),
     typedarray: Value,
-) Error!std.meta.Tuple(&.{ TypedarrayType, usize, *anyopaque, Value, usize }) = c_to_zig.translate("napi_get_typedarray_info", true, false, .{ .@"2" = TypedarrayType });
+) Error!@Tuple(&.{ TypedarrayType, usize, *anyopaque, Value, usize }) = c_to_zig.translate("napi_get_typedarray_info", true, false, .{ .@"2" = TypedarrayType });
 
 /// https://nodejs.org/api/n-api.html#napi_create_dataview
 pub const createDataview: fn (
@@ -780,7 +780,7 @@ pub const isDataview: fn (
 pub const getDataviewInfo: fn (
     env: *@This(),
     dataview: Value,
-) Error!std.meta.Tuple(&.{ usize, *anyopaque, Value, usize }) = c_to_zig.translate("napi_get_dataview_info", true, false, .{});
+) Error!@Tuple(&.{ usize, *anyopaque, Value, usize }) = c_to_zig.translate("napi_get_dataview_info", true, false, .{});
 
 /// https://nodejs.org/api/n-api.html#napi_get_version
 pub const getVersion: fn (
@@ -790,7 +790,7 @@ pub const getVersion: fn (
 /// https://nodejs.org/api/n-api.html#napi_create_promise
 pub const createPromise: fn (
     env: *@This(),
-) Error!std.meta.Tuple(&.{ Deferred, Value }) = c_to_zig.translate("napi_create_promise", true, false, .{});
+) Error!@Tuple(&.{ Deferred, Value }) = c_to_zig.translate("napi_create_promise", true, false, .{});
 
 /// https://nodejs.org/api/n-api.html#napi_resolve_deferred
 pub const resolveDeferred: fn (
@@ -876,19 +876,19 @@ pub const createBigintWords: fn (
 pub const getValueBigintInt64: fn (
     env: *@This(),
     value: Value,
-) Error!std.meta.Tuple(&.{ i64, bool }) = c_to_zig.translate("napi_get_value_bigint_int64", true, false, .{});
+) Error!@Tuple(&.{ i64, bool }) = c_to_zig.translate("napi_get_value_bigint_int64", true, false, .{});
 
 /// https://nodejs.org/api/n-api.html#napi_get_value_bigint_uint64
 pub const getValueBigintUint64: fn (
     env: *@This(),
     value: Value,
-) Error!std.meta.Tuple(&.{ u64, bool }) = c_to_zig.translate("napi_get_value_bigint_uint64", true, false, .{});
+) Error!@Tuple(&.{ u64, bool }) = c_to_zig.translate("napi_get_value_bigint_uint64", true, false, .{});
 
 /// https://nodejs.org/api/n-api.html#napi_get_value_bigint_words
 pub const getValueBigintWords: fn (
     env: *@This(),
     value: Value,
-) Error!std.meta.Tuple(&.{ c_int, usize, u64 }) = c_to_zig.translate("napi_get_value_bigint_words", true, false, .{});
+) Error!@Tuple(&.{ c_int, usize, u64 }) = c_to_zig.translate("napi_get_value_bigint_words", true, false, .{});
 
 /// https://nodejs.org/api/n-api.html#napi_get_all_property_names
 pub const getAllPropertyNames: fn (
@@ -1066,7 +1066,7 @@ pub const makeCallback: fn (
 pub const createBuffer: fn (
     env: *@This(),
     length: usize,
-) Error!std.meta.Tuple(&.{ *anyopaque, Value }) = c_to_zig.translate("napi_create_buffer", true, false, .{});
+) Error!@Tuple(&.{ *anyopaque, Value }) = c_to_zig.translate("napi_create_buffer", true, false, .{});
 
 /// https://nodejs.org/api/n-api.html#napi_create_external_buffer
 pub const createExternalBuffer: fn (
@@ -1082,7 +1082,7 @@ pub const createExternalBuffer: fn (
 pub const createBufferCopy: fn (
     env: *@This(),
     data: []const u8,
-) Error!std.meta.Tuple(&.{ *anyopaque, Value }) = c_to_zig.translateMerge("napi_create_buffer_copy", true, false, .{}, &.{
+) Error!@Tuple(&.{ *anyopaque, Value }) = c_to_zig.translateMerge("napi_create_buffer_copy", true, false, .{}, &.{
     .{ .ptr_index = 2, .len_index = 1 },
 });
 
@@ -1096,7 +1096,7 @@ pub const isBuffer: fn (
 pub const getBufferInfo: fn (
     env: *@This(),
     value: Value,
-) Error!std.meta.Tuple(&.{ *anyopaque, usize }) = c_to_zig.translate("napi_get_buffer_info", true, false, .{});
+) Error!@Tuple(&.{ *anyopaque, usize }) = c_to_zig.translate("napi_get_buffer_info", true, false, .{});
 
 /// https://nodejs.org/api/n-api.html#napi_create_async_work
 pub const createAsyncWork: fn (

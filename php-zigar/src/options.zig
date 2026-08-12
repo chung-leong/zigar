@@ -124,7 +124,6 @@ pub const Options = struct {
                 .linux => "linux-gnu",
                 .@"linux-musl" => "linux-musl",
                 .openbsd => "openbsd",
-                .sunos => "solaris",
                 .win32 => "windows",
                 else => "other",
             };
@@ -239,8 +238,7 @@ pub const Options = struct {
             else => {
                 const names: []const [:0]const u8 = &.{ "TMPDIR", "TMP", "TEMP", "TEMPDIR" };
                 const tmpdir = for (names) |name| {
-                    // std.posix.getenv() crashes for some reason
-                    if (std.posix.getenvZ(name)) |value| break value;
+                    if (std.c.getenv(name)) |value| break std.mem.sliceTo(value, 0);
                 } else "/tmp";
                 return try allocator.dupe(u8, tmpdir);
             },
@@ -253,6 +251,7 @@ pub const Options = struct {
     }
 
     pub fn override(self: *@This(), ht: *HashTable) !void {
+        @setEvalBranchQuota(2_000_000);
         var iter: HashTableIterator = .init(ht, .{});
         while (iter.next()) |value| {
             inline for (comptime std.meta.fields(@This())) |field| {

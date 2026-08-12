@@ -300,7 +300,7 @@ pub fn Translator(comptime options: TranslatorOptions) type {
             const Payload = switch (OutputTypes.len) {
                 0 => void,
                 1 => OutputTypes[0],
-                else => std.meta.Tuple(OutputTypes),
+                else => @Tuple(OutputTypes),
             };
             return @Type(.{
                 .@"fn" = .{
@@ -1681,7 +1681,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
                     }));
                     break :define try self.createExpression(.{
                         .function_call = .{
-                            .fn_ref = try self.createIdentifier("std.meta.Tuple", .{}),
+                            .fn_ref = try self.createIdentifier("@Tuple", .{}),
                             .arguments = arguments,
                         },
                     });
@@ -1724,7 +1724,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             const output_types: []const *const Expression = get: {
                 if (self.getTypeInfo(return_type, .error_union)) |eu| {
                     if (eu.payload_type.* == .function_call) {
-                        // call to std.meta.Tuple()
+                        // call to @Tuple()
                         const arg = eu.payload_type.function_call.arguments[0];
                         break :get arg.array_init.initializers;
                     } else if (!self.isPrimitive(eu.payload_type, "void")) {
@@ -2211,7 +2211,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             return can_return and !options.status_is_returned_fn(fn_name);
         }
 
-        fn deriveErrorSet(self: *@This()) !std.meta.Tuple(&.{ *const Expression, usize }) {
+        fn deriveErrorSet(self: *@This()) !@Tuple(&.{ *const Expression, usize }) {
             var names: [][]const u8 = &.{};
             var non_error_enum_count: usize = 0;
             if (options.c_error_type) |enum_name| {
@@ -3367,7 +3367,7 @@ test "Translator.Translated" {
     const Fn3 = c_to_zig.Translated(fn (i32, *OldStruct) StatusEnum, true, false, .{});
     try expectEqual(fn (i32) ErrorSet!NewStruct, Fn3);
     const Fn4 = c_to_zig.Translated(fn (i32, *bool, *OldStruct) StatusEnum, true, false, .{});
-    try expectEqual(fn (i32) ErrorSet!std.meta.Tuple(&.{ bool, NewStruct }), Fn4);
+    try expectEqual(fn (i32) ErrorSet!@Tuple(&.{ bool, NewStruct }), Fn4);
     const Fn5 = c_to_zig.Translated(fn (i32, OldStruct) bool, false, false, .{});
     try expectEqual(fn (i32, NewStruct) bool, Fn5);
     const Fn6 = c_to_zig.Translated(fn (i32, OldStruct) c_int, false, false, .{});

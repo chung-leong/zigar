@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const io = @import("system.zig").io;
 const php = @import("php.zig");
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 
@@ -156,7 +157,8 @@ pub fn showErrorTrace(loc: std.builtin.SourceLocation, err: anytype) void {
         loc.file,
         loc.line,
     });
-    if (@errorReturnTrace()) |trace| {
-        std.debug.dumpStackTrace(trace.*);
-    }
+    var buffer: [1024]u8 = undefined;
+    var writer = std.Io.File.stderr().writer(io, &buffer);
+    const wi = &writer.interface;
+    std.debug.writeCurrentStackTrace(.{}, .{ .writer = wi, .mode = .no_color }) catch {};
 }

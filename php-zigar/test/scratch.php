@@ -2,4 +2,4 @@
 
 $m = zigar_use(__DIR__ . '/scratch.zig');
 
-$m->fail();
+$m->hello();

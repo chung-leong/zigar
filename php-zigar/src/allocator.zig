@@ -295,5 +295,5 @@ pub fn Arg(comptime _: @TypeOf(.enum_literal), comptime T: type) type {
             arg_index += 1;
         }
     }
-    return @Struct(.auto, null, field_names, field_types, field_attrs);
+    return @Struct(.auto, null, &field_names, &field_types, &field_attrs);
 }

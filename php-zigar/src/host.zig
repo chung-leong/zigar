@@ -8,6 +8,7 @@ const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
 const DynLib = @import("dyn-lib.zig").DynLib;
 const GarbageCollectionBuffer = @import("gc.zig").GarbageCollectionBuffer;
+const io = @import("system.zig").io;
 const js_compat = @import("js-compat.zig");
 const ArgStruct = @import("module/arg-struct.zig").ArgStruct;
 const ModuleGeneric = @import("module/native/interface.zig").Module;
@@ -90,7 +91,7 @@ pub const ModuleHost = struct {
         self.dispatcher = try .init(self);
         errdefer self.dispatcher.deinit();
         try self.dispatcher.installHooks(&lib, module.attributes.io_redirection);
-        _ = module.exports.set_host_instance(@ptrCast(self));
+        _ = module.exports.set_host_instance(@ptrCast(self), &io);
         _ = module.exports.set_language_name("PHP");
         self.importer = try .init(self);
         defer self.importer.deinit();
@@ -144,19 +145,17 @@ pub const ModuleHost = struct {
             const extra = if (Payload == void or Payload == E) 0 else 1;
             const NewArgs = comptime define: {
                 const fields = std.meta.fields(Args);
-                var field_names: [fields.len + extra][]const u8 = undefined;
                 var field_types: [fields.len + extra]type = undefined;
-                var field_attrs: [fields.len + extra]std.builtin.Type.StructField.Attributes = undefined;
-                for (0..field_names.len) |i| {
-                    field_names[i] = std.fmt.comptimePrint("{d}", .{i});
+                for (0..field_types.len) |i| {
                     field_types[i] = switch (i) {
                         0 => *Module.Host,
-                        else => if (extra == 1 and i == field_names.len - 1) *Payload else fields[i].type,
+                        else => switch (extra == 1 and i == field_types.len - 1) {
+                            true => *Payload,
+                            false => fields[i].type,
+                        },
                     };
-                    field_attrs[i] = .{};
                 }
-
-                break :define @Struct(.auto, null, &field_names, &field_types, &field_attrs);
+                break :define @Tuple(&field_types);
             };
             const ns = struct {
                 fn call(new_args: NewArgs) E {

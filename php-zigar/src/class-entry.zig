@@ -103,15 +103,14 @@ pub const ZigClassEntry = struct {
         const fields = std.meta.fields(@TypeOf(structure.by_enum));
         var field_names: [fields.len][]const u8 = undefined;
         var field_types: [fields.len]type = undefined;
-        var field_attrs: [fields.len]std.builtin.Type.StructField.Attributes = undefined;
+        var field_attrs: [fields.len]std.builtin.Type.UnionField.Attributes = undefined;
         for (fields, 0..) |field, i| {
             const S = @field(structure.by_enum, field.name);
-            const StructureStatic = if (@hasDecl(S, "Static")) S.Static else void;
             field_names[i] = field.name;
-            field_types[i] = StructureStatic;
+            field_types[i] = if (@hasDecl(S, "Static")) S.Static else void;
             field_attrs[i] = .{};
         }
-        break :define @Struct(.auto, null, &field_names, &field_types, &field_attrs);
+        break :define @Union(.auto, null, &field_names, &field_types, &field_attrs);
     };
 
     pub inline fn entry(self: *@This()) *ClassEntry {

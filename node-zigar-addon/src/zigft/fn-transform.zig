@@ -59,7 +59,7 @@ test "spreadArgs" {
             return spreadArgs(ns.call, null);
         }
 
-        fn sum(args: std.meta.Tuple(&.{ i32, i32, i32 })) i32 {
+        fn sum(args: @Tuple(&.{ i32, i32, i32 })) i32 {
             var n: i32 = 0;
             inline for (args) |arg| {
                 n += arg;

@@ -878,7 +878,7 @@ fn createSprintfTest(fmt: []const u8, tuple: anytype) type {
             inline for (tuple, 0..) |value, index| {
                 arg_types[f.params.len + index] = @TypeOf(value);
             }
-            const ArgTuple = std.meta.Tuple(&arg_types);
+            const ArgTuple = @Tuple(&arg_types);
             var arg_tuple: ArgTuple = undefined;
             inline for (&arg_tuple, 0..) |*a, index| {
                 a.* = switch (index) {

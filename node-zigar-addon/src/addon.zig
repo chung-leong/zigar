@@ -36,8 +36,45 @@ const ModuleHost = struct {
     pub const HandlerVTable = hooks.HandlerVTable;
     const redirection_controller = redirection.Controller(@This());
 
+    const Futex = struct {
+        const initial_value = 0xffff_ffff;
+
+        value: std.atomic.Value(u32) = .init(initial_value),
+        handle: usize,
+        timeout: usize = 0,
+
+        pub fn init(self: *@This(), io: std.Io) usize {
+            self.* = .{ .handle = @intFromPtr(self), .io = io };
+            return self.handle;
+        }
+
+        pub fn wait(self: *@This()) E {
+            if (self.timeout != 0) {
+                const timeout: std.Io.Timeout = .{
+                    .duration = .{
+                        .raw = .fromNanoseconds(self.timeout),
+                        .clock = .real,
+                    },
+                };
+                std.Io.futexWaitTimeout(io, u32, &self.value.raw, initial_value, timeout) catch {
+                    return E.SUCCESS;
+                };
+            } else {
+                std.Io.futexWaitUncancelable(io, u32, &self.value.raw, initial_value);
+            }
+            const final_value = self.value.load(.acquire);
+            return std.enums.fromInt(E, final_value) orelse .FAULT;
+        }
+
+        pub fn wake(handle: usize, result: E) void {
+            const self: *@This() = @ptrFromInt(handle);
+            if (self.handle != handle) return;
+            self.value.store(@intFromEnum(result), .release);
+            std.Io.futexWake(io, u32, &self.value.raw, 1);
+        }
+    };
+
     env: Env,
-    io: std.Io,
     ref_count: isize = 1,
     module: ?*Module = null,
     library: ?DynLib = null,
@@ -130,18 +167,19 @@ const ModuleHost = struct {
     var function_count: i32 = 0;
 
     var threaded_io = std.Io.Threaded.init_single_threaded;
+    const io = threaded_io.io();
 
     const Module = interface.Module(Value);
 
     fn register(self: *@This()) !void {
-        host_list_mutex.lock(self.io) catch unreachable;
-        defer host_list_mutex.unlock(self.io);
+        host_list_mutex.lockUncancelable(io);
+        defer host_list_mutex.unlock(io);
         try host_list.append(c_allocator, self);
     }
 
     fn unregister(self: *@This()) void {
-        host_list_mutex.lock(self.io) catch unreachable;
-        defer host_list_mutex.unlock(self.io);
+        host_list_mutex.lockUncancelable(io);
+        defer host_list_mutex.unlock(io);
         for (host_list.items, 0..) |module, index| {
             if (module == self) {
                 _ = host_list.orderedRemove(index);
@@ -338,7 +376,7 @@ const ModuleHost = struct {
                 },
             }
         };
-        _ = module.exports.set_host_instance(@ptrCast(self), &self.io);
+        _ = module.exports.set_host_instance(@ptrCast(self), &io);
         try self.exportFunctionsToModule();
         if (env.getValueBool(redirectingIO) catch true) {
             // hooks are installed even when io redirection is disabled, because they're needed for
@@ -362,29 +400,29 @@ const ModuleHost = struct {
     pub fn initializeThread(self: *@This()) !void {
         if (self.syscall_trap_installed) {
             try redirection_controller.installSyscallTrap(self, &trapping_syscalls);
-            self.thread_syscall_trap_list_mutex.lock(self.io) catch unreachable;
-            defer self.thread_syscall_trap_list_mutex.unlock(self.io);
+            self.thread_syscall_trap_list_mutex.lockUncancelable(io);
+            defer self.thread_syscall_trap_list_mutex.unlock(io);
             try self.thread_syscall_trap_list.append(c_allocator, &trapping_syscalls);
             if (self.syscall_trap_count > 0) {
                 trapping_syscalls = true;
             }
         }
-        host_list_mutex.lock(self.io) catch unreachable;
-        defer host_list_mutex.unlock(self.io);
+        host_list_mutex.lockUncancelable(io);
+        defer host_list_mutex.unlock(io);
         for (host_list.items) |host| {
             if (host.env == self.env) {
                 // the same JavaScript environment, meaning that the thread can potential call a
                 // function handled by this host; we need to initialize the threadlocal instance
                 // pointer in its module
-                _ = if (host.module) |m| m.exports.set_host_instance(@ptrCast(self), &self.io);
+                _ = if (host.module) |m| m.exports.set_host_instance(@ptrCast(self), &io);
             }
         }
     }
 
     pub fn deinitializeThread(self: *@This()) !void {
         if (self.syscall_trap_installed) {
-            self.thread_syscall_trap_list_mutex.lock(self.io) catch unreachable;
-            defer self.thread_syscall_trap_list_mutex.unlock(self.io);
+            self.thread_syscall_trap_list_mutex.lockUncancelable(io);
+            defer self.thread_syscall_trap_list_mutex.unlock(io);
             const index = for (self.thread_syscall_trap_list.items, 0..) |ptr, i| {
                 if (ptr == &trapping_syscalls) break i;
             } else return;
@@ -607,7 +645,7 @@ const ModuleHost = struct {
         const env = self.env;
         const handle = try env.getValueUsize(futex_handle);
         const value = try env.getValueUint32(async_result);
-        try Futex.wake(handle, @enumFromInt(value));
+        Futex.wake(handle, @enumFromInt(value));
     }
 
     const NumberType = enum(u32) {
@@ -629,9 +667,9 @@ const ModuleHost = struct {
         const u8_ptr: [*]u8 = @ptrCast(opaque_ptr);
         const u8_slices: [1][]u8 = .{u8_ptr[0..len]};
         const read = if (env.getValueUsize(position)) |pos|
-            try file.readPositional(self.io, u8_slices[0..], pos)
+            try file.readPositional(io, u8_slices[0..], pos)
         else |_|
-            try file.readStreaming(self.io, u8_slices[0..]);
+            try file.readStreaming(io, u8_slices[0..]);
         return try env.createTypedarray(.uint8_array, read, buffer, 0);
     }
 
@@ -642,9 +680,9 @@ const ModuleHost = struct {
         const u8_ptr: [*]const u8 = @ptrCast(opaque_ptr);
         const u8_slices: [1][]const u8 = .{u8_ptr[0..len]};
         _ = if (env.getValueUsize(position)) |pos|
-            try file.writePositional(self.io, u8_slices[0..], pos)
+            try file.writePositional(io, u8_slices[0..], pos)
         else |_|
-            try file.writeStreaming(self.io, &.{}, u8_slices[0..], 1);
+            try file.writeStreaming(io, &.{}, u8_slices[0..], 1);
     }
 
     fn getFileHandle(self: *@This(), fd: Value) !Value {
@@ -768,8 +806,8 @@ const ModuleHost = struct {
             main_thread_syscall_trap_count += 1;
             if (main_thread_syscall_trap_count == 1) trapping_syscalls = true;
             // turn on all syscall traps in threads belonging to this module
-            self.thread_syscall_trap_list_mutex.lock(self.io) catch unreachable;
-            defer self.thread_syscall_trap_list_mutex.unlock(self.io);
+            self.thread_syscall_trap_list_mutex.lockUncancelable(io);
+            defer self.thread_syscall_trap_list_mutex.unlock(io);
             for (self.thread_syscall_trap_list.items) |ptr| ptr.* = true;
         }
     }
@@ -780,8 +818,8 @@ const ModuleHost = struct {
         if (self.syscall_trap_count == 0) {
             main_thread_syscall_trap_count -= 1;
             if (main_thread_syscall_trap_count == 0) trapping_syscalls = false;
-            self.thread_syscall_trap_list_mutex.lock(self.io) catch unreachable;
-            defer self.thread_syscall_trap_list_mutex.unlock(self.io);
+            self.thread_syscall_trap_list_mutex.lockUncancelable(io);
+            defer self.thread_syscall_trap_list_mutex.unlock(io);
             for (self.thread_syscall_trap_list.items) |ptr| ptr.* = false;
         }
     }
@@ -1025,7 +1063,7 @@ const ModuleHost = struct {
     fn handleJscall(self: *@This(), call: *Jscall) !E {
         if (in_main_thread) {
             errdefer {
-                if (call.futex_handle != 0) Futex.wake(call.futex_handle, E.FAULT) catch {};
+                if (call.futex_handle != 0) Futex.wake(call.futex_handle, E.FAULT);
             }
             const env = self.env;
             const status = try env.callFunction(
@@ -1043,7 +1081,7 @@ const ModuleHost = struct {
         } else {
             const func = self.ts.handle_jscall orelse return error.Disabled;
             var futex: Futex = undefined;
-            call.futex_handle = futex.init(self.io);
+            call.futex_handle = futex.init();
             try napi.callThreadsafeFunction(func, @constCast(call), .nonblocking);
             return futex.wait();
         }
@@ -1098,7 +1136,7 @@ const ModuleHost = struct {
         } else {
             const func = self.ts.handle_syscall orelse return error.Disabled;
             var futex: Futex = undefined;
-            call.futex_handle = futex.init(self.io);
+            call.futex_handle = futex.init();
             if (call.cmd == .write and call.u.write.fd == 2) {
                 const len: usize = call.u.write.len;
                 const bytes = call.u.write.bytes;
@@ -1562,7 +1600,7 @@ const ModuleHost = struct {
         }
         const env = self.env;
         if (env.getValueUsize(futex)) |handle| {
-            try Futex.wake(handle, result);
+            Futex.wake(handle, result);
         } else |_| {}
         return result;
     }
@@ -1647,7 +1685,7 @@ const ModuleHost = struct {
             const call: *Jscall = @ptrCast(@alignCast(data));
             _ = handleJscall(self, call) catch {
                 // wake caller if call fails since JavaScript isn't going to do it
-                Futex.wake(call.futex_handle, .FAULT) catch {};
+                Futex.wake(call.futex_handle, .FAULT);
             };
         }
 
@@ -1655,7 +1693,7 @@ const ModuleHost = struct {
             const self: *ModuleHost = @ptrCast(@alignCast(context));
             const call: *Syscall = @ptrCast(@alignCast(data));
             _ = handleSyscall(self, call) catch {
-                Futex.wake(call.futex_handle, .FAULT) catch {};
+                Futex.wake(call.futex_handle, .FAULT);
             };
         }
 
@@ -1670,45 +1708,6 @@ const ModuleHost = struct {
             disableMultithread(self) catch {};
         }
     };
-};
-
-const Futex = struct {
-    const initial_value = 0xffff_ffff;
-
-    value: std.atomic.Value(u32) = .init(initial_value),
-    handle: usize,
-    timeout: usize = 0,
-    io: std.Io,
-
-    pub fn init(self: *@This(), io: std.Io) usize {
-        self.* = .{ .handle = @intFromPtr(self), .io = io };
-        return self.handle;
-    }
-
-    pub fn wait(self: *@This()) E {
-        if (self.timeout != 0) {
-            const timeout: std.Io.Timeout = .{
-                .duration = .{
-                    .raw = .fromNanoseconds(self.timeout),
-                    .clock = .real,
-                },
-            };
-            std.Io.futexWaitTimeout(self.io, u32, &self.value.raw, initial_value, timeout) catch {
-                return E.SUCCESS;
-            };
-        } else {
-            std.Io.futexWaitUncancelable(self.io, u32, &self.value.raw, initial_value);
-        }
-        const final_value = self.value.load(.acquire);
-        return std.enums.fromInt(E, final_value) orelse .FAULT;
-    }
-
-    pub fn wake(handle: usize, result: E) !void {
-        const self: *@This() = @ptrFromInt(handle);
-        if (self.handle != handle) return error.Unexpected;
-        self.value.store(@intFromEnum(result), .release);
-        std.Io.futexWake(self.io, u32, &self.value.raw, 1);
-    }
 };
 
 fn throwError(env: *Env, fmt: []const u8, args: anytype) void {

@@ -3,6 +3,7 @@ const std = @import("std");
 const AbortSignal = @import("abort-signal.zig").AbortSignal;
 const extension = @import("extension.zig");
 const failure = @import("failure.zig");
+const io = @import("system.zig").io;
 const php = @import("php.zig");
 const FunctionCallCache = php.FunctionCallCache;
 const MethodCallCaches = php.MethodCallCaches;
@@ -27,11 +28,10 @@ pub fn EventLoop(comptime cb: fn () void) type {
         in_loop: bool,
         terminated: bool,
         deinit_deferred: bool,
-        timer: std.time.Timer,
         timeouts: std.ArrayList(Timeout),
 
         const Timeout = struct {
-            end: u64,
+            end: i64,
             signal: *AbortSignal,
         };
 
@@ -52,7 +52,6 @@ pub fn EventLoop(comptime cb: fn () void) type {
             self.terminated = false;
             self.in_loop = false;
             self.deinit_deferred = false;
-            self.timer = try .start();
             self.timeouts = .empty;
             // start the loop fiber
             self.in_loop = true;
@@ -108,47 +107,50 @@ pub fn EventLoop(comptime cb: fn () void) type {
         }
 
         pub fn addTimeout(self: *@This(), seconds: f64, signal: *AbortSignal) !void {
-            const duration: u64 = @intFromFloat(seconds * 1_000_000_000.0);
-            if (self.timeouts.items.len == 0) self.timer.reset();
+            const duration: i64 = @intFromFloat(seconds * 1_000_000.0);
+            const timestamp = std.Io.Clock.real.now(io);
             try self.timeouts.append(std.heap.c_allocator, .{
-                .end = self.timer.read() + duration,
+                .end = timestamp.toMicroseconds() + duration,
                 .signal = signal,
             });
             signal.addRef();
         }
 
-        fn updateTimouts(self: *@This()) std.meta.Tuple(&.{ Value, Value }) {
-            const now = self.timer.read();
+        fn updateTimouts(self: *@This()) @Tuple(&.{ Value, Value }) {
+            const timestamp = std.Io.Clock.real.now(io);
             const len = self.timeouts.items.len;
-            var pause: ?u64 = null;
+            var pause: ?i64 = null;
             for (0..len) |i| {
                 const index = len - i - 1;
                 var item = self.timeouts.items[index];
-                if (now >= item.end) {
+                if (timestamp.toMicroseconds() >= item.end) {
                     // set the abort signal and remove it from the list
                     item.signal.abort();
                     item.signal.release();
                     _ = self.timeouts.swapRemove(index);
                 } else {
                     // choose the smallest duration
-                    const diff = item.end - now;
+                    const diff = item.end - timestamp.toMicroseconds();
                     if (pause == null or pause.? > diff) {
                         pause = diff;
                     }
                 }
             }
-            if (pause) |nanosecs| {
-                const s_u64 = @min(std.math.maxInt(Long), nanosecs / 1_000_000_000);
+            if (pause) |us| {
+                const s_u64 = @min(std.math.maxInt(Long), @divFloor(us, 1_000_000));
                 const s: Long = @intCast(s_u64);
-                const us: Long = @intCast(((nanosecs - s_u64 * 1_000_000_000) + 999) / 1000);
-                return .{ php.createValueLong(s), php.createValueLong(us) };
+                const us_remainder: Long = @intCast(us - s_u64 * 1_000_000);
+                return .{ php.createValueLong(s), php.createValueLong(us_remainder) };
             } else {
                 return .{ php.createValueNull(), php.createValueNull() };
             }
         }
 
         pub fn handleLoop(ed: *ExecuteData, _: *Value) void {
-            const self: *@This() = @ptrCast(@alignCast(ed.func.*.internal_function.reserved[0]));
+            // workaround for https://codeberg.org/ziglang/zig/issues/31888
+            const f: *php.Function = @ptrCast(ed.func);
+            const ptr = f.internal_function.reserved[0].?;
+            const self: *@This() = @ptrCast(@alignCast(ptr));
             const read_fds = php.createValueReference(&php.createValueArray(null));
             defer php.release(&read_fds);
             const write_fds = php.createValueReference(&php.createValueNull());

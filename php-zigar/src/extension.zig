@@ -17,6 +17,8 @@ const ModuleEntry = php.ModuleEntry;
 const String = php.String;
 const Value = php.Value;
 const structure = @import("structure.zig");
+const system = @import("system.zig");
+const io = system.io;
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 const ZigCompiler = @import("compilation.zig").ZigCompiler;
 
@@ -49,12 +51,9 @@ pub fn removeRequestShutdownCallback(ptr: *anyopaque, fn_ptr: *const fn (*anyopa
     }
 }
 
-var io: std.Io = undefined;
-var gpa: std.heap.DebugAllocator(.{}) = .init; 
-
 export fn php_zigar_mod_init(_: c_int, module_number: c_int) php.Result {
-    io = std.Io.Threaded.init(gpa.allocator(), .{});
     dyn_lib.fixEnvironment();
+    system.init();
     Options.setup(module_number) catch return php.FAILURE;
     ModuleHost.setup() catch return php.FAILURE;
     options = .init();
@@ -76,7 +75,7 @@ export fn php_zigar_req_init(_: c_int, _: c_int) php.Result {
         options = default_options.*;
         options_set = true;
     }
-    CallDispatcher.installHandler(io) catch return php.FAILURE;
+    CallDispatcher.installHandler() catch return php.FAILURE;
     return php.SUCCESS;
 }
 
@@ -163,12 +162,12 @@ const functions = struct {
             const src_path, const mod_path = get: {
                 const path = try getResolvedPath(php.allocator, arg_iter.next().?);
                 errdefer php.allocator.free(path);
-                var dir = std.fs.openDirAbsolute(path, .{}) catch |err| {
+                var dir = std.Io.Dir.openDirAbsolute(io, path, .{}) catch |err| {
                     if (err != error.NotDir) return err;
                     const mod_path = try deriveModulePath(php.allocator, path);
                     break :get .{ path, mod_path };
                 };
-                dir.close();
+                dir.close(io);
                 break :get .{ null, path };
             };
             defer if (src_path) |path| php.allocator.free(path);
@@ -193,12 +192,12 @@ const functions = struct {
             const src_path, const mod_path = get: {
                 const path = try getResolvedPath(php.allocator, arg_iter.next().?);
                 errdefer php.allocator.free(path);
-                var dir = std.fs.openDirAbsolute(path, .{}) catch |err| {
+                var dir = std.Io.Dir.openDirAbsolute(io, path, .{}) catch |err| {
                     if (err != error.NotDir) return err;
                     const mod_path = try deriveModulePath(php.allocator, path);
                     break :get .{ path, mod_path };
                 };
-                dir.close();
+                dir.close(io);
                 break :get .{ null, path };
             };
             defer if (src_path) |path| php.allocator.free(path);
@@ -251,7 +250,7 @@ const functions = struct {
 
     fn getResolvedPath(allocator: std.mem.Allocator, value: *Value) ![]const u8 {
         const path = try php.getValueStringContent(value);
-        const cwd_path = try std.process.getCwdAlloc(allocator);
+        const cwd_path = try std.process.currentPathAlloc(io, allocator);
         defer php.allocator.free(cwd_path);
         return try std.fs.path.resolve(allocator, &.{ cwd_path, path });
     }

@@ -4,6 +4,7 @@ const accessor = @import("accessor.zig");
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
 const failure = @import("failure.zig");
+const io = @import("system.zig").io;
 const ModuleHost = @import("host.zig").ModuleHost;
 const php = @import("php.zig");
 const ArgumentIterator = php.ArgumentIterator;
@@ -78,7 +79,7 @@ pub const AbortSignal = struct {
 
     pub fn abort(self: *@This()) void {
         self.value.store(1, .monotonic);
-        std.Thread.Futex.wake(&self.value, std.math.maxInt(u32));
+        std.Io.futexWake(io, u32, &self.value.raw, std.math.maxInt(u32));
     }
 
     pub fn setTimeout(self: *@This(), value: *const Value) !void {

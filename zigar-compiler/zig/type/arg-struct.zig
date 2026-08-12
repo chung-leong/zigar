@@ -8,6 +8,7 @@ pub fn ArgStruct(comptime T: type) type {
 }
 
 pub fn Arg(comptime _: @TypeOf(.enum_literal), comptime T: type) type {
+    @setEvalBranchQuota(2_000_000);
     const f = @typeInfo(T).@"fn";
     const count = get: {
         var count = 1;

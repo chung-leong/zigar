@@ -115,7 +115,7 @@ pub fn defineWithCallConv(
 }
 
 /// Create a function closure.
-pub fn close(comptime T: type, vars: T) !*const BoundFn(@TypeOf(onlyFn(T)), std.meta.Tuple(&.{T})) {
+pub fn close(comptime T: type, vars: T) !*const BoundFn(@TypeOf(onlyFn(T)), @Tuple(&.{T})) {
     const func = onlyFn(T);
     return try bind(func, .{vars});
 }
@@ -125,7 +125,7 @@ pub fn closeWithCallConv(
     comptime T: type,
     vars: T,
     comptime cc: std.builtin.CallingConvention,
-) !*const BoundFnWithCallConv(@TypeOf(onlyFn(T)), std.meta.Tuple(&.{T}), cc) {
+) !*const BoundFnWithCallConv(@TypeOf(onlyFn(T)), @Tuple(&.{T}), cc) {
     const func = onlyFn(T);
     return try bindWithCallConv(func, .{vars}, cc);
 }
@@ -1756,7 +1756,7 @@ const Instruction = switch (builtin.target.cpu.arch) {
             return table;
         }
 
-        pub fn decode(bytes: [*]const u8) std.meta.Tuple(&.{ @This(), Attributes, usize }) {
+        pub fn decode(bytes: [*]const u8) @Tuple(&.{ @This(), Attributes, usize }) {
             var i: usize = 0;
             var instr: @This() = .{};
             if (std.enums.fromInt(Prefix, bytes[i])) |prefix| {
