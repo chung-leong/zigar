@@ -14,6 +14,8 @@ const Value = napi.Value;
 const Ref = napi.Ref;
 const ThreadsafeFunction = napi.ThreadsafeFunction;
 const redirection = @import("redirection.zig");
+const system = @import("system.zig");
+const io = system.io;
 const fn_transform = @import("zigft/fn-transform.zig");
 
 comptime {
@@ -43,8 +45,8 @@ const ModuleHost = struct {
         handle: usize,
         timeout: usize = 0,
 
-        pub fn init(self: *@This(), io: std.Io) usize {
-            self.* = .{ .handle = @intFromPtr(self), .io = io };
+        pub fn init(self: *@This()) usize {
+            self.* = .{ .handle = @intFromPtr(self) };
             return self.handle;
         }
 
@@ -166,9 +168,6 @@ const ModuleHost = struct {
     var buffer_count: i32 = 0;
     var function_count: i32 = 0;
 
-    var threaded_io = std.Io.Threaded.init_single_threaded;
-    const io = threaded_io.io();
-
     const Module = interface.Module(Value);
 
     fn register(self: *@This()) !void {
@@ -212,8 +211,8 @@ const ModuleHost = struct {
         // create the environment
         const js_env = try env.callFunction(try env.getNull(), create_env, &.{});
         const self = try c_allocator.create(@This());
-        threaded_io = std.Io.Threaded.init_single_threaded;
-        self.* = .{ .env = env, .io = threaded_io.io() };
+        system.init();
+        self.* = .{ .env = env };
         defer self.release();
         try self.register();
         // import functions from the environment
@@ -387,7 +386,7 @@ const ModuleHost = struct {
                     const vtable: *const HandlerVTable = @ptrCast(@alignCast(hook.handler));
                     try redirection_controller.addSyscallVtable(self, pos, vtable);
                     errdefer redirection_controller.removeSyscallVtable(self, vtable) catch {};
-                    if (redirection_controller.installSyscallTrap(self, &trapping_syscalls)) {
+                    if (redirection_controller.installSyscallTrap(&trapping_syscalls)) {
                         self.syscall_trap_installed = true;
                     } else |_| {}
                 }
@@ -399,7 +398,7 @@ const ModuleHost = struct {
 
     pub fn initializeThread(self: *@This()) !void {
         if (self.syscall_trap_installed) {
-            try redirection_controller.installSyscallTrap(self, &trapping_syscalls);
+            try redirection_controller.installSyscallTrap(&trapping_syscalls);
             self.thread_syscall_trap_list_mutex.lockUncancelable(io);
             defer self.thread_syscall_trap_list_mutex.unlock(io);
             try self.thread_syscall_trap_list.append(c_allocator, &trapping_syscalls);
