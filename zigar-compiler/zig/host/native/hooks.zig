@@ -2559,6 +2559,7 @@ pub fn PosixSubstituteLinux(comptime redirector: type) type {
         pub const copy_file_range = makeStdHook("copy_file_range");
         pub const sendfile = makeStdHook("sendfile");
         pub const sendfile64 = makeStdHook("sendfile64");
+        pub const statx = makeStdHook("statx");
 
         fn makeStdHook(comptime name: []const u8) posix.StdHook(@TypeOf(@field(redirector, name))) {
             return posix.makeStdHookUsing(Original, name, name);
@@ -2569,6 +2570,7 @@ pub fn PosixSubstituteLinux(comptime redirector: type) type {
             pub var copy_file_range: *const @TypeOf(Self.copy_file_range) = undefined;
             pub var sendfile: *const @TypeOf(Self.sendfile) = undefined;
             pub var sendfile64: *const @TypeOf(Self.sendfile64) = undefined;
+            pub var statx: *const @TypeOf(Self.statx) = undefined;
         };
         pub const calling_convention = std.builtin.CallingConvention.c;
     };
