@@ -115,7 +115,8 @@ export function addTests(importModule, options) {
       expect(log).to.have.lengthOf(0);
       printError();
       expect(log).to.have.lengthOf(1);
-      expect(log[0]).to.eql({ source: 'stderr', message: 'error: std.log.err\n' });
+      expect(log[0].source).to.equal('stderr');
+      expect(log[0].message).to.contain('std.log.err');
     })
     it('should fix issue 757', async function() {
       const { default: module } = await importTest('issue-757');

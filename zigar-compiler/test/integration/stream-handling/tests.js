@@ -755,7 +755,6 @@ export function addTests(importModule, options) {
         await shutdown();
       }
     })
-    skip.
     it('should get stats of an Uint8Array passed as a file', async function() {
       const { __zigar, print } = await importTest('stat-opened-file');
       const array = new Uint8Array(17);
@@ -2713,30 +2712,6 @@ export function addTests(importModule, options) {
         }
       }
     })
-
-    // public function testCopyVirtualFileToRealFileUsingCopyFileRange(): void 
-    // {
-    //     global $input;
-    //     $m = ZigImporter::load(__DIR__ . '/copy-virtual-file-to-real-file-with-copy-file-range.zig');
-    //     $path = __DIR__ . '/data/macbeth.txt';
-    //     $input = file_get_contents($path);
-    //     $out_path = __DIR__ . '/data/copy-file-range-test.txt';        
-    //     try {
-    //         $out_file = fopen($out_path, 'w');
-    //         fwrite($out_file, "Hello world");
-    //         $initial_pos = ftell($out_file);
-    //         $in_file = fopen("var://input", 'r');
-    //         $copied = $m->copy($in_file, $out_file, 28, 4, 32);
-    //         fclose($out_file);
-    //         fclose($in_file);
-    //         $content = file_get_contents($out_path);
-    //         $chunk = substr($input, 28, 32);
-    //         $this->assertSame("Hell$chunk", $content);
-    //     } finally {
-    //         unlink($out_path);
-    //     }
-    // }
-
     it('should get file descriptor using libc function', async function() {
       const { __zigar, get } = await importTest('get-file-descriptor-with-libc-function');
       __zigar.on('open', (evt) => {
