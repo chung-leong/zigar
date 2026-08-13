@@ -1588,27 +1588,29 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
         pub fn statx(dirfd: c_int, path: [*:0]const u8, flags: c_int, mask: c_uint, buf: *std.os.linux.Statx, result: *c_int) callconv(.c) bool {
             if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.stat))) {
-                var resolver = PathResolver.init(dirfd, path) catch {
-                    result.* = intFromError(.NOMEM);
-                    return true;
-                };
-                defer resolver.deinit();
-                var call: Syscall = if (flags & std.os.linux.AT.EMPTY_PATH != 0 and std.mem.len(path) == 0)
-                    .{ .cmd = .fstat, .u = .{
-                        .fstat = .{
-                            .fd = resolver.dirfd,
-                        },
-                    } }
-                else
-                    .{ .cmd = .stat, .u = .{
+                var err: std.c.E = undefined;
+                if (flags & std.os.linux.AT.EMPTY_PATH != 0 and std.mem.len(path) == 0) {
+                    var call: Syscall = .{ .cmd = .fstat, .u = .{
+                        .fstat = .{ .fd = dirfd },
+                    } };
+                    err = Host.redirectSyscall(&call);
+                    if (err == .SUCCESS) copyStatx(buf, &call.u.fstat.stat, mask);
+                } else {
+                    var resolver = PathResolver.init(dirfd, path) catch {
+                        result.* = intFromError(.NOMEM);
+                        return true;
+                    };
+                    defer resolver.deinit();
+                    var call: Syscall = .{ .cmd = .stat, .u = .{
                         .stat = .{
                             .dirfd = resolver.dirfd,
                             .path = resolver.path,
                             .lookup_flags = convertLookupFlags(flags),
                         },
                     } };
-                const err = Host.redirectSyscall(&call);
-                if (err == .SUCCESS) copyStatx(buf, &call.u.fstat.stat, mask);
+                    err = Host.redirectSyscall(&call);
+                    if (err == .SUCCESS) copyStatx(buf, &call.u.stat.stat, mask);
+                }
                 if (err != .OPNOTSUPP or isPrivateDescriptor(dirfd)) {
                     result.* = intFromError(err);
                     return true;

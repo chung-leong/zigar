@@ -497,7 +497,6 @@ final class StreamHandlingTest extends ZigarTestCase
 
     public function testGetStatsOfVirtualFile(): void
     {
-        $this->markTestSkipped('crashing due to BADF');
         $m = ZigImporter::load(__DIR__ . '/stat-opened-file.zig');
         $file = new VirtualFile('This is a test and this is only a test');
         $file->ctime = 12345;
@@ -1796,13 +1795,14 @@ final class StreamHandlingTest extends ZigarTestCase
 
     public function testCopyVirtualFileToRealFile(): void 
     {
-        global $input;
+        global $input, $in_stat;
         $m = ZigImporter::load(__DIR__ . '/copy-virtual-file-to-real-file.zig');
         $path = __DIR__ . '/data/virtual-file-test.txt';
         try {
             $out_file = fopen($path, 'w');
             $input = 'Hello world!';
-            $in_file = fopen("var://input", 'r');
+            $in_file = fopen("var://input/in_stat", 'r');
+            $in_stat = [ 'size' => strlen($input) ];
             $size = strlen($input);
             $copied = $m->copy($in_file, $out_file);
             $this->assertSame($size, $copied);
