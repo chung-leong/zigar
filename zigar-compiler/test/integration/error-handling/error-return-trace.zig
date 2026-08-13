@@ -1,15 +1,11 @@
 const std = @import("std");
-var threaded_io = std.Io.Threaded.init_single_threaded;
 
 const Error = error{some_error};
-const io = threaded_io.io();
 
 pub fn fail() void {
     @call(.never_inline, a, .{}) catch {};
-    var buffer: [1024]u8 = undefined;
-    var writer = std.Io.File.stderr().writer(io, &buffer);
-    const wi = &writer.interface;
-    std.debug.writeCurrentStackTrace(.{}, .{ .writer = wi, .mode = .no_color }) catch {};
+    const trace = @errorReturnTrace() orelse return;
+    std.debug.dumpErrorReturnTrace(trace);
 }
 
 fn a() !void {

@@ -9,7 +9,7 @@ const c = @import("c");
 const off_t = c.off_t;
 const off64_t = c.off64_t;
 
-const system = @import("../../system.zig");
+const io = @import("../../system.zig").io;
 const fn_transform = @import("../../zigft/fn-transform.zig");
 
 const size_t = usize;
@@ -1588,27 +1588,29 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
         pub fn statx(dirfd: c_int, path: [*:0]const u8, flags: c_int, mask: c_uint, buf: *std.os.linux.Statx, result: *c_int) callconv(.c) bool {
             if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.stat))) {
-                var resolver = PathResolver.init(dirfd, path) catch {
-                    result.* = intFromError(.NOMEM);
-                    return true;
-                };
-                defer resolver.deinit();
-                var call: Syscall = if (flags & std.os.linux.AT.EMPTY_PATH != 0 and std.mem.len(path) == 0)
-                    .{ .cmd = .fstat, .u = .{
-                        .fstat = .{
-                            .fd = resolver.dirfd,
-                        },
-                    } }
-                else
-                    .{ .cmd = .stat, .u = .{
+                var err: std.c.E = undefined;
+                if (flags & std.os.linux.AT.EMPTY_PATH != 0 and std.mem.len(path) == 0) {
+                    var call: Syscall = .{ .cmd = .fstat, .u = .{
+                        .fstat = .{ .fd = dirfd },
+                    } };
+                    err = Host.redirectSyscall(&call);
+                    if (err == .SUCCESS) copyStatx(buf, &call.u.fstat.stat, mask);
+                } else {
+                    var resolver = PathResolver.init(dirfd, path) catch {
+                        result.* = intFromError(.NOMEM);
+                        return true;
+                    };
+                    defer resolver.deinit();
+                    var call: Syscall = .{ .cmd = .stat, .u = .{
                         .stat = .{
                             .dirfd = resolver.dirfd,
                             .path = resolver.path,
                             .lookup_flags = convertLookupFlags(flags),
                         },
                     } };
-                const err = Host.redirectSyscall(&call);
-                if (err == .SUCCESS) copyStatx(buf, &call.u.fstat.stat, mask);
+                    err = Host.redirectSyscall(&call);
+                    if (err == .SUCCESS) copyStatx(buf, &call.u.stat.stat, mask);
+                }
                 if (err != .OPNOTSUPP or isPrivateDescriptor(dirfd)) {
                     result.* = intFromError(err);
                     return true;
@@ -1926,7 +1928,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                 if (relative) {
                     self.dirfd = fd_root;
                     // resolve the path
-                    const cwd = try std.process.currentPathAlloc(system.io, self.allocator);
+                    const cwd = try std.process.currentPathAlloc(io, self.allocator);
                     defer self.allocator.free(cwd);
                     var buf = try std.fs.path.resolve(self.allocator, &.{ cwd, path });
                     // add sentinel
@@ -2341,7 +2343,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             if (tb) |t| {
                 ts = .{ .{ .sec = t.actime, .nsec = 0 }, .{ .sec = t.modtime, .nsec = 0 } };
             } else {
-                const now = std.Io.Timestamp.now(system.io, .real);
+                const now = std.Io.Timestamp.now(io, .real);
                 const nps = 1_000_000_000;
                 const s: c_long = @intCast(@divTrunc(now.nanoseconds, nps));
                 const ns: c_long = @intCast(now.nanoseconds - s * nps);
@@ -2359,7 +2361,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             if (tb) |t| {
                 ts = .{ .{ .sec = t.actime, .nsec = 0 }, .{ .sec = t.modtime, .nsec = 0 } };
             } else {
-                const now = std.Io.Timestamp.now(system.io, .real);
+                const now = std.Io.Timestamp.now(io, .real);
                 const nps = 1_000_000_000;
                 const s: c_long = @intCast(@divTrunc(now.nanoseconds, nps));
                 const ns: c_long = @intCast(now.nanoseconds - s * nps);
@@ -2559,6 +2561,7 @@ pub fn PosixSubstituteLinux(comptime redirector: type) type {
         pub const copy_file_range = makeStdHook("copy_file_range");
         pub const sendfile = makeStdHook("sendfile");
         pub const sendfile64 = makeStdHook("sendfile64");
+        pub const statx = makeStdHook("statx");
 
         fn makeStdHook(comptime name: []const u8) posix.StdHook(@TypeOf(@field(redirector, name))) {
             return posix.makeStdHookUsing(Original, name, name);
@@ -2569,6 +2572,7 @@ pub fn PosixSubstituteLinux(comptime redirector: type) type {
             pub var copy_file_range: *const @TypeOf(Self.copy_file_range) = undefined;
             pub var sendfile: *const @TypeOf(Self.sendfile) = undefined;
             pub var sendfile64: *const @TypeOf(Self.sendfile64) = undefined;
+            pub var statx: *const @TypeOf(Self.statx) = undefined;
         };
         pub const calling_convention = std.builtin.CallingConvention.c;
     };
@@ -4864,8 +4868,8 @@ pub fn Win32Substitute(comptime redirector: type) type {
         }
 
         fn createTemporaryHandle(path: [*:0]const u8, dirfd: c_int, arg: anytype) !HANDLE {
-            mutex.lock(system.io) catch unreachable;
-            defer mutex.unlock(system.io);
+            mutex.lock(io) catch unreachable;
+            defer mutex.unlock(io);
             var fd: c_int = fd_temp_min;
             for (temp_handle_list.items) |item| {
                 if (item.fd >= fd) fd = item.fd + 1;
@@ -4888,8 +4892,8 @@ pub fn Win32Substitute(comptime redirector: type) type {
         }
 
         fn destroyTemporaryHandle(handle: HANDLE) !void {
-            mutex.lock(system.io) catch unreachable;
-            defer mutex.unlock(system.io);
+            mutex.lock(io) catch unreachable;
+            defer mutex.unlock(io);
             const fd = toDescriptor(handle);
             for (temp_handle_list.items, 0..) |item, i| {
                 if (item.fd == fd) {
@@ -4902,8 +4906,8 @@ pub fn Win32Substitute(comptime redirector: type) type {
         }
 
         fn getTemporaryHandleInfo(handle: HANDLE) !?TemporaryHandleInfo {
-            mutex.lock(system.io) catch unreachable;
-            defer mutex.unlock(system.io);
+            mutex.lock(io) catch unreachable;
+            defer mutex.unlock(io);
             const fd = toDescriptor(handle);
             return for (temp_handle_list.items) |item| {
                 if (item.fd == fd) break item;
@@ -4920,16 +4924,16 @@ pub fn Win32Substitute(comptime redirector: type) type {
                 0, 1, 2 => return true,
                 else => if (unseekable_descriptor_list.items.len == 0) return true,
             }
-            mutex.lock(system.io) catch unreachable;
-            defer mutex.unlock(system.io);
+            mutex.lock(io) catch unreachable;
+            defer mutex.unlock(io);
             return for (unseekable_descriptor_list.items) |ufd| {
                 if (ufd == fd) break false;
             } else true;
         }
 
         fn addUnseekable(fd: c_int) void {
-            mutex.lock(system.io) catch unreachable;
-            defer mutex.unlock(system.io);
+            mutex.lock(io) catch unreachable;
+            defer mutex.unlock(io);
             unseekable_descriptor_list.append(c_allocator, fd) catch {};
         }
 

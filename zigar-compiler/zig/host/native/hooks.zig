@@ -9,7 +9,7 @@ const c = @import("c");
 const off_t = c.off_t;
 const off64_t = c.off64_t;
 
-const system = @import("../../system.zig");
+const io = @import("../../system.zig").io;
 const fn_transform = @import("../../zigft/fn-transform.zig");
 
 const size_t = usize;
@@ -1928,7 +1928,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                 if (relative) {
                     self.dirfd = fd_root;
                     // resolve the path
-                    const cwd = try std.process.currentPathAlloc(system.io, self.allocator);
+                    const cwd = try std.process.currentPathAlloc(io, self.allocator);
                     defer self.allocator.free(cwd);
                     var buf = try std.fs.path.resolve(self.allocator, &.{ cwd, path });
                     // add sentinel
@@ -2343,7 +2343,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             if (tb) |t| {
                 ts = .{ .{ .sec = t.actime, .nsec = 0 }, .{ .sec = t.modtime, .nsec = 0 } };
             } else {
-                const now = std.Io.Timestamp.now(system.io, .real);
+                const now = std.Io.Timestamp.now(io, .real);
                 const nps = 1_000_000_000;
                 const s: c_long = @intCast(@divTrunc(now.nanoseconds, nps));
                 const ns: c_long = @intCast(now.nanoseconds - s * nps);
@@ -2361,7 +2361,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             if (tb) |t| {
                 ts = .{ .{ .sec = t.actime, .nsec = 0 }, .{ .sec = t.modtime, .nsec = 0 } };
             } else {
-                const now = std.Io.Timestamp.now(system.io, .real);
+                const now = std.Io.Timestamp.now(io, .real);
                 const nps = 1_000_000_000;
                 const s: c_long = @intCast(@divTrunc(now.nanoseconds, nps));
                 const ns: c_long = @intCast(now.nanoseconds - s * nps);
@@ -4868,8 +4868,8 @@ pub fn Win32Substitute(comptime redirector: type) type {
         }
 
         fn createTemporaryHandle(path: [*:0]const u8, dirfd: c_int, arg: anytype) !HANDLE {
-            mutex.lock(system.io) catch unreachable;
-            defer mutex.unlock(system.io);
+            mutex.lock(io) catch unreachable;
+            defer mutex.unlock(io);
             var fd: c_int = fd_temp_min;
             for (temp_handle_list.items) |item| {
                 if (item.fd >= fd) fd = item.fd + 1;
@@ -4892,8 +4892,8 @@ pub fn Win32Substitute(comptime redirector: type) type {
         }
 
         fn destroyTemporaryHandle(handle: HANDLE) !void {
-            mutex.lock(system.io) catch unreachable;
-            defer mutex.unlock(system.io);
+            mutex.lock(io) catch unreachable;
+            defer mutex.unlock(io);
             const fd = toDescriptor(handle);
             for (temp_handle_list.items, 0..) |item, i| {
                 if (item.fd == fd) {
@@ -4906,8 +4906,8 @@ pub fn Win32Substitute(comptime redirector: type) type {
         }
 
         fn getTemporaryHandleInfo(handle: HANDLE) !?TemporaryHandleInfo {
-            mutex.lock(system.io) catch unreachable;
-            defer mutex.unlock(system.io);
+            mutex.lock(io) catch unreachable;
+            defer mutex.unlock(io);
             const fd = toDescriptor(handle);
             return for (temp_handle_list.items) |item| {
                 if (item.fd == fd) break item;
@@ -4924,16 +4924,16 @@ pub fn Win32Substitute(comptime redirector: type) type {
                 0, 1, 2 => return true,
                 else => if (unseekable_descriptor_list.items.len == 0) return true,
             }
-            mutex.lock(system.io) catch unreachable;
-            defer mutex.unlock(system.io);
+            mutex.lock(io) catch unreachable;
+            defer mutex.unlock(io);
             return for (unseekable_descriptor_list.items) |ufd| {
                 if (ufd == fd) break false;
             } else true;
         }
 
         fn addUnseekable(fd: c_int) void {
-            mutex.lock(system.io) catch unreachable;
-            defer mutex.unlock(system.io);
+            mutex.lock(io) catch unreachable;
+            defer mutex.unlock(io);
             unseekable_descriptor_list.append(c_allocator, fd) catch {};
         }
 

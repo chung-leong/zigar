@@ -1,3 +1,4 @@
 const std = @import("std");
+var threaded_io = std.Io.Threaded.init_single_threaded;
 
-pub var io: std.Io = undefined;
+pub const io = threaded_io.io();

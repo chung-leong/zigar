@@ -24,8 +24,8 @@ export function addTests(importModule, options) {
       }
     });
     skip.entirely.if(target === 'wasm32').or(target === 'win32').or(optimize !== 'Debug').
-    it('should print stack trace', async function() {
-      const { fail } = await importTest('stack-trace');
+    it('should print error return trace', async function() {
+      const { fail } = await importTest('error-return-trace');
       const lines = await capture(() => fail());
       const text = lines.join('\n');
       if (target === 'linux') {
@@ -41,8 +41,8 @@ export function addTests(importModule, options) {
       }
     })
     skip.entirely.unless(target === 'wasm32').and(runtimeSafety).
-    it('should produce an error return trace', async function() {
-      const { fail } = await importTest('wasm-error-trace');
+    it('should produce an error return trace for WASM', async function() {
+      const { fail } = await importTest('wasm-error-return-trace');
       const [ line ] = await captureError(() => {
         if (runtimeSafety) {
           expect(fail).to.throw(WebAssembly.RuntimeError)

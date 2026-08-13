@@ -7,7 +7,6 @@ const c = @import("c");
 
 const exporter = @import("../export.zig");
 const Value = exporter.Value;
-const system = @import("../system.zig");
 const js_fn = @import("../thunk/js-fn.zig");
 const zig_fn = @import("../thunk/zig-fn.zig");
 pub const AbortSignal = @import("../type/abort-signal.zig").AbortSignal;
@@ -225,7 +224,7 @@ pub fn getInstance() *anyopaque {
     return instance;
 }
 
-pub fn setHostInstance(ptr: *Module.Host, io_ptr: *const std.Io) callconv(.c) E {
+pub fn setHostInstance(ptr: *Module.Host) callconv(.c) E {
     if (builtin.link_libc and builtin.target.os.tag != .windows) {
         if (@hasDecl(c, "RTLD_DEEPBIND")) {
             // fix missing environ due to RTLD_DEEPBIND option given to dlopen()
@@ -240,7 +239,6 @@ pub fn setHostInstance(ptr: *Module.Host, io_ptr: *const std.Io) callconv(.c) E 
     }
     instance = ptr;
     initialized = true;
-    system.io = io_ptr.*;
     return E.SUCCESS;
 }
 
