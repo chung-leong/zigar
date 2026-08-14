@@ -1,6 +1,7 @@
 const std = @import("std");
 const wasm_allocator = std.heap.wasm_allocator;
 const builtin = @import("builtin");
+const io = @import("../../system.zig").io;
 
 const LinkedList = @import("../../type/linked-list.zig").LinkedList;
 
@@ -683,7 +684,7 @@ pub fn _pthread_cleanup_push(
 
 const PthreadMutex = struct {
     ref: RefCount(@This()) = .{},
-    mutex: std.Thread.Mutex = .{},
+    mutex: std.Io.Mutex = .init,
     lock_count: usize = 0,
     thread_id: std.atomic.Value(pthread_t) = .init(0),
     wait_futex: std.atomic.Value(u32) = .init(0),
@@ -709,13 +710,16 @@ const PthreadMutex = struct {
 
     pub fn wait(self: *@This(), duration: u64) void {
         self.wait_futex.store(0, .unordered);
-        std.Thread.Futex.timedWait(&self.wait_futex, 0, duration) catch {};
+        const timeout: std.Io.Timeout = .{
+            .duration = .{ .clock = .real, .raw = .fromNanoseconds(duration) },
+        };
+        std.Io.futexWaitTimeout(io, u32, &self.wait_futex.raw, 0, timeout) catch {};
     }
 
     pub fn wake(self: *@This()) void {
         if (self.wait_futex.load(.unordered) != 0) {
             self.wait_futex.store(1, .unordered);
-            std.Thread.Futex.wake(&self.wait_futex, 1);
+            std.Io.futexWake(io, u32, &self.wait_futex.raw, 1);
         }
     }
 };
@@ -790,7 +794,7 @@ pub fn pthread_mutex_lock(
         },
         else => {},
     }
-    pthread_mutex.mutex.lock();
+    pthread_mutex.mutex.lockUncancelable(io);
     pthread_mutex.thread_id.store(current_id, .unordered);
     pthread_mutex.lock_count = 1;
     return 0;
@@ -798,7 +802,7 @@ pub fn pthread_mutex_lock(
 
 pub fn pthread_mutex_timedlock(
     noalias mutex: [*c]pthread_mutex_t,
-    noalias abstime: [*c]const std.posix.timespec,
+    noalias abstime: [*c]const std.c.timespec,
 ) callconv(.c) c_int {
     while (true) {
         const result = pthread_mutex_trylock(mutex);
@@ -806,7 +810,8 @@ pub fn pthread_mutex_timedlock(
             const end = abstime.*;
             const end_ns = end.toTimestamp();
             // get the current time and see if it's large than abstime
-            const now = std.posix.clock_gettime(.REALTIME) catch break;
+            var now: std.c.timespec = undefined;
+            if (std.c.clock_gettime(.REALTIME, &now) < 0) break;
             const now_ns = now.toTimestamp();
             if (now_ns > end_ns) break;
             const pthread_mutex = PthreadMutex.extract(mutex);
@@ -837,7 +842,7 @@ pub fn pthread_mutex_unlock(
         },
         else => {},
     }
-    pthread_mutex.mutex.unlock();
+    pthread_mutex.mutex.unlock(io);
     pthread_mutex.lock_count = 0;
     pthread_mutex.thread_id.store(0, .unordered);
     pthread_mutex.wake();
@@ -981,9 +986,9 @@ pub fn pthread_mutexattr_setrobust(
 
 const PthreadRwLock = struct {
     ref: RefCount(@This()) = .{},
-    lock: std.Thread.RwLock = .{},
+    lock: std.Io.RwLock = .init,
     writer_thread_id: pthread_t = 0,
-    reader_thread_list: std.ArrayListUnmanaged(pthread_t) = .{},
+    reader_thread_list: std.ArrayList(pthread_t) = .empty,
     reader_thread_list_spinlock: pthread_spinlock_t = 0,
     wait_futex: std.atomic.Value(u32) = .init(0),
     attributes: Attributes = .{},
@@ -1005,13 +1010,16 @@ const PthreadRwLock = struct {
 
     pub fn wait(self: *@This(), duration: u64) void {
         self.wait_futex.store(0, .unordered);
-        std.Thread.Futex.timedWait(&self.wait_futex, 0, duration) catch {};
+        const timeout: std.Io.Timeout = .{
+            .duration = .{ .clock = .real, .raw = .fromNanoseconds(duration) },
+        };
+        std.Io.futexWaitTimeout(io, u32, &self.wait_futex.raw, 0, timeout) catch {};
     }
 
     pub fn wake(self: *@This()) void {
         if (self.wait_futex.load(.unordered) != 0) {
             self.wait_futex.store(1, .unordered);
-            std.Thread.Futex.wake(&self.wait_futex, 1);
+            std.Io.futexWake(io, u32, &self.wait_futex.raw, 1);
         }
     }
 };
@@ -1046,12 +1054,12 @@ pub fn pthread_rwlock_rdlock(
     rwlock: [*c]pthread_rwlock_t,
 ) callconv(.c) c_int {
     const pthread_rwlock = PthreadRwLock.extract(rwlock);
-    pthread_rwlock.lock.lockShared();
+    pthread_rwlock.lock.lockSharedUncancelable(io);
     const thread_id = pthread_self();
     _ = pthread_spin_lock(&pthread_rwlock.reader_thread_list_spinlock);
     defer _ = pthread_spin_unlock(&pthread_rwlock.reader_thread_list_spinlock);
     pthread_rwlock.reader_thread_list.append(wasm_allocator, thread_id) catch {
-        pthread_rwlock.lock.unlockShared();
+        pthread_rwlock.lock.unlockShared(io);
         return errno(.NOMEM);
     };
     return 0;
@@ -1061,12 +1069,12 @@ pub fn pthread_rwlock_tryrdlock(
     rwlock: [*c]pthread_rwlock_t,
 ) callconv(.c) c_int {
     const pthread_rwlock = PthreadRwLock.extract(rwlock);
-    if (!pthread_rwlock.lock.tryLockShared()) return errno(.BUSY);
+    if (!pthread_rwlock.lock.tryLockShared(io)) return errno(.BUSY);
     const thread_id = pthread_self();
     _ = pthread_spin_lock(&pthread_rwlock.reader_thread_list_spinlock);
     defer _ = pthread_spin_unlock(&pthread_rwlock.reader_thread_list_spinlock);
     pthread_rwlock.reader_thread_list.append(wasm_allocator, thread_id) catch {
-        pthread_rwlock.lock.unlockShared();
+        pthread_rwlock.lock.unlockShared(io);
         return errno(.NOMEM);
     };
     return 0;
@@ -1074,7 +1082,7 @@ pub fn pthread_rwlock_tryrdlock(
 
 pub fn pthread_rwlock_timedrdlock(
     noalias rwlock: [*c]pthread_rwlock_t,
-    noalias abstime: [*c]const std.posix.timespec,
+    noalias abstime: [*c]const std.c.timespec,
 ) callconv(.c) c_int {
     while (true) {
         const result = pthread_rwlock_tryrdlock(rwlock);
@@ -1082,7 +1090,8 @@ pub fn pthread_rwlock_timedrdlock(
             const pthread_rwlock = PthreadRwLock.extract(rwlock);
             const end = abstime.*;
             const end_ns = end.toTimestamp();
-            const now = std.posix.clock_gettime(.REALTIME) catch break;
+            var now: std.c.timespec = undefined;
+            if (std.c.clock_gettime(.REALTIME, &now) < 0) break;
             const now_ns = now.toTimestamp();
             if (now_ns >= end_ns) break;
             const duration = end_ns - now_ns;
@@ -1096,7 +1105,7 @@ pub fn pthread_rwlock_wrlock(
     rwlock: [*c]pthread_rwlock_t,
 ) callconv(.c) c_int {
     const pthread_rwlock = PthreadRwLock.extract(rwlock);
-    pthread_rwlock.lock.lock();
+    pthread_rwlock.lock.lockUncancelable(io);
     pthread_rwlock.writer_thread_id = pthread_self();
     return 0;
 }
@@ -1105,14 +1114,14 @@ pub fn pthread_rwlock_trywrlock(
     rwlock: [*c]pthread_rwlock_t,
 ) callconv(.c) c_int {
     const pthread_rwlock = PthreadRwLock.extract(rwlock);
-    if (!pthread_rwlock.lock.tryLock()) return errno(.BUSY);
+    if (!pthread_rwlock.lock.tryLock(io)) return errno(.BUSY);
     pthread_rwlock.writer_thread_id = pthread_self();
     return 0;
 }
 
 pub fn pthread_rwlock_timedwrlock(
     noalias rwlock: [*c]pthread_rwlock_t,
-    noalias abstime: [*c]const std.posix.timespec,
+    noalias abstime: [*c]const std.c.timespec,
 ) callconv(.c) c_int {
     while (true) {
         const result = pthread_rwlock_trywrlock(rwlock);
@@ -1120,7 +1129,8 @@ pub fn pthread_rwlock_timedwrlock(
             const pthread_rwlock = PthreadRwLock.extract(rwlock);
             const end = abstime.*;
             const end_ns = end.toTimestamp();
-            const now = std.posix.clock_gettime(.REALTIME) catch break;
+            var now: std.c.timespec = undefined;
+            if (std.c.clock_gettime(.REALTIME, &now) < 0) break;
             const now_ns = now.toTimestamp();
             if (now_ns >= end_ns) break;
             const duration = end_ns - now_ns;
@@ -1138,7 +1148,7 @@ pub fn pthread_rwlock_unlock(
     if (pthread_rwlock.writer_thread_id != 0) {
         if (thread_id != pthread_rwlock.writer_thread_id) return errno(.PERM);
         pthread_rwlock.writer_thread_id = 0;
-        pthread_rwlock.lock.unlock();
+        pthread_rwlock.lock.unlock(io);
     } else {
         var reader_index: usize = undefined;
         for (pthread_rwlock.reader_thread_list.items, 0..) |id, index| {
@@ -1147,7 +1157,7 @@ pub fn pthread_rwlock_unlock(
                 break;
             }
         } else return errno(.PERM);
-        pthread_rwlock.lock.unlockShared();
+        pthread_rwlock.lock.unlockShared(io);
         _ = pthread_spin_lock(&pthread_rwlock.reader_thread_list_spinlock);
         defer _ = pthread_spin_unlock(&pthread_rwlock.reader_thread_list_spinlock);
         _ = pthread_rwlock.reader_thread_list.swapRemove(reader_index);
@@ -1212,12 +1222,12 @@ pub fn pthread_rwlockattr_setkind_np(
 
 const PthreadCondition = struct {
     ref: RefCount(@This()) = .{},
-    condition: std.Thread.Condition = .{},
+    condition: std.Io.Condition = .init,
     attributes: PthreadCondition.Attributes = .{},
 
     const Attributes = struct {
         shared: c_int = PTHREAD_PROCESS_PRIVATE,
-        clock_id: std.posix.clockid_t = .REALTIME,
+        clock_id: std.c.clockid_t = .REALTIME,
     };
 
     pub fn extract(cond: [*c]const pthread_cond_t) *@This() {
@@ -1261,7 +1271,7 @@ pub fn pthread_cond_signal(
     cond: [*c]pthread_cond_t,
 ) callconv(.c) c_int {
     const pthread_condition = PthreadCondition.extract(cond);
-    pthread_condition.condition.signal();
+    pthread_condition.condition.signal(io);
     return 0;
 }
 
@@ -1269,7 +1279,7 @@ pub fn pthread_cond_broadcast(
     cond: [*c]pthread_cond_t,
 ) callconv(.c) c_int {
     const pthread_condition = PthreadCondition.extract(cond);
-    pthread_condition.condition.broadcast();
+    pthread_condition.condition.broadcast(io);
     return 0;
 }
 
@@ -1279,26 +1289,107 @@ pub fn pthread_cond_wait(
 ) callconv(.c) c_int {
     const pthread_condition = PthreadCondition.extract(cond);
     const pthread_mutex: *PthreadMutex = @ptrCast(mutex.*);
-    pthread_condition.condition.wait(&pthread_mutex.mutex);
+    pthread_condition.condition.waitUncancelable(io, &pthread_mutex.mutex);
     return 0;
 }
+
+// code copied from master branch as waitTimeout() is missing from 0.16.0
+const MasterCondition = struct {
+    pub fn waitTimeout(cond: *std.Io.Condition, _io: std.Io, mutex: *std.Io.Mutex, timeout: std.Io.Timeout) WaitTimeoutError!void {
+        const deadline = timeout.toDeadline(_io);
+
+        var epoch = cond.epoch.load(.acquire); // `.acquire` to ensure ordered before state load
+
+        {
+            const prev_state = cond.state.fetchAdd(.{ .waiters = 1, .signals = 0 }, .monotonic);
+            std.debug.assert(prev_state.waiters < std.math.maxInt(u16)); // overflow caused by too many waiters
+        }
+
+        mutex.unlock(_io);
+        defer mutex.lockUncancelable(_io);
+
+        while (true) {
+            const result = _io.futexWaitTimeout(u32, &cond.epoch.raw, epoch, deadline);
+
+            epoch = cond.epoch.load(.acquire); // `.acquire` to ensure ordered before `state` laod
+
+            // We were woken normally, so try to consume a pending signal. A signal takes
+            // priority over an expired deadline, so this is checked before the deadline
+            // below. On error we safely remove ourselves as a waiter and propagate the error.
+            if (result) |_| {
+                var prev_state = cond.state.load(.monotonic);
+                while (prev_state.signals > 0) {
+                    prev_state = cond.state.cmpxchgWeak(prev_state, .{
+                        .waiters = prev_state.waiters - 1,
+                        .signals = prev_state.signals - 1,
+                    }, .acquire, .monotonic) orelse {
+                        // We successfully consumed a signal.
+                        return;
+                    };
+                }
+            } else |err| {
+                deregister(cond, _io);
+                return err;
+            }
+
+            // There are no signals available and no error; if a timeout was specified and
+            // the deadline has passed, remove ourselves as a waiter and return
+            // `error.Timeout`. Otherwise, this was a spurious wakeup: loop back to the
+            // futex wait.
+            switch (deadline) {
+                .none => {},
+                .deadline => |d| if (d.untilNow(_io).raw.nanoseconds >= 0) {
+                    deregister(cond, _io);
+                    return error.Timeout;
+                },
+                .duration => unreachable,
+            }
+        }
+    }
+
+    fn deregister(cond: *std.Io.Condition, _io: std.Io) void {
+        var prev_state = cond.state.load(.monotonic);
+        while (true) {
+            const new_signals = @min(prev_state.signals, prev_state.waiters - 1);
+            prev_state = cond.state.cmpxchgWeak(prev_state, .{
+                .waiters = prev_state.waiters - 1,
+                .signals = new_signals,
+            }, .monotonic, .monotonic) orelse {
+                if (prev_state.signals > 0 and prev_state.signals < prev_state.waiters) {
+                    // We kept a signal we are not consuming; wake a remaining waiter for it.
+                    _ = cond.epoch.fetchAdd(1, .release);
+                    _io.futexWake(u32, &cond.epoch.raw, 1);
+                }
+                return;
+            };
+        }
+    }
+
+    pub const WaitTimeoutError = std.Io.Cancelable || std.Io.Timeout.Error;
+};
 
 pub fn pthread_cond_timedwait(
     noalias cond: [*c]pthread_cond_t,
     noalias mutex: [*c]pthread_mutex_t,
-    noalias abstime: [*c]const std.posix.timespec,
+    noalias abstime: [*c]const std.c.timespec,
 ) callconv(.c) c_int {
     const pthread_condition = PthreadCondition.extract(cond);
     const pthread_mutex: *PthreadMutex = @ptrCast(mutex.*);
+    const timeout = timeoutFromSpec(abstime, pthread_condition.attributes.clock_id);
+    MasterCondition.waitTimeout(&pthread_condition.condition, io, &pthread_mutex.mutex, timeout) catch {};
+    return 0;
+}
+
+fn timeoutFromSpec(abstime: [*c]const std.c.timespec, clock_id: std.c.clockid_t) std.Io.Timeout {
     const end = abstime.*;
     const end_ns = end.toTimestamp();
-    const clock_id = pthread_condition.attributes.clock_id;
-    const now = std.posix.clock_gettime(clock_id) catch return errno(.TIMEDOUT);
-    const now_ns = now.toTimestamp();
-    if (now_ns >= end_ns) return errno(.TIMEDOUT);
-    const duration = end_ns - now_ns;
-    pthread_condition.condition.timedWait(&pthread_mutex.mutex, duration) catch return errno(.TIMEDOUT);
-    return 0;
+    const clock: std.Io.Clock = switch (clock_id) {
+        .REALTIME => .real,
+        .MONOTONIC => .awake,
+        .PROCESS_CPUTIME_ID => .cpu_process,
+        .THREAD_CPUTIME_ID => .cpu_thread,
+    };
+    return .{ .deadline = .{ .clock = clock, .raw = .fromNanoseconds(end_ns) } };
 }
 
 pub fn pthread_condattr_init(
@@ -1339,7 +1430,7 @@ pub fn pthread_condattr_setpshared(
 
 pub fn pthread_condattr_getclock(
     noalias attr: [*c]const pthread_condattr_t,
-    noalias clock_id: [*c]std.posix.clockid_t,
+    noalias clock_id: [*c]std.c.clockid_t,
 ) callconv(.c) c_int {
     const pthread_condition_attrs: *PthreadCondition.Attributes = attr.*;
     clock_id.* = pthread_condition_attrs.clock_id;
@@ -1348,7 +1439,7 @@ pub fn pthread_condattr_getclock(
 
 pub fn pthread_condattr_setclock(
     attr: [*c]pthread_condattr_t,
-    clock_id: std.posix.clockid_t,
+    clock_id: std.c.clockid_t,
 ) callconv(.c) c_int {
     const pthread_condition_attrs: *PthreadCondition.Attributes = attr.*;
     pthread_condition_attrs.clock_id = clock_id;
@@ -1406,12 +1497,12 @@ pub fn pthread_spin_unlock(
     return 0;
 }
 
-var key_list: std.ArrayListUnmanaged(struct {
+var key_list: std.ArrayList(struct {
     destructor: ?*const fn (?*anyopaque) callconv(.c) void = null,
     deleted: bool = false,
-}) = .{};
+}) = .empty;
 var key_list_spinlock: pthread_spinlock_t = 0;
-threadlocal var key_value_list: std.ArrayListUnmanaged(?*anyopaque) = .{};
+threadlocal var key_value_list: std.ArrayList(?*anyopaque) = .empty;
 
 pub fn pthread_key_create(
     key: [*c]pthread_key_t,
@@ -1464,7 +1555,7 @@ pub fn pthread_setspecific(
 
 pub fn pthread_getcpuclockid(
     thread_id: pthread_t,
-    clock_id: [*c]std.posix.clockid_t,
+    clock_id: [*c]std.c.clockid_t,
 ) callconv(.c) c_int {
     _ = thread_id;
     _ = clock_id;
@@ -1473,7 +1564,7 @@ pub fn pthread_getcpuclockid(
 
 const PthreadSemaphore = struct {
     ref: RefCount(@This()) = .{},
-    semaphore: std.Thread.Semaphore = .{},
+    semaphore: std.Io.Semaphore = .{},
     attributes: Attributes = .{},
     name: ?[]u8 = null,
 
@@ -1589,22 +1680,30 @@ pub fn sem_wait(
     sem: [*c]sem_t,
 ) callconv(.c) c_int {
     const pthread_semaphore = PthreadSemaphore.extract(sem);
-    pthread_semaphore.semaphore.wait();
+    pthread_semaphore.semaphore.waitUncancelable(io);
     return 0;
 }
 
+const MasterSemaphore = struct {
+    pub fn waitTimeout(s: *std.Io.Semaphore, _io: std.Io, timeout: std.Io.Timeout) WaitTimeoutError!void {
+        const deadline = timeout.toDeadline(_io);
+        try s.mutex.lock(_io);
+        defer s.mutex.unlock(_io);
+        while (s.permits == 0) try MasterCondition.waitTimeout(&s.cond, _io, &s.mutex, deadline);
+        s.permits -= 1;
+        if (s.permits > 0) s.cond.signal(_io);
+    }
+
+    pub const WaitTimeoutError = std.Io.Cancelable || std.Io.Timeout.Error;
+};
+
 pub fn sem_timedwait(
     noalias sem: [*c]sem_t,
-    noalias abstime: [*c]const std.posix.timespec,
+    noalias abstime: [*c]const std.c.timespec,
 ) callconv(.c) c_int {
     const pthread_semaphore = PthreadSemaphore.extract(sem);
-    const end = abstime.*;
-    const end_ns = end.toTimestamp();
-    const now = std.posix.clock_gettime(.REALTIME) catch return semErrno(.TIMEDOUT, -1);
-    const now_ns = now.toTimestamp();
-    if (now_ns >= end_ns) return semErrno(.TIMEDOUT, -1);
-    const duration = end_ns - now_ns;
-    pthread_semaphore.semaphore.timedWait(duration) catch return semErrno(.TIMEDOUT, -1);
+    const timeout = timeoutFromSpec(abstime, .REALTIME);
+    MasterSemaphore.waitTimeout(&pthread_semaphore.semaphore, io, timeout) catch {};
     return 0;
 }
 
@@ -1612,7 +1711,12 @@ pub fn sem_trywait(
     sem: [*c]sem_t,
 ) callconv(.c) c_int {
     const pthread_semaphore = PthreadSemaphore.extract(sem);
-    pthread_semaphore.semaphore.timedWait(0) catch return semErrno(.AGAIN, -1);
+    const timeout: std.Io.Timeout = .{
+        .duration = .{ .clock = .real, .raw = .zero },
+    };
+    MasterSemaphore.waitTimeout(&pthread_semaphore.semaphore, io, timeout) catch {
+        return semErrno(.AGAIN, -1);
+    };
     return 0;
 }
 
@@ -1620,7 +1724,7 @@ pub fn sem_post(
     sem: [*c]sem_t,
 ) callconv(.c) c_int {
     const pthread_semaphore = PthreadSemaphore.extract(sem);
-    pthread_semaphore.semaphore.post();
+    pthread_semaphore.semaphore.post(io);
     return 0;
 }
 

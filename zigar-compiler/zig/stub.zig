@@ -8,7 +8,18 @@ pub const host = switch (builtin.target.cpu.arch.isWasm()) {
     false => @import("host/native.zig"),
 };
 
-pub const std_options: std.Options = if (@hasDecl(module, "std_options")) module.std_options else .{};
+pub const std_options = init: {
+    var options: std.Options = .{};
+    if (@hasDecl(module, "std_options")) {
+        for (std.meta.fieldNames(std.Options)) |name| {
+            @field(options, name) = @field(module.std_options, name);
+        }
+    }
+    if (builtin.target.cpu.arch.isWasm() and @hasField(std.Options, "wasm_main_thread_no_wait")) {
+        options.wasm_main_thread_no_wait = true;
+    }
+    break :init options;
+};
 pub const debug: type = if (@hasDecl(module, "debug")) module.debug else struct {};
 
 pub const panic = switch (@hasDecl(module, "panic") and @TypeOf(module.panic) == type) {

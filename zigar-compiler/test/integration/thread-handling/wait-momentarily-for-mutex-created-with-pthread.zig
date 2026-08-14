@@ -10,11 +10,6 @@ const zigar = @import("zigar");
 
 const io = threaded_io.io();
 
-const clock_id = switch (builtin.target.os.tag) {
-    .windows => c.CLOCK_REALTIME_COARSE,
-    else => c.CLOCK_REALTIME,
-};
-
 var mutex: pthread_mutex_t = undefined;
 
 pub fn spawn() !void {
@@ -28,6 +23,11 @@ pub fn spawn() !void {
     if (c.pthread_detach(thread_id) != 0) return error.CannotDetachThread;
 }
 
+const clock_id = switch (builtin.target.os.tag) {
+    .windows => .REALTIME_COARSE,
+    else => .REALTIME,
+};
+
 fn run1(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     _ = c.pthread_mutex_lock(&mutex);
     defer _ = c.pthread_mutex_unlock(&mutex);
@@ -38,10 +38,10 @@ fn run1(_: ?*anyopaque) callconv(.c) ?*anyopaque {
 
 fn run2(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     std.Io.sleep(io, .fromMilliseconds(10), .real) catch unreachable;
-    var time: c.struct_timespec = undefined;
-    _ = c.clock_gettime(clock_id, &time);
+    var time: std.c.timespec = undefined;
+    _ = std.c.clock_gettime(clock_id, &time);
     add(&time, 150 * 1000000);
-    const retval = c.pthread_mutex_timedlock(&mutex, &time);
+    const retval = c.pthread_mutex_timedlock(&mutex, @ptrCast(&time));
     if (retval == 0) {
         defer _ = c.pthread_mutex_unlock(&mutex);
         std.debug.print("Thread 2 acquired mutex\n", .{});
@@ -53,10 +53,10 @@ fn run2(_: ?*anyopaque) callconv(.c) ?*anyopaque {
 
 fn run3(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     std.Io.sleep(io, .fromMilliseconds(10), .real) catch unreachable;
-    var time: c.struct_timespec = undefined;
-    _ = c.clock_gettime(clock_id, &time);
+    var time: std.c.timespec = undefined;
+    _ = std.c.clock_gettime(clock_id, &time);
     add(&time, 20 * 1000000);
-    const retval = c.pthread_mutex_timedlock(&mutex, &time);
+    const retval = c.pthread_mutex_timedlock(&mutex, @ptrCast(&time));
     if (retval == 0) {
         defer _ = c.pthread_mutex_unlock(&mutex);
         std.debug.print("Thread 3 acquired mutex\n", .{});
@@ -66,11 +66,11 @@ fn run3(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     return null;
 }
 
-fn add(time: *c.struct_timespec, ns: c_long) void {
-    time.tv_nsec += ns;
-    if (time.tv_nsec > 1000000000) {
-        time.tv_sec += 1;
-        time.tv_nsec -= 1000000_000;
+fn add(time: *std.c.timespec, ns: c_long) void {
+    time.nsec += ns;
+    if (time.nsec > 1000000000) {
+        time.sec += 1;
+        time.nsec -= 1000000_000;
     }
 }
 

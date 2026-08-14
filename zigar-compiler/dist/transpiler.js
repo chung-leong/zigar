@@ -5592,21 +5592,22 @@ var allocator = mixin({
 var dir = mixin({
   // create Dir struct for outbound call
   createDirectory(arg) {
-    if (typeof(arg) === 'object' && typeof(arg?.fd) === 'number') {
+    if (typeof(arg) === 'object' && typeof(arg?.handle) === 'number') {
       return arg;
     }
     const dir = this.convertDirectory(arg);
     if (!dir) {
       throw new InvalidStream(PosixDescriptorRight.fd_readdir, arg);
     }
-    let fd = this.createStreamHandle(dir, this.getDefaultRights('dir'));
-    return { fd };
+    let handle = this.createStreamHandle(dir, this.getDefaultRights('dir'));
+    return { handle };
   },
 });
 
 var file = mixin({
   // create File struct for outbound call
   createFile(arg) {
+    const flags = { nonblocking: false };
     if (typeof(arg) === 'object' && typeof(arg?.handle) === 'number') {
       return arg;
     }
@@ -5629,7 +5630,7 @@ var file = mixin({
       }
     }
     let fd = this.createStreamHandle(file, rights);
-    return { handle: fd };
+    return { handle: fd, flags };
   },
 });
 

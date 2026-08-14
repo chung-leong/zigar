@@ -20,9 +20,9 @@ pub fn spawn() !void {
     var semaphore: [*c]sem_t = undefined;
     semaphore = c.sem_open("dingo", 0, mode, value);
     if (semaphore != SEM_FAILED) return error.IncorrectResponse1;
-    semaphore = c.sem_open("hello", c.O_CREAT | c.O_EXCL, mode, value);
+    semaphore = c.sem_open("hello", @as(u32, @bitCast(std.c.O{ .CREAT = true, .EXCL = true })), mode, value);
     if (semaphore == SEM_FAILED) return error.CannotCreateNamedSemaphore;
-    semaphore = c.sem_open("hello", c.O_CREAT | c.O_EXCL, mode, value);
+    semaphore = c.sem_open("hello", @as(u32, @bitCast(std.c.O{ .CREAT = true, .EXCL = true })), mode, value);
     if (semaphore != SEM_FAILED) return error.IncorrectResponse2;
     semaphore = c.sem_open("dingo", 0, mode, value);
     if (semaphore != SEM_FAILED) return error.IncorrectResponse3;

@@ -680,7 +680,7 @@ pub const CallDispatcher = struct {
             }
         }
         const module = self.host.module;
-        _ = module.exports.set_host_instance(@ptrCast(self.host), &io);
+        _ = module.exports.set_host_instance(@ptrCast(self.host));
     }
 
     pub fn deinitializeThread(self: *@This()) !void {

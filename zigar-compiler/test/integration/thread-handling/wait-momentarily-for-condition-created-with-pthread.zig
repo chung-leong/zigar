@@ -8,10 +8,7 @@ const pthread_cond_t = c.pthread_cond_t;
 const pthread_condattr_t = c.pthread_condattr_t;
 const zigar = @import("zigar");
 
-const clock_id = switch (builtin.target.os.tag) {
-    .windows => c.CLOCK_REALTIME_COARSE,
-    else => c.CLOCK_REALTIME,
-};
+extern fn pthread_condattr_setclock(*pthread_condattr_t, std.c.clockid_t) c_int;
 
 var mutex: pthread_mutex_t = undefined;
 var cond: pthread_cond_t = undefined;
@@ -20,7 +17,7 @@ pub fn spawn() !void {
     if (c.pthread_mutex_init(&mutex, null) != 0) return error.CannotCreateMutex;
     var attrs: pthread_condattr_t = undefined;
     if (c.pthread_condattr_init(&attrs) != 0) return error.CannotCreateConditionAttributes;
-    if (c.pthread_condattr_setclock(&attrs, c.CLOCK_REALTIME) != 0) return error.CannotSetConditionAttribute;
+    if (pthread_condattr_setclock(&attrs, .REALTIME) != 0) return error.CannotSetConditionAttribute;
     if (c.pthread_cond_init(&cond, &attrs) != 0) return error.CannotCreateCondition;
     var thread_id: pthread_t = undefined;
     for (0..3) |i| {
@@ -40,15 +37,20 @@ pub fn broadcast() !void {
     if (c.pthread_cond_broadcast(&cond) != 0) return error.CannotBroadcastCondition;
 }
 
+const clock_id = switch (builtin.target.os.tag) {
+    .windows => .REALTIME_COARSE,
+    else => .REALTIME,
+};
+
 fn run(arg: ?*anyopaque) callconv(.c) ?*anyopaque {
     _ = c.pthread_mutex_lock(&mutex);
     defer _ = c.pthread_mutex_unlock(&mutex);
     std.debug.print("Thread waiting for condition\n", .{});
-    var time: c.struct_timespec = undefined;
-    _ = c.clock_gettime(clock_id, &time);
+    var time: std.c.timespec = undefined;
+    _ = std.c.clock_gettime(clock_id, &time);
     const duration: usize = @intFromPtr(arg);
     add(&time, @intCast(duration));
-    const retval = c.pthread_cond_timedwait(&cond, &mutex, &time);
+    const retval = c.pthread_cond_timedwait(&cond, &mutex, @ptrCast(&time));
     if (retval == 0) {
         std.debug.print("Thread saw condition\n", .{});
     } else {
@@ -57,11 +59,11 @@ fn run(arg: ?*anyopaque) callconv(.c) ?*anyopaque {
     return null;
 }
 
-fn add(time: *c.struct_timespec, ns: c_long) void {
-    time.tv_nsec += ns;
-    if (time.tv_nsec > 1000000000) {
-        time.tv_sec += 1;
-        time.tv_nsec -= 1000000_000;
+fn add(time: *std.c.timespec, ns: c_long) void {
+    time.nsec += ns;
+    if (time.nsec > 1000000000) {
+        time.sec += 1;
+        time.nsec -= 1000000_000;
     }
 }
 

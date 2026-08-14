@@ -9,11 +9,6 @@ const zigar = @import("zigar");
 
 const io = threaded_io.io();
 
-const clock_id = switch (builtin.target.os.tag) {
-    .windows => c.CLOCK_REALTIME_COARSE,
-    else => c.CLOCK_REALTIME,
-};
-
 var semaphore: sem_t = undefined;
 
 pub fn spawn() !void {
@@ -27,12 +22,17 @@ pub fn spawn() !void {
     if (c.pthread_detach(thread_id) != 0) return error.CannotDetachThread;
 }
 
+const clock_id = switch (builtin.target.os.tag) {
+    .windows => .REALTIME_COARSE,
+    else => .REALTIME,
+};
+
 fn run1(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     std.debug.print("Thread 1 acquiring semaphore\n", .{});
-    var time: c.struct_timespec = undefined;
-    _ = c.clock_gettime(clock_id, &time);
+    var time: std.c.timespec = undefined;
+    _ = std.c.clock_gettime(clock_id, &time);
     add(&time, 1000000);
-    if (c.sem_timedwait(&semaphore, &time) != 0) {
+    if (c.sem_timedwait(&semaphore, @ptrCast(&time)) != 0) {
         std.debug.print("Thread 1 timed out: {}\n", .{std.c._errno().* == @intFromEnum(std.c.E.TIMEDOUT)});
         return null;
     }
@@ -49,10 +49,10 @@ fn run1(_: ?*anyopaque) callconv(.c) ?*anyopaque {
 
 fn run2(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     std.debug.print("Thread 2 acquiring semaphore\n", .{});
-    var time: c.struct_timespec = undefined;
-    _ = c.clock_gettime(clock_id, &time);
+    var time: std.c.timespec = undefined;
+    _ = std.c.clock_gettime(clock_id, &time);
     add(&time, 1000000);
-    if (c.sem_timedwait(&semaphore, &time) != 0) {
+    if (c.sem_timedwait(&semaphore, @ptrCast(&time)) != 0) {
         std.debug.print("Thread 2 timed out: {}\n", .{std.c._errno().* == @intFromEnum(std.c.E.TIMEDOUT)});
         return null;
     }
@@ -69,10 +69,10 @@ fn run2(_: ?*anyopaque) callconv(.c) ?*anyopaque {
 
 fn run3(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     std.debug.print("Thread 3 acquiring semaphore\n", .{});
-    var time: c.struct_timespec = undefined;
-    _ = c.clock_gettime(clock_id, &time);
+    var time: std.c.timespec = undefined;
+    _ = std.c.clock_gettime(clock_id, &time);
     add(&time, 1000000);
-    if (c.sem_timedwait(&semaphore, &time) != 0) {
+    if (c.sem_timedwait(&semaphore, @ptrCast(&time)) != 0) {
         std.debug.print("Thread 3 timed out: {}\n", .{std.c._errno().* == @intFromEnum(std.c.E.TIMEDOUT)});
         return null;
     }
@@ -87,11 +87,11 @@ fn run3(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     return null;
 }
 
-fn add(time: *c.struct_timespec, ns: c_long) void {
-    time.tv_nsec += ns;
-    if (time.tv_nsec > 1000000000) {
-        time.tv_sec += 1;
-        time.tv_nsec -= 1000000_000;
+fn add(time: *std.c.timespec, ns: c_long) void {
+    time.nsec += ns;
+    if (time.nsec > 1000000000) {
+        time.sec += 1;
+        time.nsec -= 1000000_000;
     }
 }
 

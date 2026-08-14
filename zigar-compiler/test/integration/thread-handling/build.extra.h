@@ -1,4 +1,5 @@
 #define _GNU_SOURCE
+#define __wasilibc_unmodified_upstream
 #include <stdio.h>
 
 #ifdef _WIN32

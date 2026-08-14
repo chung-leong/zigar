@@ -6,8 +6,8 @@ import '../utils.js';
 var dir = mixin({
   // create Dir struct for outbound call
   createDirectory(arg) {
-    if (typeof(arg) === 'object' && typeof(arg?.fd) === 'number') {
-      return { handle: arg.fd };
+    if (typeof(arg) === 'object' && typeof(arg?.handle) === 'number') {
+      return arg;
     }
     const dir = this.convertDirectory(arg);
     if (!dir) {

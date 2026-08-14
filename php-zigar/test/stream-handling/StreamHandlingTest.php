@@ -1695,7 +1695,7 @@ final class StreamHandlingTest extends ZigarTestCase
     public function testThrowWhenAttemptingToReadlink(): void 
     {
         $m = ZigImporter::load(__DIR__ . '/read-link-with-posix-function.zig');
-        $this->assertExceptionMessage('access denied', function() use($m) {
+        $this->assertExceptionMessage('unable to read link', function() use($m) {
             $m->readLink('/vfs://test');
         });
     }

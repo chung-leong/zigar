@@ -8,11 +8,6 @@ const zigar = @import("zigar");
 
 var rwlock: pthread_rwlock_t = undefined;
 
-const clock_id = switch (builtin.target.os.tag) {
-    .windows => c.CLOCK_REALTIME_COARSE,
-    else => c.CLOCK_REALTIME,
-};
-
 pub fn spawn() !void {
     if (c.pthread_rwlock_init(&rwlock, null) != 0) return error.CannotCreateReadWriteLock;
     if (c.pthread_rwlock_wrlock(&rwlock) != 0) return error.CannotObtainWriteLock;
@@ -29,12 +24,17 @@ pub fn unlock() !void {
     if (c.pthread_rwlock_unlock(&rwlock) != 0) return error.CannotReleaseReadWriteLock;
 }
 
+const clock_id = switch (builtin.target.os.tag) {
+    .windows => .REALTIME_COARSE,
+    else => .REALTIME,
+};
+
 fn run1(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     std.debug.print("Thread 1 acquiring read lock\n", .{});
-    var time: c.struct_timespec = undefined;
-    _ = c.clock_gettime(clock_id, &time);
+    var time: std.c.timespec = undefined;
+    _ = std.c.clock_gettime(clock_id, &time);
     add(&time, 10 * 1000000);
-    const retval = c.pthread_rwlock_timedrdlock(&rwlock, &time);
+    const retval = c.pthread_rwlock_timedrdlock(&rwlock, @ptrCast(&time));
     if (retval == 0) {
         defer _ = c.pthread_rwlock_unlock(&rwlock);
         std.debug.print("Thread 1 acquired read lock\n", .{});
@@ -46,10 +46,10 @@ fn run1(_: ?*anyopaque) callconv(.c) ?*anyopaque {
 
 fn run2(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     std.debug.print("Thread 2 acquiring read lock\n", .{});
-    var time: c.struct_timespec = undefined;
-    _ = c.clock_gettime(clock_id, &time);
+    var time: std.c.timespec = undefined;
+    _ = std.c.clock_gettime(clock_id, &time);
     add(&time, 750 * 1000000);
-    const retval = c.pthread_rwlock_timedrdlock(&rwlock, &time);
+    const retval = c.pthread_rwlock_timedrdlock(&rwlock, @ptrCast(&time));
     if (retval == 0) {
         defer _ = c.pthread_rwlock_unlock(&rwlock);
         std.debug.print("Thread 2 acquired read lock\n", .{});
@@ -59,11 +59,11 @@ fn run2(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     return null;
 }
 
-fn add(time: *c.struct_timespec, ns: c_long) void {
-    time.tv_nsec += ns;
-    if (time.tv_nsec > 1000000000) {
-        time.tv_sec += 1;
-        time.tv_nsec -= 1000000_000;
+fn add(time: *std.c.timespec, ns: c_long) void {
+    time.nsec += ns;
+    if (time.nsec > 1000000000) {
+        time.sec += 1;
+        time.nsec -= 1000000_000;
     }
 }
 

@@ -91,7 +91,7 @@ pub const ModuleHost = struct {
         self.dispatcher = try .init(self);
         errdefer self.dispatcher.deinit();
         try self.dispatcher.installHooks(&lib, module.attributes.io_redirection);
-        _ = module.exports.set_host_instance(@ptrCast(self), &io);
+        _ = module.exports.set_host_instance(@ptrCast(self));
         _ = module.exports.set_language_name("PHP");
         self.importer = try .init(self);
         defer self.importer.deinit();

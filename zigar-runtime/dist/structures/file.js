@@ -6,6 +6,7 @@ import { hasMethod } from '../utils.js';
 var file = mixin({
   // create File struct for outbound call
   createFile(arg) {
+    const flags = { nonblocking: false };
     if (typeof(arg) === 'object' && typeof(arg?.handle) === 'number') {
       return arg;
     }
@@ -28,7 +29,7 @@ var file = mixin({
       }
     }
     let fd = this.createStreamHandle(file, rights);
-    return { handle: fd };
+    return { handle: fd, flags };
   },
 });
 
