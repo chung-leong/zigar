@@ -851,7 +851,7 @@ export function addTests(importModule, options) {
         spawn,
         startup,
         shutdown,
-      } = await importTest('call-function-once-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      } = await importTest('pthread/call-function-once', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
       startup();
       try {
         const lines = await capture(async () => {

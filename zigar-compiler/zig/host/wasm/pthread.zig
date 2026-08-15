@@ -112,42 +112,6 @@ const Pthread = struct {
         return list.find(match, id);
     }
 
-    pub fn cancel(self: *@This()) !void {
-        const cancel_arg: ?*anyopaque = switch (self.cancel_type.load(.unordered)) {
-            PTHREAD_CANCEL_ASYNCHRONOUS => init: {
-                // immediate termination is desired; the web worker handling this thread is going
-                // to be killed and a replace worker will take its place during thread clean-up
-                // we need to provide the necessary information allowing this to happen
-                const wasi_thread = self.thread.impl.thread;
-                const WasiThread = @TypeOf(wasi_thread.*);
-                const Instance = struct {
-                    // struct from lib/std/Thread.zig
-                    thread: WasiThread,
-                    tls_offset: usize,
-                    stack_offset: usize,
-                    raw_ptr: usize,
-                    call_back: *const fn (usize) void,
-                    original_stack_pointer: [*]u8,
-                };
-                const instance: *Instance = @ptrCast(self.thread.impl.thread);
-                const bytes = @sizeOf(AsyncCancellation) + 4096; // 4K should be more than enough
-                const memory_ptr = wasm_allocator.rawAlloc(bytes, .@"16", 0) orelse return error.OutOfMemory;
-                const ac: *AsyncCancellation = @ptrCast(@alignCast(memory_ptr));
-                ac.* = .{
-                    .memory = memory_ptr[0..bytes],
-                    .stack_pointer = memory_ptr + std.mem.alignForward(usize, @sizeOf(AsyncCancellation), 16),
-                    .tls_base = wasi_thread.memory.ptr + instance.tls_offset,
-                };
-                break :init ac;
-            },
-            else => null,
-        };
-        // cancellation is handled on the JavaScript side; depending on whether cancel_arg is null,
-        // the JS runtime can either immediately axe the worker handling the thread specified
-        // by id or wait until it makes a syscall or calls pthread_testcancel()
-        @"thread-cancel"(self.wasi_thread_id, cancel_arg);
-    }
-
     pub fn match(self: *const @This(), id: c_ulong) bool {
         return self.id == id;
     }
@@ -158,19 +122,43 @@ const Pthread = struct {
         }
     }
 
-    pub fn performCancellationCleanUp() void {
-        // this function runs in a new worker after the one handling the thread was killed
-        // since the thread id is reused, we'd have the same TLS variable as before; getCurrent()
-        // would still give us the right struct
+    pub fn cancel(self: *@This()) !void {
+        const immediate = self.cancel_type.load(.unordered) == PTHREAD_CANCEL_ASYNCHRONOUS;
+        self.return_value = PTHREAD_CANCELED;
+        try self.scheduleCleanUp(immediate);
+    }
+
+    pub fn exit(self: *@This(), retval: ?*anyopaque) noreturn {
+        self.return_value = retval;
+        self.scheduleCleanUp(false) catch {};
+        std.os.wasi.proc_exit(0);
+    }
+
+    fn scheduleCleanUp(self: *@This(), immediate: bool) !void {
+        try self.thread.impl.cancel(immediate, cleanup, @intFromPtr(self), .{
+            .stack_size = 64 * 1024,
+            .cancel_fn = .{
+                .name = "thread-cancel",
+                .library_name = "wasi",
+            },
+        });
+    }
+
+    fn cleanup(arg: usize) void {
+        const self: *@This() = @ptrFromInt(arg);
+        if (self.return_value == PTHREAD_CANCELED) {
+            self.performCancellationCleanUp();
+        }
+        self.performExitCleanup();
+    }
+
+    fn performCancellationCleanUp(self: *@This()) void {
         var top = PthreadCleanUpCallback.getTop();
         while (top) |ptcb| {
             ptcb.routine(ptcb.arg);
             top = ptcb.next;
         }
-        const self = getCurrent();
         self.cancel_progress.store(.canceled, .unordered);
-        self.return_value = PTHREAD_CANCELED;
-        self.performExitCleanup();
     }
 
     pub fn performExitCleanup(self: *@This()) void {
@@ -189,97 +177,12 @@ const Pthread = struct {
             }
         }
         key_value_list.deinit(wasm_allocator);
-        // termination code copied from WasiThreadImpl
-        const wasi_thread = self.thread.impl.thread;
-        switch (wasi_thread.state.swap(.completed, .seq_cst)) {
-            .running => {
-                // reset the Thread ID
-                asm volatile (
-                    \\ local.get %[ptr]
-                    \\ i32.const 0
-                    \\ i32.atomic.store 0
-                    :
-                    : [ptr] "r" (&wasi_thread.tid.raw),
-                );
-
-                // Wake the main thread listening to this thread
-                asm volatile (
-                    \\ local.get %[ptr]
-                    \\ i32.const 1 # waiters
-                    \\ memory.atomic.notify 0
-                    \\ drop # no need to know the waiters
-                    :
-                    : [ptr] "r" (&wasi_thread.tid.raw),
-                );
-            },
-            .completed => unreachable,
-            .detached => {
-                // use free in the vtable so the stack doesn't get set to undefined when optimize = Debug
-                const free = wasi_thread.allocator.vtable.free;
-                const ptr = wasi_thread.allocator.ptr;
-                free(ptr, wasi_thread.memory, std.mem.Alignment.@"1", 0);
-            },
-        }
         // remove from list if it's detached
         if (self.state.load(.unordered) == .detached) {
             self.ref.dec();
         }
     }
 
-    const AsyncCancellation = struct {
-        memory: []u8,
-        stack_pointer: [*]u8,
-        tls_base: [*]u8,
-    };
-
-    /// This function is called after a thread has been canceled; if it was a deferred cancelation,
-    /// (i.e. the worker interrupted itself voluntarily), the argument would be null; if it was an
-    /// async cancelation, the worker has unceremoniously gotten the axe; the pointer provides the
-    /// for necessary information for the replacement worker to take on the identity of its
-    /// ill-fated comrade and clean up after it
-    export fn wasi_thread_clean(_: ?*AsyncCancellation) callconv(.naked) void {
-        const clothed = struct {
-            // cancel_type is PTHREAD_CANCEL_ASYNCHRONOUS and a new worker has just taken over;
-            // our assembly code has recreated the environment of the thread by this point; we
-            // just need to perform the clean-up then free the memory allocated for the temporary
-            // stack and the AsyncCancellation struct itself
-            fn runAsync(ac: *AsyncCancellation) callconv(.c) void {
-                // use raw free to avoid modification of stack memory
-                defer wasm_allocator.rawFree(ac.memory, .@"16", 0);
-                performCancellationCleanUp();
-            }
-
-            // cancel_type is PTHREAD_CANCEL_DEFERRED and a cancellation point has just been
-            // reached (i.e. a syscall happened); perform clean-up within the original thread
-            // using the thread's stack
-            fn runDeferred() callconv(.c) void {
-                performCancellationCleanUp();
-            }
-        };
-        asm volatile (
-            \\ local.get 0
-            \\ if
-            \\   local.get 0
-            \\   i32.load %[stack_pointer]
-            \\   global.set __stack_pointer
-            \\   local.get 0
-            \\   i32.load %[tls_base]
-            \\   global.set __tls_base
-            \\   local.get 0
-            \\   call %[run_async]
-            \\ else
-            \\   call %[run_deferred]
-            \\ end_if
-            \\ return
-            :
-            : [stack_pointer] "X" (@offsetOf(AsyncCancellation, "stack_pointer")),
-              [tls_base] "X" (@offsetOf(AsyncCancellation, "tls_base")),
-              [run_async] "X" (&clothed.runAsync),
-              [run_deferred] "X" (&clothed.runDeferred),
-        );
-    }
-
-    extern "wasi" fn @"thread-cancel"(id: u32, async_cancel: ?*anyopaque) void;
     extern "wasi" fn @"thread-address"(id: u32) usize;
 };
 
@@ -326,9 +229,7 @@ pub fn pthread_exit(
     retval: ?*anyopaque,
 ) callconv(.c) noreturn {
     const pthread = Pthread.getCurrent();
-    pthread.return_value = retval;
-    pthread.performExitCleanup();
-    std.os.wasi.proc_exit(0); // trigger a JavaScript error
+    pthread.exit(retval);
 }
 
 pub fn pthread_join(

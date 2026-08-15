@@ -31,17 +31,17 @@ var workerSupport = mixin({
     worker.run(tid, taddr);
     return tid;
   },
-  cancelThread(tid, raddr) {
+  cancelThread(tid, taddr, immediate) {
     const worker = this.workers.find(w => w.tid === tid);
     if (worker) {
-      if (!raddr) {
-        // defer termination until thread reaches a cancellation point
-        worker.canceled = true;
-      } else {
+      if (immediate) {
         worker.end(true);
         // create a replacement worker that'll perform the thread clean-up
         const scab = this.createWorker();
-        scab.clean(raddr);
+        scab.run(tid, taddr);
+      } else {
+        // defer termination until thread reaches a cancellation point
+        worker.canceled = taddr;
       }
     }
   }, 
@@ -54,7 +54,7 @@ var workerSupport = mixin({
       switch (msg.type) {
         case 'call': {
           const { module, name, args, futex } = msg;        
-          if (!worker.canceled) {
+          if (worker.canceled === 0) {
             const fn = this.exportedModules[module]?.[name];
             // add a true argument to indicate that waiting is possible
             const result = fn?.(...args, true);
@@ -65,10 +65,17 @@ var workerSupport = mixin({
               finish(result);
             }
           } else {
-            // a deferred cancellation has occurred; set canceled to false so that debug print 
-            // works during the clean-up process
-            worker.canceled = false;
+            // a deferred cancellation has occurred--tell the worker to bail out from whatever 
+            // it's currently doing
             worker.signal(futex, 2);
+          }
+        } break;
+        case 'terminate': {
+          if (worker.canceled !== 0) {
+            // run clean-up routine
+            worker.run(worker.tid, worker.canceled);
+          } else {
+            worker.end();
           }
         } break;
         case 'done': {
@@ -96,11 +103,8 @@ var workerSupport = mixin({
     worker.run = (tid, taddr) => {
       worker.tid = tid;
       worker.taddr = taddr;
-      worker.canceled = false;
+      worker.canceled = 0;
       worker.postMessage({ type: 'run', tid, taddr });
-    };
-    worker.clean = (raddr) => {
-      worker.postMessage({ type: 'clean', raddr });
     };
     worker.end = (force = false) => {
       if (force) {
@@ -161,11 +165,9 @@ function workerMain() {
         const exit = () => { throw new Error('Exit') };
         const wait = (futex, timeout) => {
           const result = Atomics.wait(futex, 0, 0, timeout);
-          if (result !== 'timed-out') {
+          if (result !== 'timed-out') {            
             if (Atomics.load(futex, 0) === 2) {
-              // was canceled in the middle of a call; jump back jump back into Zig to execute 
-              // cleanup routines and TLS destructors then exit
-              instance.exports.wasi_thread_clean(0);
+              // thread was canceled
               exit();
             }
             return Atomics.load(futex, 1);
@@ -235,16 +237,11 @@ function workerMain() {
         // catch thread termination exception
         try {
           instance.exports.wasi_thread_start(msg.tid, msg.taddr);
-        } catch {
-        }
-        port.postMessage({ type: 'done' });
-      } break;
-      case 'clean': {
-        try {
-          instance.exports.wasi_thread_clean(msg.raddr);
-        } catch {
-        }
-        port.postMessage({ type: 'done' });
+          port.postMessage({ type: 'done' });
+        } catch (err) {
+          // abnormal exit--clen
+          port.postMessage({ type: 'terminate' });
+      }
       } break;
       case 'end': {
         port.close();

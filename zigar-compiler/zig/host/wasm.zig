@@ -383,7 +383,11 @@ comptime {
     if (exporter.options.use_pthread_emulation) {
         const pthread = @import("wasm/pthread.zig");
         for (std.meta.declarations(pthread)) |decl| {
-            @export(&@field(pthread, decl.name), .{ .name = decl.name, .visibility = .hidden });
+            @export(&@field(pthread, decl.name), .{
+                .name = decl.name,
+                .visibility = .default,
+                .linkage = .strong,
+            });
         }
     }
 }
