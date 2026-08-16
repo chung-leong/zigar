@@ -1277,7 +1277,9 @@ pub fn pthread_cond_timedwait(
     const pthread_condition = PthreadCondition.extract(cond);
     const pthread_mutex: *PthreadMutex = @ptrCast(mutex.*);
     const timeout = timeoutFromSpec(abstime, pthread_condition.attributes.clock_id);
-    MasterCondition.waitTimeout(&pthread_condition.condition, io, &pthread_mutex.mutex, timeout) catch {};
+    MasterCondition.waitTimeout(&pthread_condition.condition, io, &pthread_mutex.mutex, timeout) catch {
+        return errno(.TIMEDOUT);
+    };
     return 0;
 }
 
@@ -1604,7 +1606,9 @@ pub fn sem_timedwait(
 ) callconv(.c) c_int {
     const pthread_semaphore = PthreadSemaphore.extract(sem);
     const timeout = timeoutFromSpec(abstime, .REALTIME);
-    MasterSemaphore.waitTimeout(&pthread_semaphore.semaphore, io, timeout) catch {};
+    MasterSemaphore.waitTimeout(&pthread_semaphore.semaphore, io, timeout) catch {
+        return semErrno(.TIMEDOUT, -1);
+    };
     return 0;
 }
 
