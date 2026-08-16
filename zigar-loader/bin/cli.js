@@ -24,11 +24,11 @@ async function patchStandardLibrary() {
     const modPath = findZigarCompiler();
     const patchPath = join(modPath, 'wasi-thread.patch');
     const zigPath = resolve(findExecutable('zig'), '..');
-    const stdPath = join(zigPath, 'lib/std');
+    const libPath = join(zigPath, 'lib');
     const patchExePath = findExecutable('patch');
-    const dryRunCmd = `patch -d "${stdPath}" -t -p0 -N --dry-run < "${patchPath}"`;
+    const dryRunCmd = `patch -d "${libPath}" -t -p0 -N --dry-run < "${patchPath}"`;
     const dryRunResult = execSync(dryRunCmd).toString();
-    const patchCmd = `patch -d ${JSON.stringify(stdPath)} -t -p0 < ${JSON.stringify(patchPath)}`;
+    const patchCmd = `patch -d ${JSON.stringify(libPath)} -t -p0 < ${JSON.stringify(patchPath)}`;
     const result = execSync(patchCmd).toString();
     console.log(result);
   } catch (err) {

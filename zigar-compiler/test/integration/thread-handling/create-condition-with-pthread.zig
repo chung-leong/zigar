@@ -10,14 +10,12 @@ const zigar = @import("zigar");
 var mutex: pthread_mutex_t = undefined;
 var cond: pthread_cond_t = undefined;
 
-extern fn pthread_condattr_setclock(*pthread_condattr_t, std.c.clockid_t) c_int;
-
 pub fn spawn() !void {
     if (c.pthread_mutex_init(&mutex, null) != 0) return error.CannotCreateMutex;
     var attrs: pthread_condattr_t = undefined;
     if (c.pthread_condattr_init(&attrs) != 0) return error.CannotCreateConditionAttributes;
     if (@hasDecl(c, "pthread_condattr_setclock")) {
-        if (pthread_condattr_setclock(&attrs, .REALTIME) != 0) return error.CannotSetConditionAttribute;
+        if (c.pthread_condattr_setclock(&attrs, @ptrFromInt(c.CLOCK_REALTIME)) != 0) return error.CannotSetConditionAttribute;
     }
     if (c.pthread_cond_init(&cond, &attrs) != 0) return error.CannotCreateCondition;
     var thread_id: pthread_t = undefined;

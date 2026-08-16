@@ -1,205 +1,555 @@
-diff -ruN "heap/WasmAllocator.zig" heap/WasmAllocator.zig
---- "heap/WasmAllocator.zig"	2025-10-11 05:53:21.000000000 +0200
-+++ heap/WasmAllocator.zig	2025-11-10 14:13:38.110576374 +0100
-@@ -10,9 +10,6 @@
-     if (!builtin.target.cpu.arch.isWasm()) {
-         @compileError("only available for wasm32 arch");
-     }
--    if (!builtin.single_threaded) {
--        @compileError("TODO implement support for multi-threaded wasm");
--    }
+diff -ruN libc/wasi/libc-top-half/musl/src/internal/pthread_impl.h libc/wasi/libc-top-half/musl/src/internal/pthread_impl.h
+--- libc/wasi/libc-top-half/musl/src/internal/pthread_impl.h	2026-04-13 20:50:15.000000000 +0200
++++ libc/wasi/libc-top-half/musl/src/internal/pthread_impl.h	2026-08-16 01:09:08.234769000 +0200
+@@ -230,4 +230,99 @@
+ 
+ #define __ATTRP_C11_THREAD ((void*)(uintptr_t)-1)
+ 
++#pragma weak _pthread_cleanup_pop
++#pragma weak _pthread_cleanup_push
++#pragma weak pthread_attr_destroy
++#pragma weak pthread_attr_getdetachstate
++#pragma weak pthread_attr_getguardsize
++#pragma weak pthread_attr_getinheritsched
++#pragma weak pthread_attr_getschedparam
++#pragma weak pthread_attr_getschedpolicy
++#pragma weak pthread_attr_getscope
++#pragma weak pthread_attr_getstack
++#pragma weak pthread_attr_getstackaddr
++#pragma weak pthread_attr_getstacksize
++#pragma weak pthread_attr_init
++#pragma weak pthread_attr_setdetachstate
++#pragma weak pthread_attr_setguardsize
++#pragma weak pthread_attr_setinheritsched
++#pragma weak pthread_attr_setschedparam
++#pragma weak pthread_attr_setschedpolicy
++#pragma weak pthread_attr_setscope
++#pragma weak pthread_attr_setstack
++#pragma weak pthread_attr_setstackaddr
++#pragma weak pthread_attr_setstacksize
++#pragma weak pthread_cancel
++#pragma weak pthread_cond_broadcast
++#pragma weak pthread_cond_destroy
++#pragma weak pthread_cond_init
++#pragma weak pthread_cond_signal
++#pragma weak pthread_cond_timedwait
++#pragma weak pthread_cond_wait
++#pragma weak pthread_condattr_destroy
++#pragma weak pthread_condattr_getclock
++#pragma weak pthread_condattr_getpshared
++#pragma weak pthread_condattr_init
++#pragma weak pthread_condattr_setclock
++#pragma weak pthread_condattr_setpshared
++#pragma weak pthread_create
++#pragma weak pthread_detach
++#pragma weak pthread_equal
++#pragma weak pthread_exit
++#pragma weak pthread_getcpuclockid
++#pragma weak pthread_getschedparam
++#pragma weak pthread_getspecific
++#pragma weak pthread_join
++#pragma weak pthread_key_create
++#pragma weak pthread_key_delete
++#pragma weak pthread_mutex_consistent
++#pragma weak pthread_mutex_destroy
++#pragma weak pthread_mutex_getprioceiling
++#pragma weak pthread_mutex_init
++#pragma weak pthread_mutex_lock
++#pragma weak pthread_mutex_setprioceiling
++#pragma weak pthread_mutex_timedlock
++#pragma weak pthread_mutex_trylock
++#pragma weak pthread_mutex_unlock
++#pragma weak pthread_mutexattr_destroy
++#pragma weak pthread_mutexattr_getprioceiling
++#pragma weak pthread_mutexattr_getprotocol
++#pragma weak pthread_mutexattr_getpshared
++#pragma weak pthread_mutexattr_getrobust
++#pragma weak pthread_mutexattr_gettype
++#pragma weak pthread_mutexattr_init
++#pragma weak pthread_mutexattr_setprioceiling
++#pragma weak pthread_mutexattr_setprotocol
++#pragma weak pthread_mutexattr_setpshared
++#pragma weak pthread_mutexattr_setrobust
++#pragma weak pthread_mutexattr_settype
++#pragma weak pthread_once
++#pragma weak pthread_rwlock_destroy
++#pragma weak pthread_rwlock_init
++#pragma weak pthread_rwlock_rdlock
++#pragma weak pthread_rwlock_timedrdlock
++#pragma weak pthread_rwlock_timedwrlock
++#pragma weak pthread_rwlock_tryrdlock
++#pragma weak pthread_rwlock_trywrlock
++#pragma weak pthread_rwlock_unlock
++#pragma weak pthread_rwlock_wrlock
++#pragma weak pthread_rwlockattr_destroy
++#pragma weak pthread_rwlockattr_getkind_np
++#pragma weak pthread_rwlockattr_getpshared
++#pragma weak pthread_rwlockattr_init
++#pragma weak pthread_rwlockattr_setkind_np
++#pragma weak pthread_rwlockattr_setpshared
++#pragma weak pthread_self
++#pragma weak pthread_setcancelstate
++#pragma weak pthread_setcanceltype
++#pragma weak pthread_setschedparam
++#pragma weak pthread_setschedprio
++#pragma weak pthread_setspecific
++#pragma weak pthread_spin_destroy
++#pragma weak pthread_spin_init
++#pragma weak pthread_spin_lock
++#pragma weak pthread_spin_trylock
++#pragma weak pthread_spin_unlock
++#pragma weak pthread_testcancel
++
+ #endif
+diff -ruN std/heap/BrkAllocator.zig std/heap/BrkAllocator.zig
+--- std/heap/BrkAllocator.zig	2026-04-13 20:50:15.000000000 +0200
++++ std/heap/BrkAllocator.zig	2026-08-13 22:56:24.884845000 +0200
+@@ -11,10 +11,6 @@
+ const assert = std.debug.assert;
+ const math = std.math;
+ 
+-comptime {
+-    if (!builtin.single_threaded) @compileError("unsupported");
+-}
+-
+ next_addrs: [size_class_count]usize = @splat(0),
+ /// For each size class, points to the freed pointer.
+ frees: [size_class_count]usize = @splat(0),
+diff -ruN std/heap.zig std/heap.zig
+--- std/heap.zig	2026-04-13 20:50:15.000000000 +0200
++++ std/heap.zig	2026-08-14 16:01:25.039531000 +0200
+@@ -13,7 +13,7 @@
+ pub const SmpAllocator = @import("heap/SmpAllocator.zig");
+ pub const FixedBufferAllocator = @import("heap/FixedBufferAllocator.zig");
+ pub const PageAllocator = @import("heap/PageAllocator.zig");
+-pub const WasmAllocator = if (builtin.single_threaded) BrkAllocator else @compileError("unimplemented");
++pub const WasmAllocator = if (builtin.single_threaded) BrkAllocator else ThreadSafe(BrkAllocator);
+ pub const BrkAllocator = @import("heap/BrkAllocator.zig");
+ 
+ pub const DebugAllocatorConfig = @import("heap/debug_allocator.zig").Config;
+@@ -474,6 +474,76 @@
+     };
  }
  
- pub const vtable: Allocator.VTable = .{
-@@ -44,10 +41,19 @@
- var frees: [size_class_count]usize = @splat(0);
- /// For each big size class, points to the freed pointer.
- var big_frees: [big_size_class_count]usize = @splat(0);
-+var mutex: switch (builtin.single_threaded) {
-+    false => std.Thread.Mutex,
-+    true => struct {
-+        inline fn lock(_: *@This()) void {}
-+        inline fn unlock(_: *@This()) void {}
-+    },
-+} = .{};
- 
- fn alloc(ctx: *anyopaque, len: usize, alignment: mem.Alignment, return_address: usize) ?[*]u8 {
-     _ = ctx;
-     _ = return_address;
-+    mutex.lock();
-+    defer mutex.unlock();
-     // Make room for the freelist next pointer.
-     const actual_len = @max(len +| @sizeOf(usize), alignment.toByteUnits());
-     const slot_size = math.ceilPowerOfTwo(usize, actual_len) catch return null;
-@@ -127,6 +133,8 @@
- ) void {
-     _ = ctx;
-     _ = return_address;
-+    mutex.lock();
-+    defer mutex.unlock();
-     const buf_align = alignment.toByteUnits();
-     const actual_len = @max(buf.len + @sizeOf(usize), buf_align);
-     const slot_size = math.ceilPowerOfTwoAssert(usize, actual_len);
-diff -ruN "std.zig" std.zig
---- "std.zig"	2025-10-11 05:53:21.000000000 +0200
-+++ std.zig	2025-11-10 14:02:42.144567439 +0100
-@@ -119,6 +119,8 @@
- 
-     /// Function used to implement `std.fs.cwd` for WASI.
-     wasiCwd: fn () os.wasi.fd_t = fs.defaultWasiCwd,
-+    /// Availability of synchronous wait in the main thread
-+    wasi_main_thread_wait: bool = false,
- 
-     /// The current log level.
-     log_level: log.Level = log.default_level,
-diff -ruN "Thread/Mutex.zig" Thread/Mutex.zig
---- "Thread/Mutex.zig"	2025-10-11 05:53:21.000000000 +0200
-+++ Thread/Mutex.zig	2025-11-10 14:03:10.168932706 +0100
-@@ -51,6 +51,8 @@
-     WindowsImpl
- else if (builtin.os.tag.isDarwin())
-     DarwinImpl
-+else if (builtin.os.tag == .wasi)
-+    WasiImpl
- else
-     FutexImpl;
- 
-@@ -208,6 +210,77 @@
-     }
- };
- 
-+const WasiImpl = struct {
-+    status: std.atomic.Value(u32) = .{ .raw = free },
-+    wait_count: std.atomic.Value(u32) = .{ .raw = 0 },
++/// Wraps a non-thread-safe allocator and makes it thread-safe.
++fn ThreadSafe(comptime T: type) type {
++    return struct {
++        nts_allocator: T = .{},
++        state: u32 = 0,
 +
-+    const free: u32 = 0; // no one owns the lock
-+    const owned: u32 = 1; // a worker thread has the lock
-+    const seized: u32 = 2; // the main thread either has the lock already or is about to get it
-+    const forfeited: u32 = 3; // the main thread has received the lock from the previous owner
++        pub fn allocator(self: *@This()) Allocator {
++            return .{
++                .ptr = self,
++                .vtable = &vtable,
++            };
++        }
 +
-+    pub fn lock(self: *@This()) void {
-+        if (inMainThread()) {
-+            // announce that the lock will be taken by the main thread
-+            switch (self.status.swap(seized, .acquire)) {
-+                // seizing a free lock
-+                free => {},
-+                // keep spinning until the current owner surrenders it
-+                owned => while (self.status.load(.monotonic) != forfeited) {},
-+                else => unreachable,
-+            }
-+        } else {
-+            while (true) {
-+                // try to get the lock
-+                if (self.status.cmpxchgWeak(free, owned, .acquire, .monotonic)) |status| {
-+                    // pause the worker when the lock is not free
-+                    if (status != free) {
-+                        _ = self.wait_count.fetchAdd(1, .monotonic);
-+                        Thread.Futex.wait(&self.status, status);
-+                        _ = self.wait_count.fetchSub(1, .monotonic);
-+                    }
-+                } else break;
++        pub const vtable: Allocator.VTable = .{
++            .alloc = alloc,
++            .resize = resize,
++            .remap = remap,
++            .free = free,
++        };
++
++        fn alloc(ctx: *anyopaque, n: usize, alignment: std.mem.Alignment, ra: usize) ?[*]u8 {
++            const self: *@This() = @ptrCast(@alignCast(ctx));
++            self.lock();
++            defer self.unlock();
++            return ntsAlloc(&self.nts_allocator, n, alignment, ra);
++        }
++
++        fn resize(ctx: *anyopaque, buf: []u8, alignment: std.mem.Alignment, new_len: usize, ret_addr: usize) bool {
++            const self: *@This() = @ptrCast(@alignCast(ctx));
++            self.lock();
++            defer self.unlock();
++            return ntsResize(&self.nts_allocator, buf, alignment, new_len, ret_addr);
++        }
++
++        fn remap(context: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, return_address: usize) ?[*]u8 {
++            const self: *@This() = @ptrCast(@alignCast(context));
++            self.lock();
++            defer self.unlock();
++            return ntsRemap(&self.nts_allocator, memory, alignment, new_len, return_address);
++        }
++
++        fn free(ctx: *anyopaque, buf: []u8, alignment: std.mem.Alignment, ret_addr: usize) void {
++            const self: *@This() = @ptrCast(@alignCast(ctx));
++            self.lock();
++            defer self.unlock();
++            return ntsFree(&self.nts_allocator, buf, alignment, ret_addr);
++        }
++
++        fn lock(self: *@This()) void {
++            while (@cmpxchgWeak(u32, &self.state, 0, 1, .acquire, .monotonic) != null) {
++                var tio: std.Io.Threaded = undefined;
++                futexWaitUncancelable(&tio, &self.state, 1);
 +            }
 +        }
-+    }
 +
-+    pub fn unlock(self: *@This()) void {
-+        if (inMainThread()) {
-+            // just release the lock
-+            self.status.store(free, .release);
-+        } else {
-+            // release the lock if the worker thread still owns it
-+            if (self.status.cmpxchgStrong(owned, free, .release, .monotonic)) |status| {
-+                switch (status) {
-+                    seized => {
-+                        // let the spinning main thread take the lock
-+                        self.status.store(forfeited, .release);
-+                        return;
-+                    },
-+                    else => unreachable,
++        fn unlock(self: *@This()) void {
++            @atomicStore(u32, &self.state, 0, .release);
++            var tio: std.Io.Threaded = undefined;
++            futexWake(&tio, &self.state, 1);
++        }
++
++        const ntsAlloc = T.vtable.alloc;
++        const ntsResize = T.vtable.resize;
++        const ntsRemap = T.vtable.remap;
++        const ntsFree = T.vtable.free;
++        const futexWaitUncancelable = std.Io.Threaded.io(undefined).vtable.futexWaitUncancelable;
++        const futexWake = std.Io.Threaded.io(undefined).vtable.futexWake;
++    };
++}
++
+ test c_allocator {
+     if (builtin.link_libc) {
+         try testAllocator(c_allocator);
+diff -ruN std/Io/Threaded.zig std/Io/Threaded.zig
+--- std/Io/Threaded.zig	2026-04-13 20:50:15.000000000 +0200
++++ std/Io/Threaded.zig	2026-08-16 20:03:55.041791510 +0200
+@@ -937,6 +937,8 @@
+         return Thread.futexWaitInner(ptr, expect, false, timeout_ns);
+     }
+ 
++    var main_thread_spin_ptr: ?*const u32 = null;
++
+     fn futexWaitInner(ptr: *const u32, expect: u32, uncancelable: bool, timeout_ns: ?u64) Io.Cancelable!void {
+         @branchHint(.cold);
+ 
+@@ -956,7 +958,38 @@
+             comptime assert(builtin.cpu.has(.wasm, .atomics));
+             // TODO implement cancelation for WASM futex waits by signaling the futex
+             if (!uncancelable) try Thread.checkCancel();
+-            const to: i64 = if (timeout_ns) |ns| ns else -1;
++            if (std.options.wasm_main_thread_no_wait) {
++                // see if the current thread is the main thread
++                if (currentId() == 0) {
++                    // enter a spin instead of using the wait instruction
++                    @atomicStore(?*const u32, &main_thread_spin_ptr, ptr, .monotonic);
++                    errdefer @atomicStore(?*const u32, &main_thread_spin_ptr, null, .monotonic);
++                    if (timeout_ns) |ns| {
++                        if (builtin.target.os.tag == .wasi) {
++                            var ns_start: std.os.wasi.timestamp_t = 0;
++                            if (std.os.wasi.clock_time_get(.MONOTONIC, 1, &ns_start) != .SUCCESS)
++                                @panic("unsupported");
++                            // keep spinning until futexWake sets main_thread_spin_ptr to null
++                            while (@atomicLoad(?*const u32, &main_thread_spin_ptr, .acquire) != null) {
++                                if (!uncancelable) try Thread.checkCancel();
++                                var ns_now: std.os.wasi.timestamp_t = 0;
++                                if (std.os.wasi.clock_time_get(.MONOTONIC, 1, &ns_now) != .SUCCESS)
++                                    @panic("unsupported");
++                                if (ns_now - ns_start >= ns) {
++                                    @atomicStore(?*const u32, &main_thread_spin_ptr, null, .monotonic);
++                                    break;
++                                }
++                            }
++                        } else @panic("unsupported");
++                    } else {
++                        while (@atomicLoad(?*const u32, &main_thread_spin_ptr, .acquire) != null) {
++                            if (!uncancelable) try Thread.checkCancel();
++                        }
++                    }
++                    return;
 +                }
 +            }
-+        }
-+        if (self.wait_count.load(.monotonic) > 0) {
-+            // awaken a waiting worker thread
-+            Thread.Futex.wake(&self.status, 1);
-+        }
-+    }
-+
-+    pub fn tryLock(self: *@This()) bool {
-+        const new_status: u32 = if (inMainThread()) seized else owned;
-+        return self.status.cmpxchgStrong(free, new_status, .acquire, .monotonic) == null;
-+    }
-+
-+    fn inMainThread() bool {
-+        const root = @import("root");
-+        if (@hasDecl(root, "std_options") and root.std_options.wasi_main_thread_wait) {
-+            return false;
-+        }
-+        return Thread.getCurrentId() == 0;
-+    }
-+};
-+
- test "smoke test" {
-     var mutex = Mutex{};
- 
-diff -ruN "Thread.zig" Thread.zig
---- "Thread.zig"	2025-10-11 05:53:21.000000000 +0200
-+++ Thread.zig	2025-11-10 14:10:39.916701350 +0100
-@@ -1037,14 +1037,38 @@
- 
-     comptime {
-         if (!builtin.single_threaded) {
--            @export(&wasi_thread_start, .{ .name = "wasi_thread_start" });
-+            switch (builtin.mode) {
-+                .Debug => {
-+                    @export(&wasi_thread_start_debug, .{ .name = "wasi_thread_start" });
-+                    @export(&wasi_thread_start, .{ .name = "wasi_thread_start_cont", .visibility = .hidden });
-+                },
-+                else => @export(&wasi_thread_start, .{ .name = "wasi_thread_start" }),
++            const to: i64 = if (timeout_ns) |ns| @bitCast(ns) else -1;
+             const signed_expect: i32 = @bitCast(expect);
+             const result = asm volatile (
+                 \\local.get %[ptr]
+@@ -1112,6 +1145,14 @@
+             return parking_futex.wake(ptr, max_waiters);
+         } else if (builtin.cpu.arch.isWasm()) {
+             comptime assert(builtin.cpu.has(.wasm, .atomics));
++            var remaining_waiters = max_waiters;
++            if (std.options.wasm_main_thread_no_wait) {
++                if (@atomicLoad(?*const u32, &main_thread_spin_ptr, .monotonic) == ptr) {
++                    @atomicStore(?*const u32, &main_thread_spin_ptr, null, .release);
++                    remaining_waiters -= 1;
++                }
++                if (remaining_waiters == 0) return;
 +            }
-         }
+             const woken_count = asm volatile (
+                 \\local.get %[ptr]
+                 \\local.get %[waiters]
+@@ -1119,7 +1160,7 @@
+                 \\local.set %[ret]
+                 : [ret] "=r" (-> u32),
+                 : [ptr] "r" (ptr),
+-                  [waiters] "r" (max_waiters),
++                  [waiters] "r" (remaining_waiters),
+             );
+             _ = woken_count; // can be 0 when linker flag 'shared-memory' is not enabled
+         } else switch (native_os) {
+diff -ruN std/std.zig std/std.zig
+--- std/std.zig	2026-04-13 20:50:15.000000000 +0200
++++ std/std.zig	2026-08-16 19:19:22.672879572 +0200
+@@ -190,6 +190,11 @@
+         else => false,
+     },
+ 
++    /// The wait instruction is generally not allowed when WebAssembly is running in the main
++    /// (or UI) thread of a WebBrpwser. Setting this to true will cause `futexWait()` to spin in
++    /// the main thread while awaiting a call to `futexWake()` in a different thread.
++    wasm_main_thread_no_wait: bool = false,
++
+     /// TODO This is a separate decl instead of a field as a workaround around
+     /// compilation errors due to zig not being lazy enough.
+     pub const logTerminalMode: fn () Io.Terminal.Mode = log.defaultTerminalMode;
+diff -ruN std/Thread.zig std/Thread.zig
+--- std/Thread.zig	2026-04-13 20:50:15.000000000 +0200
++++ std/Thread.zig	2026-08-16 18:38:01.534610000 +0200
+@@ -826,17 +826,25 @@
+         allocator: std.mem.Allocator,
+         /// The current state of the thread.
+         state: State = State.init(.running),
++        /// Stack memory for use by clean-up routine during thread cancellation
++        cleanup_stack_memory: ?[]u8 = null,
++
++        fn deinit(self: *@This()) void {
++            // use free in the vtable so the stack doesn't get set to undefined when optimize = Debug
++            const free = self.allocator.vtable.free;
++            const ptr = self.allocator.ptr;
++            free(ptr, self.memory, .@"1", 0);
++            if (self.cleanup_stack_memory) |sm| free(ptr, sm, .@"16", 0);
++        }
+     };
+ 
+     /// A meta-data structure used to bootstrap a thread
+     const Instance = struct {
+         thread: WasiThread,
+-        /// Contains the offset to the new __tls_base.
+-        /// The offset starting from the memory's base.
+-        tls_offset: usize,
+-        /// Contains the offset to the stack for the newly spawned thread.
+-        /// The offset is calculated starting from the memory's base.
+-        stack_offset: usize,
++        /// Contains the address to the new __tls_base.
++        tls_address: usize,
++        /// Contains the address to the stack for the newly spawned thread.
++        stack_address: usize,
+         /// Contains the raw pointer value to the wrapper which holds all arguments
+         /// for the callback.
+         raw_ptr: usize,
+@@ -844,11 +852,6 @@
+         /// function upon thread spawn. The above mentioned pointer will be passed
+         /// to this function pointer as its argument.
+         call_back: *const fn (usize) void,
+-        /// When a thread is in `detached` state, we must free all of its memory
+-        /// upon thread completion. However, as this is done while still within
+-        /// the thread, we must first jump back to the main thread's stack or else
+-        /// we end up freeing the stack that we're currently using.
+-        original_stack_pointer: [*]u8,
+     };
+ 
+     const State = std.atomic.Value(enum(u8) { running, completed, detached });
+@@ -874,12 +877,7 @@
      }
  
-+    /// Set the stack pointer then call wasi_thread_start
-+    fn wasi_thread_start_debug(_: i32, _: *Instance) callconv(.naked) void {
-+        const arg = asm (
-+            \\ local.get 1
-+            \\ local.set %[ret]
-+            : [ret] "=r" (-> *Instance)
-+        );
-+        __set_stack_pointer(arg.thread.memory.ptr + arg.stack_offset);
-+        asm volatile (
-+            \\ local.get 0
-+            \\ local.get 1
-+            \\ call wasi_thread_start_cont
-+            \\ return
-+        );
-+    }
-+
+     fn join(self: Impl) void {
+-        defer {
+-            // Create a copy of the allocator so we do not free the reference to the
+-            // original allocator while freeing the memory.
+-            var allocator = self.thread.allocator;
+-            allocator.free(self.thread.memory);
+-        }
++        defer self.thread.deinit();
+ 
+         while (true) {
+             const tid = self.thread.tid.load(.seq_cst);
+@@ -986,13 +984,13 @@
+         wrapper.* = .{ .args = args };
+ 
+         const instance: *Instance = @ptrCast(@alignCast(&allocated_memory[instance_offset]));
++        const start_address = @intFromPtr(allocated_memory.ptr);
+         instance.* = .{
+             .thread = .{ .memory = allocated_memory, .allocator = config.allocator.? },
+-            .tls_offset = tls_offset,
+-            .stack_offset = stack_offset,
++            .tls_address = start_address + tls_offset,
++            .stack_address = start_address + stack_offset,
+             .raw_ptr = @intFromPtr(wrapper),
+             .call_back = &Wrapper.entry,
+-            .original_stack_pointer = __get_stack_pointer(),
+         };
+ 
+         const tid = spawnWasiThread(instance);
+@@ -1013,46 +1011,96 @@
+     }
+ 
      /// Called by the host environment after thread creation.
-     fn wasi_thread_start(tid: i32, arg: *Instance) callconv(.c) void {
+-    fn wasi_thread_start(tid: i32, arg: *Instance) callconv(.c) void {
++    fn wasi_thread_start(_: i32, _: *Instance) callconv(.naked) void {
          comptime assert(!builtin.single_threaded);
 -        __set_stack_pointer(arg.thread.memory.ptr + arg.stack_offset);
-+        if (builtin.mode != .Debug) {
-+            __set_stack_pointer(arg.thread.memory.ptr + arg.stack_offset);
-+        }
-         __wasm_init_tls(arg.thread.memory.ptr + arg.tls_offset);
-         @atomicStore(u32, &WasiThreadImpl.tls_thread_id, @intCast(tid), .seq_cst);
- 
-@@ -1074,12 +1098,10 @@
-             },
-             .completed => unreachable,
-             .detached => {
+-        __wasm_init_tls(arg.thread.memory.ptr + arg.tls_offset);
+-        @atomicStore(u32, &WasiThreadImpl.tls_thread_id, @intCast(tid), .seq_cst);
+-
+-        // Finished bootstrapping, call user's procedure.
+-        arg.call_back(arg.raw_ptr);
+-
+-        switch (arg.thread.state.swap(.completed, .seq_cst)) {
+-            .running => {
+-                // reset the Thread ID
+-                asm volatile (
+-                    \\ local.get %[ptr]
+-                    \\ i32.const 0
+-                    \\ i32.atomic.store 0
+-                    :
+-                    : [ptr] "r" (&arg.thread.tid.raw),
+-                );
+-
+-                // Wake the main thread listening to this thread
+-                asm volatile (
+-                    \\ local.get %[ptr]
+-                    \\ i32.const 1 # waiters
+-                    \\ memory.atomic.notify 0
+-                    \\ drop # no need to know the waiters
+-                    :
+-                    : [ptr] "r" (&arg.thread.tid.raw),
+-                );
+-            },
+-            .completed => unreachable,
+-            .detached => {
 -                // restore the original stack pointer so we can free the memory
 -                // without having to worry about freeing the stack
 -                __set_stack_pointer(arg.original_stack_pointer);
 -                // Ensure a copy so we don't free the allocator reference itself
 -                var allocator = arg.thread.allocator;
 -                allocator.free(arg.thread.memory);
-+                // use free in the vtable so the stack doesn't get set to undefined when optimize = Debug
-+                const free = arg.thread.allocator.vtable.free;
-+                const ptr = arg.thread.allocator.ptr;
-+                free(ptr, arg.thread.memory, std.mem.Alignment.@"1", 0);
-             },
-         }
+-            },
+-        }
++        const clothed = struct {
++            fn run(tid: i32, arg: *Instance) callconv(.c) void {
++                if (arg.thread.cleanup_stack_memory == null) {
++                    // Initialize thread-local variables.
++                    __wasm_init_tls(@ptrFromInt(arg.tls_address));
++                } else {
++                    // Testore the TLS base so thread-local variables are available during clean-up.
++                    __tls_set_base(@ptrFromInt(arg.tls_address));
++                }
++                @atomicStore(u32, &WasiThreadImpl.tls_thread_id, @intCast(tid), .seq_cst);
++
++                // Finished bootstrapping, call user's procedure.
++                arg.call_back(arg.raw_ptr);
++
++                // Set thread state and free memory allocated for thread.
++                switch (arg.thread.state.swap(.completed, .seq_cst)) {
++                    .running => {
++                        // reset the Thread ID
++                        asm volatile (
++                            \\ local.get %[ptr]
++                            \\ i32.const 0
++                            \\ i32.atomic.store 0
++                            :
++                            : [ptr] "r" (&arg.thread.tid.raw),
++                        );
++
++                        // Wake the main thread listening to this thread
++                        asm volatile (
++                            \\ local.get %[ptr]
++                            \\ i32.const 1 # waiters
++                            \\ memory.atomic.notify 0
++                            \\ drop # no need to know the waiters
++                            :
++                            : [ptr] "r" (&arg.thread.tid.raw),
++                        );
++                    },
++                    .completed => unreachable,
++                    .detached => arg.thread.deinit(),
++                }
++            }
++        };
++        // Set the stack pointer then jump to the "clothed" portion of the function.
++        asm volatile (
++            \\ local.get 1
++            \\ i32.load %[stack_address_offset]
++            \\ global.set __stack_pointer
++            \\ local.get 0
++            \\ local.get 1
++            \\ call %[cont]
++            \\ return
++            :
++            : [stack_address_offset] "X" (@offsetOf(Instance, "stack_address")),
++              [cont] "X" (&clothed.run),
++        );
++    }
++
++    /// Send a cancelation request to the WebAssembly host. Currently there's no standard function
++    /// defined for this purpose. To implement cancelation in non-standard manner, you need to
++    /// provide the import name (and library name) of the cancelation function.
++    ///
++    /// To shut down a thread immediately, the cancelation function should use Worker.terminate()
++    /// to kill the worker and spawn a replacement worker to finish the clean-up process.
++    ///
++    /// If deferred cancelation is requested, the host should wait until the thread makes a WASI
++    /// call, at which point it should throw an JavaScript error to halt WebAssembly execution.
++    /// The same worker can then be used to perform clean-up.
++    ///
++    /// We reuse `wasi_tread_start` to run the clean-up routine. Fresh stack memory is allocated
++    /// for it use, as the original stack would be in an unknown state. The caller of this function
++    /// needs to specify the amount.
++    pub fn cancel(self: *@This(), immediate: bool, cb: *const fn (usize) void, arg: usize, comptime options: struct {
++        stack_size: usize,
++        cancel_fn: struct {
++            name: []const u8,
++            library_name: ?[]const u8,
++        },
++    }) !void {
++        const stack_mem = try self.thread.allocator.alignedAlloc(u8, .@"16", options.stack_size);
++        const instance: *Instance = @fieldParentPtr("thread", self.thread);
++        instance.call_back = cb;
++        instance.raw_ptr = arg;
++        instance.stack_address = @intFromPtr(stack_mem.ptr);
++        self.thread.cleanup_stack_memory = stack_mem;
++        const cancelThread = @extern(*const fn (i32, *Instance, bool) callconv(.c) void, .{
++            .name = options.cancel_fn.name,
++            .library_name = options.cancel_fn.library_name,
++        });
++        cancelThread(self.thread.tid.raw, instance, immediate);
      }
+ 
+     /// Asks the host to create a new thread for us.
+@@ -1075,6 +1123,17 @@
+         );
+     }
+ 
++    /// Set the base of the TLS data segment for the current thread
++    inline fn __tls_set_base(ptr: [*]u8) void {
++        asm volatile (
++            \\ .globaltype __tls_base, i32
++            \\ local.get %[ptr]
++            \\ global.set __tls_base
++            :
++            : [ptr] "r" (ptr),
++        );
++    }
++
+     /// Returns the size of the TLS segment
+     inline fn __tls_size() u32 {
+         return asm volatile (
+@@ -1094,25 +1153,6 @@
+             : [ret] "=r" (-> u32),
+         );
+     }
+-
+-    /// Allows for setting the stack pointer in the WebAssembly module.
+-    inline fn __set_stack_pointer(addr: [*]u8) void {
+-        asm volatile (
+-            \\ local.get %[ptr]
+-            \\ global.set __stack_pointer
+-            :
+-            : [ptr] "r" (addr),
+-        );
+-    }
+-
+-    /// Returns the current value of the stack pointer
+-    inline fn __get_stack_pointer() [*]u8 {
+-        return asm (
+-            \\ global.get __stack_pointer
+-            \\ local.set %[stack_ptr]
+-            : [stack_ptr] "=r" (-> [*]u8),
+-        );
+-    }
+ };
+ 
+ const LinuxThreadImpl = struct {
