@@ -794,7 +794,7 @@ pub const ZigClassEntry = struct {
         }
     }
 
-    pub fn obtainObjectAtOffset(self: *@This(), parent_buf: *ByteBuffer, offset: usize, len: usize, bit_offset: u3) !*Object {
+    pub fn obtainObjectAtOffset(self: *@This(), parent_buf: *ByteBuffer, offset: usize, len: usize) !*Object {
         const parent_bytes = try parent_buf.data(offset + len, false);
         const bytes = parent_bytes[offset .. offset + len];
         // see if there's an existing object
@@ -807,7 +807,7 @@ pub const ZigClassEntry = struct {
             return php.reuse(obj);
         } else {
             // need to create the object
-            const buf = try parent_buf.slice(offset, len, self.alignment, bit_offset);
+            const buf = try parent_buf.slice(offset, len, self.alignment);
             defer buf.release();
             const obj = try self.createObjectFromBuffer(buf, null);
             return obj;

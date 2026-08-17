@@ -65,7 +65,7 @@ pub fn Vector(comptime attrs: Attributes) type {
                 const bit_index = index * bit_size;
                 const byte_index = bit_index / 8;
                 if (is_packed) {
-                    const bit_offset = (buffer.bit_offset + bit_index) % 8;
+                    const bit_offset = bit_index % 8;
                     const p_acc = self.primitiveAt(byte_index, true);
                     return inline for (.{ 0, 1, 2, 3, 4, 5, 6, 7 }) |possible_offset| {
                         if (bit_offset == possible_offset) {
@@ -84,7 +84,7 @@ pub fn Vector(comptime attrs: Attributes) type {
                 const bit_index = index * bit_size;
                 const byte_index = bit_index / 8;
                 if (is_packed) {
-                    const bit_offset = (buffer.bit_offset + bit_index) % 8;
+                    const bit_offset = bit_index % 8;
                     const p_acc = self.primitiveAt(byte_index, true);
                     return inline for (.{ 0, 1, 2, 3, 4, 5, 6, 7 }) |possible_offset| {
                         if (bit_offset == possible_offset) {

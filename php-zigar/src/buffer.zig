@@ -12,7 +12,6 @@ pub const ByteBuffer = struct {
     bytes: []u8 = undefined,
     ref_count: u32 = 1,
     alignment: std.mem.Alignment = .@"1",
-    bit_offset: u3 = 0,
     flags: packed struct {
         uninitialized: bool = true,
         read_only: bool = false,
@@ -153,10 +152,10 @@ pub const ByteBuffer = struct {
         return false;
     }
 
-    pub fn slice(self: *@This(), offset: usize, len: usize, alignment: std.mem.Alignment, bit_offset: u3) !*@This() {
-        const slice_bit_offset: u3, const slice_alignment = switch (self.flags.contains_packed_data) {
-            false => .{ 0, alignment },
-            true => .{ self.bit_offset +% bit_offset, .@"1" },
+    pub fn slice(self: *@This(), offset: usize, len: usize, alignment: std.mem.Alignment) !*@This() {
+        const slice_alignment = switch (self.flags.contains_packed_data) {
+            false => alignment,
+            true => .@"1",
         };
         const bytes = try self.data(offset + len, false);
         const new = try php.allocator.create(@This());
@@ -171,7 +170,6 @@ pub const ByteBuffer = struct {
         new.* = .{
             .bytes = @constCast(slice_bytes),
             .alignment = slice_alignment,
-            .bit_offset = slice_bit_offset,
             .flags = self.flags.assign(.{ .has_allocator = false, .temporary = false }),
         };
         if (src_buf.source_type != .none) {

@@ -110,19 +110,6 @@ pub fn Parent(comptime S: type) type {
                 self.table = table.*;
                 php.addRef(table);
             }
-            if (@hasField(S, "buffer")) {
-                const class = ZigClassEntry.fromStructure(self);
-                if (buffer.bit_offset != 0) {
-                    const supported = switch (S) {
-                        Struct => class.flags.@"struct".is_packed,
-                        Vector => true,
-                        else => false,
-                    };
-                    if (!supported) {
-                        return error.NotByteAligned;
-                    }
-                }
-            }
         }
 
         pub fn initialize(self: *S, allocator: ?*std.mem.Allocator, initializer: ?*const Value, read_only: bool) !void {

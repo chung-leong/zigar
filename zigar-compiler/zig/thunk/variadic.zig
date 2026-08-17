@@ -27,24 +27,26 @@ pub fn call(
     const arg_bytes: [*]u8 = @ptrCast(arg_ptr);
     const arg_attrs = @as([*]const ArgAttributes, @ptrCast(@alignCast(attr_ptr)))[0..arg_count];
     if (comptime builtin.target.cpu.arch.isWasm()) {
-        const param_count = f.params.len + 1;
-        var param_types: [param_count]type = undefined;
-        var param_attrs: [param_count]std.builtin.Type.Fn.Param.Attributes = undefined;
-        inline for (f.params, 0..) |param, i| {
-            param_types[i] = param.type.?;
-            param_attrs[i] = .{ .@"noalias" = param.is_noalias };
-        }
-        param_types[param_count - 1] = [*]const u8;
-        param_attrs[param_count - 1] = .{};
-        const NotVarargFn = @Fn(&param_types, &param_attrs, f.return_type.?, .{
-            .@"callconv" = f.calling_convention,
-        });
+        const NotVarargFn = comptime init: {
+            const param_count = f.params.len + 1;
+            var param_types: [param_count]type = undefined;
+            var param_attrs: [param_count]std.builtin.Type.Fn.Param.Attributes = undefined;
+            for (f.params, 0..) |param, i| {
+                param_types[i] = param.type.?;
+                param_attrs[i] = .{ .@"noalias" = param.is_noalias };
+            }
+            param_types[param_count - 1] = [*]const u8;
+            param_attrs[param_count - 1] = .{};
+            break :init @Fn(&param_types, &param_attrs, f.return_type.?, .{
+                .@"callconv" = f.calling_convention,
+            });
+        };
         var args: std.meta.ArgsTuple(NotVarargFn) = undefined;
         const vararg_offset = switch (arg_count > f.params.len) {
             // use the offset of the first vararg arg
             true => arg_attrs[f.params.len].offset,
             // just point it to the end of the struct
-            false => @sizeOf(@TypeOf(ArgStruct(FT))),
+            false => @sizeOf(ArgStruct(FT)),
         };
         const vararg_ptr: [*]const u8 = arg_bytes[vararg_offset..];
         inline for (0..f.params.len + 1) |index| {
