@@ -6971,6 +6971,7 @@ var structureAcquisition = mixin({
     this.runtimeSafety = false;
     this.ioRedirection = true;
     this.libc = false;
+    this.hasDeferred = false;
   },
   createView(address, len, copy, handle) {
     if (copy) {
@@ -6990,6 +6991,10 @@ var structureAcquisition = mixin({
     }
   },
   createInstance(structure, dv, slots) {
+    if (!Object.hasOwn(structure, 'constructor')) {
+      this.hasDeferred = true;
+      return new Deferred(structure, dv, slots);
+    }
     const { constructor } = structure;
     const object = constructor.call(ENVIRONMENT, dv);
     if (slots) {
@@ -7010,6 +7015,7 @@ var structureAcquisition = mixin({
     this.structureMap.set(name, value);
   },
   beginStructure(structure) {
+    if (Object.hasOwn(structure, 'constructor')) return;
     this.defineStructure(structure);
   },
   finishStructure(structure) {
@@ -7017,7 +7023,6 @@ var structureAcquisition = mixin({
       this.inferTypeName(structure);
     }
     this.structures.push(structure);
-    this.finalizeStructure(structure);
   },
   enableCallback(structure, template, memberFlags) {
     structure.static.template = template;
@@ -7035,6 +7040,20 @@ var structureAcquisition = mixin({
     this.mixinUsage = new Map();
     this.invokeThunk(thunk, thunk, thunk);
     this.comptime = false;
+    for (const structure of this.structures) {
+      if (this.hasDeferred) {
+        const { static: { template } } = structure;
+        const slots = template?.[SLOTS];
+        if (slots) {
+          for (const [ key, object ] of Object.entries(slots)) {
+            if (object instanceof Deferred) {            
+              slots[key] = this.createInstance(object.structure, object.dv, object.slots);
+            }
+          }
+        }
+      }
+      this.finalizeStructure(structure);
+    }
     // acquire pointer targets now that we have all constructors
     for (const structure of this.structures) {
       const { constructor, flags, instance: { template } } = structure;
@@ -7422,6 +7441,12 @@ var structureAcquisition = mixin({
     },
   } ),
 });
+
+function Deferred(structure, dv, slots) {
+  this.structure = structure;
+  this.dv = dv;
+  this.slots = slots;
+}
 
 var viewManagement = mixin({
   init() {
@@ -8771,7 +8796,7 @@ var all$1 = mixin({
       for (const member of members) {
         const { name, slot, flags } = member;
         if (member.structure.type === StructureType.Function) {
-          let fn = template[SLOTS][slot];
+          const fn = template[SLOTS][slot];
           if (flags & MemberFlag.IsString) {
             fn[TRANSFORM] = (retval) => retval.string;
           } else if (flags & MemberFlag.IsClampedArray) {

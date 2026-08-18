@@ -87,7 +87,7 @@ export default mixin({
       for (const member of members) {
         const { name, slot, flags } = member;
         if (member.structure.type === StructureType.Function) {
-          let fn = template[SLOTS][slot];
+          const fn = template[SLOTS][slot];
           if (flags & MemberFlag.IsString) {
             fn[TRANSFORM] = (retval) => retval.string;
           } else if (flags & MemberFlag.IsClampedArray) {
