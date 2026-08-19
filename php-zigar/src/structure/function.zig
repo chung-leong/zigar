@@ -38,6 +38,9 @@ pub const Function = struct {
             const class = ZigClassEntry.fromObject(class_obj);
             const thunk_buf = class.instance.template.buffer orelse return error.Unexpected;
             self.thunk_address = @intFromPtr(thunk_buf.bytes.ptr);
+            if (class.static.template.buffer) |controller_buf| {
+                self.controller_address = @intFromPtr(controller_buf.bytes.ptr);
+            }
             const arg_member = try class.getMember(.instance, 0);
             const arg_count = arg_member.class.length orelse return error.MissingLength;
             switch (arg_member.class.type) {

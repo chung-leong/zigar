@@ -124,8 +124,8 @@ pub const Promise = struct {
 };
 
 pub const PromiseStatic = struct {
-    methods: Methods = undefined,
-    callback: *Object = undefined,
+    methods: Methods,
+    callback: ?*Object = null,
 
     pub const Methods = struct {
         resolve: Function,
@@ -171,20 +171,27 @@ pub const PromiseStatic = struct {
         }
     };
 
-    pub fn init(self: *@This(), class: *ZigClassEntry) !void {
-        const closure = Promise.createHandler();
-        defer php.release(&closure);
-        const cb_member = try class.getMember(.instance, "callback");
-        if (cb_member.class.type != .pointer) return error.Unexpected;
-        const cb_obj = try cb_member.class.createObject(null, &closure, false);
-        self.callback = cb_obj;
-        self.methods = .{
-            .resolve = php.createTransformedFunction(handleResolve, "resolve", 1, false),
+    pub fn init(self: *@This()) !void {
+        self.* = .{
+            .methods = .{
+                .resolve = php.createTransformedFunction(handleResolve, "resolve", 1, false),
+            },
         };
     }
 
     pub fn deinit(self: *@This()) void {
-        php.release(self.callback);
+        if (self.callback) |cb| php.release(cb);
+    }
+
+    pub fn getCallback(self: *@This(), class: *ZigClassEntry) !*Object {
+        return self.callback orelse create: {
+            const closure = Promise.createHandler();
+            defer php.release(&closure);
+            const cb_member = try class.getMember(.instance, "callback");
+            const cb_obj = try cb_member.class.createObject(null, &closure, false);
+            self.callback = cb_obj;
+            break :create cb_obj;
+        };
     }
 
     pub fn findMethod(self: *@This(), name: *String) ?*php.Function {

@@ -30,6 +30,7 @@ pub const StructureImporter = struct {
         @"opaque": usize = 0,
     } = .{},
     host: *ModuleHost,
+    has_deferred: bool = false,
 
     pub const Handle = *opaque {};
 
@@ -62,13 +63,44 @@ pub const StructureImporter = struct {
     }
 
     pub fn activateStructures(self: *@This()) !*Object {
+        var iter: HashTableIterator = .init(&self.structure_map, .{});
+        while (iter.next()) |s| {
+            const class_value = try php.getProperty(s, N("class"));
+            const class = try ZigClassEntry.fromValue(class_value);
+            if (self.has_deferred) {
+                // look for static objects whose creation have been deferred
+                if (php.getProperty(s, N("static")) catch null) |static| {
+                    if (php.getProperty(static, N("template")) catch null) |template| {
+                        if (php.getProperty(template, N("table")) catch null) |table| {
+                            if (php.getValueHashTable(table) catch null) |ht| {
+                                var slot_iter: HashTableIterator = .init(ht, .{});
+                                while (slot_iter.next()) |object| {
+                                    if (php.getValuePointer([*]?Handle, object) catch null) |deferred_ptr| {
+                                        const index = slot_iter.currentIndex().?;
+                                        const deferred: []?Handle = deferred_ptr[0..3];
+                                        defer php.allocator.free(deferred);
+                                        const instance_h = try self.createInstance(deferred[0].?, deferred[1].?, deferred[2]);
+                                        const instance = self.dereference(instance_h);
+                                        php.setHashEntry(ht, index, instance);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            try class.finalize(s);
+        }
         // the last class to get finalized is the root namespace
         if (self.class_list.items.len == 0) return error.NoRoot;
         const root_obj = self.class_list.items[0];
         // initially, the host holds references to class objects through class_list
         // prior to destroying that list we need to flip the relationship so that
         // these objects own the host instead
-        for (self.class_list.items) |class_obj| try ZigClassEntry.activate(class_obj);
+        for (self.class_list.items) |class_obj| {
+            const class = ZigClassEntry.fromObject(class_obj);
+            try class.activate();
+        }
         const root_class = ZigClassEntry.fromObject(root_obj);
         const root_static = root_class.getStaticData(structure.Struct);
         try root_static.markAsRoot();
@@ -167,9 +199,18 @@ pub const StructureImporter = struct {
         const class_value = try php.getProperty(structure_v, N("class"));
         const class_obj = try php.getValueObject(class_value);
         const class = ZigClassEntry.fromObject(class_obj);
+        if (!class.status.defined) {
+            self.has_deferred = true;
+            const deferred_args = try php.allocator.alloc(?Handle, 3);
+            deferred_args[0] = structure_h;
+            deferred_args[1] = dv_h;
+            deferred_args[2] = prefilled_table_h;
+            const deferred = php.createValuePointer(@ptrCast(deferred_args.ptr));
+            return self.addHandle(deferred);
+        }
         const memory = self.dereference(dv_h);
-        const buf = try php.getValuePointer(*ByteBuffer, memory);
         const prefilled_table = if (prefilled_table_h) |vh| self.dereference(vh) else null;
+        const buf = try php.getValuePointer(*ByteBuffer, memory);
         const instance = try class.obtainObjectFromBuffer(buf, prefilled_table);
         const value = php.createValueObject(instance);
         if (instance.gc.refcount > 1) {
@@ -226,9 +267,7 @@ pub const StructureImporter = struct {
         const object = self.dereference(object_h);
         if (value_h) |vh| {
             const value = self.dereference(vh);
-            // the exporter uses structure arrays to refer to types, replace them with class objects
-            const actual_value = php.getProperty(value, "class") catch value;
-            try php.setProperty(object, key_str, actual_value);
+            try php.setProperty(object, key_str, value);
         } else {
             try php.deleteProperty(object, key_str);
         }
@@ -276,24 +315,25 @@ pub const StructureImporter = struct {
     pub fn beginStructure(self: *@This(), structure_h: Handle) !void {
         const structure_v = self.dereference(structure_h);
         const class_value = try php.getProperty(structure_v, N("class"));
-        const class_obj = try php.getValueObject(class_value);
-        try ZigClassEntry.defineStructure(class_obj, structure_v);
+        const class = try ZigClassEntry.fromValue(class_value);
+        try class.define(structure_v);
     }
 
     pub fn finishStructure(self: *@This(), structure_h: Handle) !void {
-        const structure_v = self.dereference(structure_h);
-        const class_value = try php.getProperty(structure_v, N("class"));
-        const class_obj = try php.getValueObject(class_value);
-        try ZigClassEntry.finalizeStructure(class_obj, structure_v);
+        _ = self;
+        _ = structure_h;
     }
 
     pub fn enableCallback(self: *@This(), structure_h: Handle, template_h: Handle, member_flags_h: Handle) !void {
         const structure_v = self.dereference(structure_h);
         const template = self.dereference(template_h);
         const member_flags = self.dereference(member_flags_h);
-        const func_value = try php.getProperty(structure_v, N("class"));
-        const func_obj = try php.getValueObject(func_value);
-        const func_class = ZigClassEntry.fromObject(func_obj);
-        try func_class.enableCallback(template, member_flags);
+        // attach static template, which holds the JS controller pointer
+        const func_static = try php.getProperty(structure_v, N("static"));
+        try php.setProperty(func_static, N("template"), template);
+        // set argument flags
+        const class_v = try php.getProperty(structure_v, N("class"));
+        const class = try ZigClassEntry.fromValue(class_v);
+        try class.setArgumentFlags(member_flags);
     }
 };

@@ -109,7 +109,7 @@ pub const Struct = struct {
                         else => unreachable,
                     };
                     const ss = try php.allocator.create(SpecialStatic);
-                    try ss.init(class);
+                    try ss.init();
                     self.special_static = @unionInit(@TypeOf(self.special_static), @tagName(t), ss);
                 },
                 else => {},
@@ -547,7 +547,8 @@ pub const Struct = struct {
                     Generator => static.special_static.generator,
                     else => unreachable,
                 };
-                const callback_value = php.createValueObject(ss.callback);
+                const callback = try ss.getCallback(class);
+                const callback_value = php.createValueObject(callback);
                 try self.setProperty(N("callback"), &callback_value, null);
                 if (class.getMember(.instance, N("allocator")) catch null) |m| {
                     const allocator = try m.accessors.get(self);

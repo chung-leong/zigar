@@ -256,19 +256,17 @@ pub const ZigClassEntry = struct {
         php.allocator.destroy(self);
     }
 
-    pub fn defineStructure(class_obj: *Object, info: *Value) !void {
+    pub fn define(self: *@This(), info: *Value) !void {
         // when this function is called, the only info related to the structure's "shape" is available
         errdefer |err| failure.showErrorTrace(@src(), err);
-        const self = fromObject(class_obj);
         try self.extractScope(info, .instance);
         errdefer self.instance.deinit(self);
         self.status.defined = true;
     }
 
-    pub fn finalizeStructure(class_obj: *Object, info: *Value) !void {
+    pub fn finalize(self: *@This(), info: *Value) !void {
         // when this function is called, the static info has become available
         errdefer |err| failure.showErrorTrace(@src(), err);
-        const self = fromObject(class_obj);
         try self.extractScope(info, .static);
         errdefer self.static.deinit(self, .static);
         switch (self.type) {
@@ -354,7 +352,7 @@ pub const ZigClassEntry = struct {
             inline else => |t| {
                 const S = @field(structure.by_enum, @tagName(t));
                 const C = structure.Class(S);
-                const class_struct = C.fromObject(class_obj);
+                const class_struct = C.fromObject(self.object);
                 try class_struct.setStorage(&table);
                 try class_struct.finalize(false);
             },
@@ -366,7 +364,7 @@ pub const ZigClassEntry = struct {
                 if (@FieldType(StaticData, name) != void) {
                     self.static_data = @unionInit(StaticData, name, .{});
                     const data = &@field(self.static_data, name);
-                    try data.init(class_obj);
+                    try data.init(self.object);
                 }
             },
         }
@@ -381,9 +379,8 @@ pub const ZigClassEntry = struct {
         self.status.finalized = true;
     }
 
-    pub fn activate(obj: *Object) !void {
+    pub fn activate(self: *@This()) !void {
         // this method is called when the host is about to release the structure map
-        const self = fromObject(obj);
         self.host.addRef();
         self.status.activated = true;
         if (self.php_portion.name.*.len == 0) {
@@ -641,7 +638,8 @@ pub const ZigClassEntry = struct {
             var iter: HashTableIterator = .init(member_list_ht, .{});
             while (iter.next()) |member_info| {
                 const member_ht = try php.getValueHashTable(member_info);
-                const class_value = try php.getHashEntry(member_ht, "structure");
+                const structure_value = try php.getHashEntry(member_ht, "structure");
+                const class_value = try php.getProperty(structure_value, "class");
                 const class_obj = try php.getValueObject(class_value);
                 const class = fromObject(class_obj);
                 const member = try php.allocator.create(Member);
@@ -952,14 +950,8 @@ pub const ZigClassEntry = struct {
         self.releaseClassObject();
     }
 
-    pub fn enableCallback(self: *@This(), template: *Value, member_flags: *Value) !void {
+    pub fn setArgumentFlags(self: *@This(), member_flags: *Value) !void {
         if (self.type != .function) return error.Unexpected;
-        // attach static template, which holds the JS controller pointer
-        self.static.template = try createTemplate(template);
-        const fn_static = self.getStaticData(structure.Function);
-        const controller_buf = self.static.template.buffer orelse return error.Unexpected;
-        fn_static.controller_address = @intFromPtr(controller_buf.bytes.ptr);
-        // add flags to argument members
         const arg_member = try self.getMember(.instance, 0);
         const slot_usage = arg_member.class.slot_usage;
         var iter = arg_member.class.getMemberIterator(.instance);

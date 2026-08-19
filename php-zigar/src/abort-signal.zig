@@ -147,7 +147,7 @@ pub const AbortSignal = struct {
 pub const AbortSignalStatic = struct {
     methods: Methods = undefined,
 
-    pub fn init(self: *@This(), _: *ZigClassEntry) !void {
+    pub fn init(self: *@This()) !void {
         self.methods = .{
             .on = php.createTransformedFunction(handleOn, "on", 0, false),
             .off = php.createTransformedFunction(handleOff, "off", 0, false),
