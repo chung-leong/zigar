@@ -63,33 +63,22 @@ pub const StructureImporter = struct {
     }
 
     pub fn activateStructures(self: *@This()) !*Object {
-        var iter: HashTableIterator = .init(&self.structure_map, .{});
-        while (iter.next()) |s| {
-            const class_value = try php.getProperty(s, N("class"));
-            const class = try ZigClassEntry.fromValue(class_value);
-            if (self.has_deferred) {
-                // look for static objects whose creation have been deferred
-                if (php.getProperty(s, N("static")) catch null) |static| {
-                    if (php.getProperty(static, N("template")) catch null) |template| {
-                        if (php.getProperty(template, N("table")) catch null) |table| {
-                            if (php.getValueHashTable(table) catch null) |ht| {
-                                var slot_iter: HashTableIterator = .init(ht, .{});
-                                while (slot_iter.next()) |object| {
-                                    if (php.getValuePointer([*]?Handle, object) catch null) |deferred_ptr| {
-                                        const index = slot_iter.currentIndex().?;
-                                        const deferred: []?Handle = deferred_ptr[0..3];
-                                        defer php.allocator.free(deferred);
-                                        const instance_h = try self.createInstance(deferred[0].?, deferred[1].?, deferred[2]);
-                                        const instance = self.dereference(instance_h);
-                                        php.setHashEntry(ht, index, instance);
-                                    }
-                                }
-                            }
-                        }
+        if (self.has_deferred) {
+            var iter: HashTableIterator = .init(&self.structure_map, .{});
+            while (iter.next()) |s| {
+                const class_value = try php.getProperty(s, N("class"));
+                const class = try ZigClassEntry.fromValue(class_value);
+                var slot_iter = class.static.template.iterateSlots();
+                while (slot_iter.next()) |object| {
+                    if (php.getValuePointer([*]?Handle, object) catch null) |deferred_ptr| {
+                        const deferred: []?Handle = deferred_ptr[0..3];
+                        defer php.allocator.free(deferred);
+                        const instance_h = try self.createInstance(deferred[0].?, deferred[1].?, deferred[2]);
+                        const instance = self.dereference(instance_h);
+                        slot_iter.replace(instance);
                     }
                 }
             }
-            try class.finalize(s);
         }
         // the last class to get finalized is the root namespace
         if (self.class_list.items.len == 0) return error.NoRoot;
@@ -320,8 +309,10 @@ pub const StructureImporter = struct {
     }
 
     pub fn finishStructure(self: *@This(), structure_h: Handle) !void {
-        _ = self;
-        _ = structure_h;
+        const structure_v = self.dereference(structure_h);
+        const class_value = try php.getProperty(structure_v, N("class"));
+        const class = try ZigClassEntry.fromValue(class_value);
+        try class.finalize(structure_v);
     }
 
     pub fn enableCallback(self: *@This(), structure_h: Handle, template_h: Handle, member_flags_h: Handle) !void {
@@ -329,11 +320,15 @@ pub const StructureImporter = struct {
         const template = self.dereference(template_h);
         const member_flags = self.dereference(member_flags_h);
         // attach static template, which holds the JS controller pointer
-        const func_static = try php.getProperty(structure_v, N("static"));
-        try php.setProperty(func_static, N("template"), template);
-        // set argument flags
         const class_v = try php.getProperty(structure_v, N("class"));
         const class = try ZigClassEntry.fromValue(class_v);
+        if (class.status.finalized) {
+            try class.setStaticTemplate(template);
+        } else {
+            const func_static = try php.getProperty(structure_v, N("static"));
+            try php.setProperty(func_static, N("template"), template);
+        }
+        // set argument flags
         try class.setArgumentFlags(member_flags);
     }
 };

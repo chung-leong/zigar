@@ -74,6 +74,48 @@ pub const ZigClassEntry = struct {
     pub const Template = struct {
         buffer: ?*ByteBuffer = null,
         table: ?Value = null,
+
+        pub const SlotIterator = union(enum) {
+            iterator: HashTableIterator,
+            one: struct {
+                value: *Value,
+                used: bool = false,
+            },
+            none: void,
+
+            pub fn next(self: *@This()) ?*Value {
+                return switch (self.*) {
+                    .iterator => |*iter| iter.next(),
+                    .one => |*one| if (one.used) null else use: {
+                        one.used = true;
+                        break :use one.value;
+                    },
+                    .none => null,
+                };
+            }
+
+            pub fn replace(self: *@This(), new_value: *Value) void {
+                switch (self.*) {
+                    .iterator => |*iter| {
+                        php.setHashEntryRef(iter.ht, iter.currentKey(), new_value);
+                    },
+                    .one => |*one| one.value.* = php.reuse(new_value).*,
+                    .none => unreachable,
+                }
+            }
+        };
+
+        pub fn iterateSlots(self: *@This()) SlotIterator {
+            if (self.table) |*table| {
+                if (php.getValueArray(table)) |ht| {
+                    return .{ .iterator = .init(ht, .{}) };
+                } else |_| {
+                    return .{ .one = .{ .value = table } };
+                }
+            } else {
+                return .{ .none = {} };
+            }
+        }
     };
     const Scope = struct {
         members: HashTable,
@@ -948,6 +990,14 @@ pub const ZigClassEntry = struct {
         _ = object;
         // remove reference to class object (added in createObjectFromParameters())
         self.releaseClassObject();
+    }
+
+    pub fn setStaticTemplate(self: *@This(), template: *Value) !void {
+        // attach static template, which holds the JS controller pointer
+        self.static.template = try createTemplate(template);
+        const fn_static = self.getStaticData(structure.Function);
+        const controller_buf = self.static.template.buffer orelse return error.Unexpected;
+        fn_static.controller_address = @intFromPtr(controller_buf.bytes.ptr);
     }
 
     pub fn setArgumentFlags(self: *@This(), member_flags: *Value) !void {
