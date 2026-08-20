@@ -130,6 +130,7 @@ export default mixin({
     if (!structure.name) {
       this.inferTypeName(structure);
     }
+    this.finalizeStructure(structure);
     this.structures.push(structure);
   },
   enableCallback(structure, template, memberFlags) {
@@ -148,6 +149,7 @@ export default mixin({
     this.mixinUsage = new Map();
     this.invokeThunk(thunk, thunk, thunk);
     this.comptime = false;
+    // acquire pointer targets now that we have all constructors
     for (const structure of this.structures) {
       if (this.hasDeferred) {
         const { static: { template } } = structure;
@@ -160,10 +162,6 @@ export default mixin({
           }
         }
       }
-      this.finalizeStructure(structure);
-    }
-    // acquire pointer targets now that we have all constructors
-    for (const structure of this.structures) {
       const { constructor, flags, instance: { template } } = structure;
       // update decls that are pointers
       for (const name of constructor[PROPS]) {
