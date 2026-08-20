@@ -1,27 +1,16 @@
 const std = @import("std");
+var threaded_io = std.Io.Threaded.init_single_threaded;
 
-const zigar = @import("zigar");
+const io = threaded_io.io();
 
-pub const JSError = error{Unexpected};
-
-pub const Callback = *const fn (generator: zigar.function.Generator(JSError!?i32, false)) void;
-
-pub fn receive(ptr: ?*anyopaque, arg: JSError!?i32) bool {
-    const number_ptr: *const u32 = @ptrCast(@alignCast(ptr));
-    if (arg) |value_maybe| {
-        std.debug.print("number = {d}, value = {any}\n", .{ number_ptr.*, value_maybe });
-        if (value_maybe) |value| {
-            if (value >= 10) return false;
-        }
-    } else |err| {
-        std.debug.print("number = {d}, error = {s}\n", .{ number_ptr.*, @errorName(err) });
+pub fn print(dir: std.Io.Dir) !void {
+    var iter = dir.iterate();
+    while (try iter.next(io)) |entry| {
+        const entry_type = switch (entry.kind) {
+            .file => "file",
+            .directory => "dir",
+            else => "unknown",
+        };
+        std.debug.print("{s} ({s})\n", .{ entry.name, entry_type });
     }
-    return true;
-}
-
-var number: u32 = 1234;
-
-pub fn call(f: Callback) void {
-    defer zigar.function.release(f);
-    f(.{ .ptr = &number, .callback = receive });
 }
