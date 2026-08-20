@@ -343,7 +343,7 @@ pub const Struct = struct {
             },
             .directory => {
                 if (try self.getStreamHandle(value, true)) |handle| {
-                    try self.setProperty(N("fd"), &handle, null);
+                    try self.setProperty(N("handle"), &handle, null);
                     return;
                 } else if (failure.hasMessage()) {
                     return error.Unexpected;
