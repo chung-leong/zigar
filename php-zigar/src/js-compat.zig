@@ -579,7 +579,7 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
                                 buf = ab.buffer;
                                 ab.buffer.addRef();
                             } else {
-                                buf = try ab.buffer.slice(offset, byte_len, .@"1");
+                                buf = try ab.buffer.slice(offset, byte_len, .@"1", 0);
                             }
                             self.array_buffer = php.reuse(arg_obj);
                         } else if (arg_obj.ce == class_entry) {

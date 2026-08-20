@@ -123,7 +123,7 @@ pub fn Gmp(comptime attrs: Attributes) type {
             comptime attributes: Attributes = attrs,
 
             pub fn get(self: @This(), buffer: *ByteBuffer) Error!Value {
-                const bit_offset = self.bit_offset;
+                const bit_offset = buffer.bit_offset +% self.bit_offset;
                 return inline for (.{ 0, 1, 2, 3, 4, 5, 6, 7 }) |possible_offset| {
                     if (bit_offset == possible_offset) {
                         break try self.getAt(buffer, possible_offset);
@@ -179,7 +179,7 @@ pub fn Gmp(comptime attrs: Attributes) type {
             }
 
             pub fn set(self: @This(), buffer: *ByteBuffer, value: *const Value) Error!void {
-                const bit_offset = self.bit_offset;
+                const bit_offset = buffer.bit_offset +% self.bit_offset;
                 inline for (.{ 0, 1, 2, 3, 4, 5, 6, 7 }) |possible_offset| {
                     if (bit_offset == possible_offset) {
                         break try self.setAt(buffer, possible_offset, value);
