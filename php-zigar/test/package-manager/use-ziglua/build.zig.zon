@@ -3,8 +3,8 @@
     .version = "0.0.0",
     .dependencies = .{
         .zlua = .{
-            .url = "https://github.com/natecraddock/ziglua/archive/refs/tags/0.5.0.zip",
-            .hash = "zlua-0.1.0-hGRpC444BQDrHc6QhcEeGh1eWMwFbl-c21vlGPWjKBfQ",
+            .url = "https://github.com/natecraddock/ziglua/archive/f4d9195e9e1be23ff0ce784a13e872e4e6e53e75.zip",
+            .hash = "zlua-0.1.0-hGRpCyBuBQAc00RSYfiW0-uCHXmtLDGgwIuQnCYhaBg9",
         },
     },
     .paths = .{
