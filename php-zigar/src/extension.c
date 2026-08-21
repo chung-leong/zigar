@@ -1,4 +1,8 @@
+#define zend_gc_delref inline_zend_gc_delref
+#define zval_addref_p inline_zval_addref_p
 #include "include/extension.h"
+#undef zend_gc_delref
+#undef zval_addref_p
 
 PHP_MINIT_FUNCTION(zigar) {
     return php_zigar_mod_init(type, module_number);
@@ -90,4 +94,15 @@ void get_argument_info(zend_execute_data* ed, arg_info* info) {
     info->ptr = ZEND_CALL_ARG(ed, 1);
     info->len = ZEND_CALL_NUM_ARGS(ed);
     info->extra = !!(ZEND_CALL_INFO(ed) & ZEND_CALL_HAS_EXTRA_NAMED_PARAMS);
+}
+
+uint32_t zend_gc_delref(zend_refcounted_h *p) {
+	ZEND_ASSERT(p->refcount > 0);
+	ZEND_RC_MOD_CHECK(p);
+	return --(p->refcount);
+}
+
+uint32_t zval_addref_p(zval* pz) {
+	ZEND_ASSERT(Z_REFCOUNTED_P(pz));
+	return GC_ADDREF(Z_COUNTED_P(pz));
 }

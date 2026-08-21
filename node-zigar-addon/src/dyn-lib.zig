@@ -10,7 +10,7 @@ pub const DynLib = struct {
     is_handle_owner: bool,
 
     const Handle = switch (builtin.target.os.tag) {
-        .windows => std.os.windows.HMODULE,
+        .windows => c.HMODULE,
         else => *anyopaque,
     };
 
@@ -18,14 +18,12 @@ pub const DynLib = struct {
         const path_copy = try std.heap.c_allocator.dupeZ(u8, path);
         const handle = switch (builtin.target.os.tag) {
             .windows => load: {
-                const path_space = std.os.windows.sliceToPrefixedFileW(null, path) catch return error.InvalidPath;
-                const path_w = path_space.span().ptr;
                 var offset: usize = 0;
-                if (path_w[0] == '\\' and path_w[1] == '?' and path_w[2] == '?' and path_w[3] == '\\') {
+                if (path[0] == '\\' and path[1] == '?' and path[2] == '?' and path[3] == '\\') {
                     // + 4 to skip over the \??\
                     offset = 4;
                 }
-                break :load try std.os.windows.LoadLibraryExW(path_w + offset, .none);
+                break :load c.LoadLibraryA(path.ptr + offset) orelse return error.FileNotFound;
             },
             else => load: {
                 var flags: u32 = c.RTLD_LAZY;
@@ -62,7 +60,7 @@ pub const DynLib = struct {
     pub fn close(self: *@This()) void {
         if (self.is_handle_owner) {
             _ = switch (builtin.target.os.tag) {
-                .windows => std.os.windows.FreeLibrary(self.handle),
+                .windows => c.FreeLibrary(self.handle),
                 else => std.c.dlclose(self.handle),
             };
         }
@@ -71,10 +69,10 @@ pub const DynLib = struct {
 
     pub fn lookup(self: *@This(), comptime T: type, name: [:0]const u8) ?T {
         const ptr = switch (builtin.target.os.tag) {
-            .windows => std.os.windows.kernel32.GetProcAddress(self.handle, name),
+            .windows => c.GetProcAddress(self.handle, name),
             else => std.c.dlsym(self.handle, name),
         };
-        return @ptrCast(@alignCast(ptr));
+        return @ptrCast(@alignCast(@constCast(ptr)));
     }
 };
 

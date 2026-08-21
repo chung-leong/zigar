@@ -34,8 +34,8 @@ pub fn DllMain(
     _: std.os.windows.DWORD,
     _: std.os.windows.LPVOID,
 ) std.os.windows.BOOL {
-    @import("php-win32-c.zig").link() catch return std.os.windows.FALSE;
-    return std.os.windows.TRUE;
+    @import("php-win32-c.zig").link() catch return .FALSE;
+    return .TRUE;
 }
 
 pub fn addRequestShutdownCallback(ptr: *anyopaque, fn_ptr: *const fn (*anyopaque) void) !void {

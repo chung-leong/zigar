@@ -319,10 +319,21 @@ pub fn Controller(comptime Host: type) type {
             if (ptr.* == target) return null;
             if (read_only) {
                 const page = getPageSlice(address);
-                if (std.c.mprotect(page.ptr, page.len, .{ .READ = true, .WRITE = true }) == -1) {
-                    return error.AccessDenied;
+                var old: c.DWORD = undefined;
+                switch (builtin.target.os.tag) {
+                    .windows => {
+                        if (c.VirtualProtect(page.ptr, page.len, c.PAGE_READWRITE, &old) != c.TRUE) {
+                            return error.AccessDenied;
+                        }
+                    },
+                    else => if (std.c.mprotect(page.ptr, page.len, .{ .READ = true, .WRITE = true }) == -1) {
+                        return error.AccessDenied;
+                    },
                 }
-                defer _ = std.c.mprotect(page.ptr, page.len, .{ .READ = true });
+                defer switch (builtin.target.os.tag) {
+                    .windows => _ = c.VirtualProtect(page.ptr, page.len, old, &old),
+                    else => _ = std.c.mprotect(page.ptr, page.len, .{ .READ = true }),
+                };
                 ptr.* = target;
             } else {
                 ptr.* = target;

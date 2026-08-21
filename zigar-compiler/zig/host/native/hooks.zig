@@ -1,7 +1,10 @@
 const std = @import("std");
 const c_allocator = std.heap.c_allocator;
 const POLL = std.c.POLL;
-const pollfd = std.c.pollfd;
+const pollfd = switch (builtin.target.os.tag) {
+    .windows => c_int,
+    else => std.c.pollfd,
+};
 const nfds_t = std.c.nfds_t;
 const builtin = @import("builtin");
 

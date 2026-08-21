@@ -1,6 +1,8 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
+const c = @import("c");
+
 const extension = @import("extension.zig");
 const failure = @import("failure.zig");
 const io = @import("system.zig").io;
@@ -257,8 +259,16 @@ pub const ZigCompiler = struct {
             thread.join();
         }
         var env: std.process.Environ.Map = .init(al);
-        const env_slice = std.mem.sliceTo(std.c.environ, null);
-        try env.putPosixBlock(.{ .slice = @ptrCast(env_slice) });
+        switch (builtin.target.os.tag) {
+            .windows => {
+                const env_ptr = c.GetEnvironmentStringsW();
+                try env.putWindowsBlock(.{ .ptr = @ptrCast(env_ptr) });
+            },
+            else => {
+                const env_slice = std.mem.sliceTo(std.c.environ, null);
+                try env.putPosixBlock(.{ .slice = @ptrCast(env_slice) });
+            },
+        }
         // work around for XCode 26.4 incompatibility
         if (builtin.target.os.tag.isDarwin()) {
             try env.put("DEVELOPER_DIR", "/dev/null");

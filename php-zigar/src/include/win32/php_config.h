@@ -10,5 +10,6 @@
 #define ZEND_WIN32
 
 #define _pid_t int
+#define _PID_T_
 
 #endif 

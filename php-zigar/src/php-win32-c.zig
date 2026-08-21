@@ -5,10 +5,10 @@ const c = @import("c");
 
 pub fn link() !void {
     const dll_name = comptime switch (@hasDecl(c, "ZTS")) {
-        false => std.unicode.wtf8ToWtf16LeStringLiteral("php8"),
-        true => std.unicode.wtf8ToWtf16LeStringLiteral("php8ts"),
+        false => "php8",
+        true => "php8ts",
     };
-    const module = std.os.windows.kernel32.GetModuleHandleW(dll_name) orelse return error.LibraryNotFound;
+    const module = c.GetModuleHandleA(dll_name) orelse return error.LibraryNotFound;
     inline for (comptime std.meta.declarations(@This())) |decl| {
         const decl_ptr = &@field(@This(), decl.name);
         const decl_ptr_info = @typeInfo(@TypeOf(decl_ptr)).pointer;
@@ -23,7 +23,7 @@ pub fn link() !void {
                 },
                 else => decl.name,
             };
-            const ptr = std.os.windows.kernel32.GetProcAddress(module, import_name) orelse {
+            const ptr = c.GetProcAddress(module, import_name) orelse {
                 return error.MissingFunction;
             };
             decl_ptr.* = @ptrCast(@alignCast(ptr));
@@ -78,9 +78,9 @@ fn Ptr(comptime name: []const u8) type {
     if (@hasField(ZendFastCall, name)) {
         const info = @typeInfo(T).@"fn";
         var param_types: [info.params.len]type = undefined;
-        var param_attrs: [info.params.len]std.builtin.Type.StructField.Attributes = undefined;
+        var param_attrs: [info.params.len]std.builtin.Type.Fn.Param.Attributes = undefined;
         for (info.params, 0..) |param, i| {
-            param_types[i] = param.type;
+            param_types[i] = param.type.?;
             param_attrs[i] = .{};
         }
         const attrs: std.builtin.Type.Fn.Attributes = .{
@@ -90,7 +90,7 @@ fn Ptr(comptime name: []const u8) type {
                 else => .c,
             },
         };
-        const F = @Fn(param_types, param_attrs, info.return_type, attrs);
+        const F = @Fn(&param_types, &param_attrs, info.return_type.?, attrs);
         return *const F;
     } else {
         return *const T;
