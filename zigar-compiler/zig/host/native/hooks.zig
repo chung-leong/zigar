@@ -522,10 +522,37 @@ const S = switch (os) {
     },
     else => std.c.S,
 };
+const timespec = switch (os) {
+    .windows => extern struct {
+        sec: c_longlong,
+        nsec: c_longlong,
+    },
+    else => std.c.timespec,
+};
 const fd_cwd = AT.FDCWD;
 const fd_root = -1;
 const fd_min = 0xf_ffff;
 const fd_temp_min = 0x1fff_ffff;
+
+fn nanoSecondsToFileTime(ns: i96) c.FILETIME {
+    const adjusted: u64 = @bitCast(std.os.windows.toSysTime(.{ .nanoseconds = ns }));
+    return .{
+        .dwHighDateTime = @as(u32, @truncate(adjusted >> 32)),
+        .dwLowDateTime = @as(u32, @truncate(adjusted)),
+    };
+}
+
+fn toLargeInt(ns: i96) c.LARGE_INTEGER {
+    var li: c.LARGE_INTEGER = undefined;
+    const li_ptr: *c_longlong = @ptrCast(&li);
+    li_ptr.* = @intCast(ns);
+    return li;
+}
+
+fn toSysTime(ns: i96) c.LARGE_INTEGER {
+    const adjusted: u64 = @bitCast(std.os.windows.toSysTime(.{ .nanoseconds = ns }));
+    return toLargeInt(adjusted);
+}
 
 pub fn SyscallRedirector(comptime ModuleHost: type) type {
     return struct {
@@ -956,7 +983,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
-        pub fn futimens(fd: c_int, times: [*]const std.c.timespec, result: *c_int) callconv(.c) bool {
+        pub fn futimens(fd: c_int, times: [*]const timespec, result: *c_int) callconv(.c) bool {
             if (isPrivateDescriptor(fd)) {
                 var call: Syscall = .{ .cmd = .futimes, .u = .{
                     .futimes = .{
@@ -1724,7 +1751,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return utimensat(fd_cwd, path, &times, AT.SYMLINK_FOLLOW, result);
         }
 
-        pub fn utimensat(dirfd: c_int, path: [*:0]const u8, times: [*]const std.c.timespec, flags: c_int, result: *c_int) callconv(.c) bool {
+        pub fn utimensat(dirfd: c_int, path: [*:0]const u8, times: [*]const timespec, flags: c_int, result: *c_int) callconv(.c) bool {
             if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.utimes))) {
                 var resolver = PathResolver.init(dirfd, path) catch {
                     result.* = intFromError(.NOMEM);
@@ -1791,8 +1818,8 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             };
         }
 
-        fn convertTimeval(tv: [*]const std.c.timeval) [2]std.c.timespec {
-            var times: [2]std.c.timespec = undefined;
+        fn convertTimeval(tv: [*]const std.c.timeval) [2]timespec {
+            var times: [2]timespec = undefined;
             for (&times, 0..) |*ptr, index| {
                 ptr.* = .{
                     .sec = tv[index].sec,
@@ -1802,7 +1829,8 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return times;
         }
 
-        fn getNanoseconds(ts: std.c.timespec) i64 {
+        fn getNanoseconds(ts: timespec) i64 {
+            if (@TypeOf(ts.sec) == void) return ts.nsec;
             return ts.sec * 1_000_000_000 + ts.nsec;
         }
 
@@ -2160,7 +2188,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         }
 
         pub fn futime(fd: c_int, tb: *const utimbuf) callconv(.c) c_int {
-            const ts: [2]std.c.timespec = .{
+            const ts: [2]timespec = .{
                 .{ .sec = tb.actime, .nsec = 0 },
                 .{ .sec = tb.modtime, .nsec = 0 },
             };
@@ -2172,7 +2200,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         }
 
         pub fn futime64(fd: c_int, tb: *const utimbuf) callconv(.c) c_int {
-            const ts: [2]std.c.timespec = .{
+            const ts: [2]timespec = .{
                 .{ .sec = tb.actime, .nsec = 0 },
                 .{ .sec = tb.modtime, .nsec = 0 },
             };
@@ -2342,7 +2370,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         }
 
         pub fn utime(path: [*:0]const u8, tb: ?*const utimbuf) callconv(.c) c_int {
-            var ts: [2]std.c.timespec = undefined;
+            var ts: [2]timespec = undefined;
             if (tb) |t| {
                 ts = .{ .{ .sec = t.actime, .nsec = 0 }, .{ .sec = t.modtime, .nsec = 0 } };
             } else {
@@ -2360,7 +2388,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         }
 
         pub fn utime64(path: [*:0]const u8, tb: ?*const utimbuf) callconv(.c) c_int {
-            var ts: [2]std.c.timespec = undefined;
+            var ts: [2]timespec = undefined;
             if (tb) |t| {
                 ts = .{ .{ .sec = t.actime, .nsec = 0 }, .{ .sec = t.modtime, .nsec = 0 } };
             } else {
@@ -3562,7 +3590,7 @@ pub fn LibcSubstituteWindows(comptime redirector: type) type {
             return Original._findnext64(handle, info);
         }
 
-        pub fn _open_osfhandle(handle: win32.HANDLE) callconv(.c) c_int {
+        pub fn _open_osfhandle(handle: c.HANDLE) callconv(.c) c_int {
             const fd = win32.toDescriptor(handle);
             if (win32.isPrivateDescriptor(fd)) {
                 return fd;
@@ -3570,7 +3598,7 @@ pub fn LibcSubstituteWindows(comptime redirector: type) type {
             return Original._open_osfhandle(handle);
         }
 
-        pub fn _get_osfhandle(fd: c_int) callconv(.c) win32.HANDLE {
+        pub fn _get_osfhandle(fd: c_int) callconv(.c) c.HANDLE {
             if (win32.isPrivateDescriptor(fd)) {
                 return win32.fromDescriptor(fd);
             }
@@ -3671,10 +3699,10 @@ pub fn LibcSubstituteWindows(comptime redirector: type) type {
 
 pub fn Win32Substitute(comptime redirector: type) type {
     return struct {
-        pub fn CloseHandle(handle: HANDLE) callconv(WINAPI) BOOL {
+        pub fn CloseHandle(handle: c.HANDLE) callconv(WINAPI) c.BOOL {
             if (isTemporaryHandle(handle)) {
                 destroyTemporaryHandle(handle);
-                return TRUE;
+                return c.TRUE;
             }
             const fd = toDescriptor(handle);
             var result: c_int = undefined;
@@ -3685,29 +3713,29 @@ pub fn Win32Substitute(comptime redirector: type) type {
         }
 
         pub fn CreateDirectory(
-            path: LPCSTR,
-            security_attributes: *SECURITY_ATTRIBUTES,
-        ) callconv(WINAPI) BOOL {
+            path: c.LPCSTR,
+            security_attributes: *c.SECURITY_ATTRIBUTES,
+        ) callconv(WINAPI) c.BOOL {
             if (CreateDirectoryX(path, security_attributes)) |rv| return rv;
             return Original.CreateDirectory(path, security_attributes);
         }
 
         pub fn CreateDirectoryW(
-            path: LPCWSTR,
-            security_attributes: *SECURITY_ATTRIBUTES,
-        ) callconv(WINAPI) BOOL {
+            path: c.LPCWSTR,
+            security_attributes: *c.SECURITY_ATTRIBUTES,
+        ) callconv(WINAPI) c.BOOL {
             if (CreateDirectoryX(path, security_attributes)) |rv| return rv;
             return Original.CreateDirectoryW(path, security_attributes);
         }
 
         fn CreateDirectoryX(
             path: anytype,
-            _: *SECURITY_ATTRIBUTES,
-        ) ?BOOL {
+            _: *c.SECURITY_ATTRIBUTES,
+        ) ?c.BOOL {
             if (redirector.Host.isRedirecting(.mkdir)) {
                 var converter = Wtf8Converter.init(.{});
                 defer converter.deinit();
-                const path_wtf8 = converter.convertTo(path) catch return FALSE;
+                const path_wtf8 = converter.convertTo(path) catch return c.FALSE;
                 var result: c_int = undefined;
                 if (redirector.mkdir(path_wtf8, 0, &result)) {
                     return saveError(result);
@@ -3717,14 +3745,14 @@ pub fn Win32Substitute(comptime redirector: type) type {
         }
 
         pub fn CreateFile(
-            path: LPCSTR,
-            desired_access: DWORD,
-            share_mode: DWORD,
-            security_attributes: *SECURITY_ATTRIBUTES,
-            create_disposition: DWORD,
-            flags_and_attributes: DWORD,
-            template_file: HANDLE,
-        ) callconv(WINAPI) ?HANDLE {
+            path: c.LPCSTR,
+            desired_access: c.DWORD,
+            share_mode: c.DWORD,
+            security_attributes: *c.SECURITY_ATTRIBUTES,
+            create_disposition: c.DWORD,
+            flags_and_attributes: c.DWORD,
+            template_file: c.HANDLE,
+        ) callconv(WINAPI) c.HANDLE {
             if (CreateFileX(
                 path,
                 desired_access,
@@ -3738,14 +3766,14 @@ pub fn Win32Substitute(comptime redirector: type) type {
         }
 
         pub fn CreateFileW(
-            path: LPCWSTR,
-            desired_access: DWORD,
-            share_mode: DWORD,
-            security_attributes: *SECURITY_ATTRIBUTES,
-            create_disposition: DWORD,
-            flags_and_attributes: DWORD,
-            template_file: HANDLE,
-        ) callconv(WINAPI) ?HANDLE {
+            path: c.LPCWSTR,
+            desired_access: c.DWORD,
+            share_mode: c.DWORD,
+            security_attributes: *c.SECURITY_ATTRIBUTES,
+            create_disposition: c.DWORD,
+            flags_and_attributes: c.DWORD,
+            template_file: c.HANDLE,
+        ) callconv(WINAPI) c.HANDLE {
             if (CreateFileX(
                 path,
                 desired_access,
@@ -3760,28 +3788,28 @@ pub fn Win32Substitute(comptime redirector: type) type {
 
         fn CreateFileX(
             path: anytype,
-            desired_access: DWORD,
-            _: DWORD,
-            _: *SECURITY_ATTRIBUTES,
-            create_disposition: DWORD,
-            _: DWORD,
-            _: HANDLE,
-        ) ??HANDLE {
+            desired_access: c.DWORD,
+            _: c.DWORD,
+            _: *c.SECURITY_ATTRIBUTES,
+            create_disposition: c.DWORD,
+            _: c.DWORD,
+            _: c.HANDLE,
+        ) c.HANDLE {
             if (redirector.Host.isRedirecting(.open)) {
                 var converter = Wtf8Converter.init(.{});
                 defer converter.deinit();
-                const path_wtf8 = converter.convertTo(path) catch return std.os.windows.INVALID_HANDLE_VALUE;
+                const path_wtf8 = converter.convertTo(path) catch return c.INVALID_HANDLE_VALUE;
                 const flags = translate: {
                     var oflags: O = switch (create_disposition) {
-                        std.os.windows.CREATE_ALWAYS => .{ .CREAT = true, .TRUNC = true },
-                        std.os.windows.CREATE_NEW => .{ .CREAT = true, .EXCL = true },
-                        std.os.windows.OPEN_ALWAYS => .{ .CREAT = true },
-                        std.os.windows.OPEN_EXISTING => .{},
-                        std.os.windows.TRUNCATE_EXISTING => .{ .TRUNC = true },
+                        c.CREATE_ALWAYS => .{ .CREAT = true, .TRUNC = true },
+                        c.CREATE_NEW => .{ .CREAT = true, .EXCL = true },
+                        c.OPEN_ALWAYS => .{ .CREAT = true },
+                        c.OPEN_EXISTING => .{},
+                        c.TRUNCATE_EXISTING => .{ .TRUNC = true },
                         else => .{},
                     };
-                    const r_access = (desired_access & std.os.windows.GENERIC_READ) != 0;
-                    const w_access = (desired_access & std.os.windows.GENERIC_WRITE) != 0;
+                    const r_access = (desired_access & c.GENERIC_READ) != 0;
+                    const w_access = (desired_access & c.GENERIC_WRITE) != 0;
                     if (r_access) {
                         oflags.ACCMODE = if (w_access) .RDWR else .RDONLY;
                     } else if (w_access) {
@@ -3795,7 +3823,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
                 if (redirector.open(path_wtf8, flags, mode, &fd)) {
                     if (fd < 0) {
                         _ = saveError(fd);
-                        return @as(?HANDLE, null);
+                        return @as(c.HANDLE, null);
                     }
                     return fromDescriptor(fd);
                 }
@@ -3804,35 +3832,35 @@ pub fn Win32Substitute(comptime redirector: type) type {
         }
 
         pub fn CreateFileMapping(
-            handle: HANDLE,
-            security_attributes: *SECURITY_ATTRIBUTES,
-            protect: DWORD,
-            max_size_high: DWORD,
-            max_size_low: DWORD,
+            handle: c.HANDLE,
+            security_attributes: *c.SECURITY_ATTRIBUTES,
+            protect: c.DWORD,
+            max_size_high: c.DWORD,
+            max_size_low: c.DWORD,
             name: ?[*:0]const u8,
-        ) callconv(WINAPI) ?HANDLE {
+        ) callconv(WINAPI) c.HANDLE {
             if (isPrivateHandle(handle)) {
                 return std.os.windows.INVALID_HANDLE_VALUE;
             }
             return Original.CreateFileMapping(handle, security_attributes, protect, max_size_high, max_size_low, name);
         }
 
-        pub fn CreateSymbolicLink(path: LPCSTR, target: LPCSTR, flags: DWORD) callconv(WINAPI) BOOL {
+        pub fn CreateSymbolicLink(path: c.LPCSTR, target: c.LPCSTR, flags: c.DWORD) callconv(WINAPI) c.BOOL {
             if (CreateSymbolicLinkX(path, target, flags)) |rv| return rv;
             return Original.CreateSymbolicLink(path, target, flags);
         }
 
-        pub fn CreateSymbolicLinkW(path: LPCWSTR, target: LPCWSTR, flags: DWORD) callconv(WINAPI) BOOL {
+        pub fn CreateSymbolicLinkW(path: c.LPCWSTR, target: c.LPCWSTR, flags: c.DWORD) callconv(WINAPI) c.BOOL {
             if (CreateSymbolicLinkX(path, target, flags)) |rv| return rv;
             return Original.CreateSymbolicLinkW(path, target, flags);
         }
 
-        fn CreateSymbolicLinkX(path: anytype, target: anytype, _: DWORD) ?BOOL {
+        fn CreateSymbolicLinkX(path: anytype, target: anytype, _: c.DWORD) ?c.BOOL {
             if (redirector.Host.isRedirecting(.symlink)) {
                 var converter = Wtf8Converter.init(.{});
                 defer converter.deinit();
-                const path_wtf8 = converter.convertTo(path) catch return FALSE;
-                const target_wtf8 = converter.convertTo(target) catch return FALSE;
+                const path_wtf8 = converter.convertTo(path) catch return c.FALSE;
+                const target_wtf8 = converter.convertTo(target) catch return c.FALSE;
                 var result: c_int = undefined;
                 if (redirector.symlink(target_wtf8, path_wtf8, &result)) {
                     return saveError(result);
@@ -3841,21 +3869,21 @@ pub fn Win32Substitute(comptime redirector: type) type {
             return null;
         }
 
-        pub fn DeleteFile(path: LPCSTR) callconv(WINAPI) BOOL {
+        pub fn DeleteFile(path: c.LPCSTR) callconv(WINAPI) c.BOOL {
             if (DeleteFileX(path)) |rv| return rv;
             return Original.DeleteFile(path);
         }
 
-        pub fn DeleteFileW(path: LPCWSTR) callconv(WINAPI) BOOL {
+        pub fn DeleteFileW(path: c.LPCWSTR) callconv(WINAPI) c.BOOL {
             if (DeleteFileX(path)) |rv| return rv;
             return Original.DeleteFileW(path);
         }
 
-        fn DeleteFileX(path: anytype) ?BOOL {
+        fn DeleteFileX(path: anytype) ?c.BOOL {
             if (redirector.Host.isRedirecting(.unlink)) {
                 var converter = Wtf8Converter.init(.{});
                 defer converter.deinit();
-                const path_wtf8 = converter.convertTo(path) catch return FALSE;
+                const path_wtf8 = converter.convertTo(path) catch return c.FALSE;
                 var result: c_int = undefined;
                 if (redirector.unlink(path_wtf8, &result)) {
                     return saveError(result);
@@ -3864,17 +3892,17 @@ pub fn Win32Substitute(comptime redirector: type) type {
             return null;
         }
 
-        pub fn GetFileAttributes(path: LPCSTR) callconv(WINAPI) DWORD {
+        pub fn GetFileAttributes(path: c.LPCSTR) callconv(WINAPI) c.DWORD {
             if (GetFileAttributesX(path)) |rv| return rv;
             return Original.GetFileAttributes(path);
         }
 
-        pub fn GetFileAttributesW(path: LPCWSTR) callconv(WINAPI) DWORD {
+        pub fn GetFileAttributesW(path: c.LPCWSTR) callconv(WINAPI) c.DWORD {
             if (GetFileAttributesX(path)) |rv| return rv;
             return Original.GetFileAttributesW(path);
         }
 
-        fn GetFileAttributesX(path: anytype) ?DWORD {
+        fn GetFileAttributesX(path: anytype) ?c.DWORD {
             if (redirector.Host.isRedirecting(.stat)) {
                 var converter = Wtf8Converter.init(.{});
                 defer converter.deinit();
@@ -3893,9 +3921,9 @@ pub fn Win32Substitute(comptime redirector: type) type {
         }
 
         pub fn GetFileInformationByHandle(
-            handle: HANDLE,
-            file_information: *BY_HANDLE_FILE_INFORMATION,
-        ) callconv(WINAPI) BOOL {
+            handle: c.HANDLE,
+            file_information: *c.BY_HANDLE_FILE_INFORMATION,
+        ) callconv(WINAPI) c.BOOL {
             const fd = toDescriptor(handle);
             var stat: std.os.wasi.filestat_t = undefined;
             var result: c_int = undefined;
@@ -3903,26 +3931,26 @@ pub fn Win32Substitute(comptime redirector: type) type {
                 if (result < 0) return saveError(result);
                 file_information.* = .{
                     .dwFileAttributes = switch (stat.filetype) {
-                        .DIRECTORY => std.os.windows.FILE_ATTRIBUTE_DIRECTORY,
-                        .SYMBOLIC_LINK => std.os.windows.FILE_ATTRIBUTE_REPARSE_POINT,
-                        else => std.os.windows.FILE_ATTRIBUTE_NORMAL,
+                        .DIRECTORY => c.FILE_ATTRIBUTE_DIRECTORY,
+                        .SYMBOLIC_LINK => c.FILE_ATTRIBUTE_REPARSE_POINT,
+                        else => c.FILE_ATTRIBUTE_NORMAL,
                     },
                     .nFileIndexLow = @truncate(stat.ino),
                     .nFileIndexHigh = @truncate(stat.ino >> 32),
                     .nFileSizeLow = @truncate(stat.size),
                     .nFileSizeHigh = @truncate(stat.size >> 32),
                     .nNumberOfLinks = @intCast(stat.nlink),
-                    .ftCreationTime = std.os.windows.nanoSecondsToFileTime(stat.ctim),
-                    .ftLastAccessTime = std.os.windows.nanoSecondsToFileTime(stat.atim),
-                    .ftLastWriteTime = std.os.windows.nanoSecondsToFileTime(stat.mtim),
+                    .ftCreationTime = nanoSecondsToFileTime(stat.ctim),
+                    .ftLastAccessTime = nanoSecondsToFileTime(stat.atim),
+                    .ftLastWriteTime = nanoSecondsToFileTime(stat.mtim),
                     .dwVolumeSerialNumber = 0,
                 };
-                return TRUE;
+                return c.TRUE;
             }
             return Original.GetFileInformationByHandle(handle, file_information);
         }
 
-        pub fn GetFileSize(handle: HANDLE, size_high: ?*DWORD) callconv(WINAPI) DWORD {
+        pub fn GetFileSize(handle: c.HANDLE, size_high: ?*c.DWORD) callconv(WINAPI) c.DWORD {
             const fd = toDescriptor(handle);
             var stat: std.os.wasi.filestat_t = undefined;
             var result: c_int = undefined;
@@ -3938,34 +3966,35 @@ pub fn Win32Substitute(comptime redirector: type) type {
             return Original.GetFileSize(handle, size_high);
         }
 
-        pub fn GetFileSizeEx(handle: HANDLE, size: *LARGE_INTEGER) callconv(WINAPI) BOOL {
+        pub fn GetFileSizeEx(handle: c.HANDLE, size: *c.LARGE_INTEGER) callconv(WINAPI) c.BOOL {
             const fd = toDescriptor(handle);
             var stat: std.os.wasi.filestat_t = undefined;
             var result: c_int = undefined;
             if (redirector.fstatT(std.os.wasi.filestat_t, fd, &stat, &result)) {
                 if (result < 0) return saveError(result);
                 _ = c.SetLastError(0);
-                size.* = @intCast(stat.size);
-                return TRUE;
+                const size_ptr: *c_longlong = @ptrCast(size);
+                size_ptr.* = @intCast(stat.size);
+                return c.TRUE;
             }
             return Original.GetFileSizeEx(handle, size);
         }
 
-        pub fn GetHandleInformation(handle: HANDLE, flags: *DWORD) callconv(WINAPI) BOOL {
+        pub fn GetHandleInformation(handle: c.HANDLE, flags: *c.DWORD) callconv(WINAPI) c.BOOL {
             if (isPrivateHandle(handle)) {
                 flags.* = 0;
-                return TRUE;
+                return c.TRUE;
             }
             return Original.GetHandleInformation(handle, flags);
         }
 
         pub fn LockFile(
-            handle: HANDLE,
-            offset_low: DWORD,
-            offset_high: DWORD,
-            len_low: DWORD,
-            len_high: DWORD,
-        ) callconv(WINAPI) BOOL {
+            handle: c.HANDLE,
+            offset_low: c.DWORD,
+            offset_high: c.DWORD,
+            len_low: c.DWORD,
+            len_high: c.DWORD,
+        ) callconv(WINAPI) c.BOOL {
             const fd = toDescriptor(handle);
             const lock = createLockStruct(.{ offset_low, offset_high }, .{ len_low, len_high }, F.WRLCK);
             var result: c_int = undefined;
@@ -3976,13 +4005,13 @@ pub fn Win32Substitute(comptime redirector: type) type {
         }
 
         pub fn LockFileEx(
-            handle: HANDLE,
-            flags: DWORD,
-            reserved: DWORD,
-            len_low: DWORD,
-            len_high: DWORD,
-            overlapped: ?*OVERLAPPED,
-        ) callconv(WINAPI) BOOL {
+            handle: c.HANDLE,
+            flags: c.DWORD,
+            reserved: c.DWORD,
+            len_low: c.DWORD,
+            len_high: c.DWORD,
+            overlapped: ?*c.OVERLAPPED,
+        ) callconv(WINAPI) c.BOOL {
             const fd = toDescriptor(handle);
             if (isPrivateDescriptor(fd)) {
                 signalBeginning(overlapped);
@@ -3995,32 +4024,32 @@ pub fn Win32Substitute(comptime redirector: type) type {
             return Original.LockFileEx(handle, flags, reserved, len_low, len_high, overlapped);
         }
 
-        pub fn MoveFile(path: LPCSTR, new_path: LPCSTR) callconv(WINAPI) BOOL {
+        pub fn MoveFile(path: c.LPCSTR, new_path: c.LPCSTR) callconv(WINAPI) c.BOOL {
             if (MoveFileExX(path, new_path, 0)) |rv| return rv;
             return Original.MoveFile(path, new_path);
         }
 
-        pub fn MoveFileW(path: LPCWSTR, new_path: LPCWSTR) callconv(WINAPI) BOOL {
+        pub fn MoveFileW(path: c.LPCWSTR, new_path: c.LPCWSTR) callconv(WINAPI) c.BOOL {
             if (MoveFileExX(path, new_path, 0)) |rv| return rv;
             return Original.MoveFileW(path, new_path);
         }
 
-        pub fn MoveFileEx(path: LPCSTR, new_path: LPCSTR, flags: DWORD) callconv(WINAPI) BOOL {
+        pub fn MoveFileEx(path: c.LPCSTR, new_path: c.LPCSTR, flags: c.DWORD) callconv(WINAPI) c.BOOL {
             if (MoveFileExX(path, new_path, flags)) |rv| return rv;
             return Original.MoveFileEx(path, new_path, flags);
         }
 
-        pub fn MoveFileExW(path: LPCWSTR, new_path: LPCWSTR, flags: DWORD) callconv(WINAPI) BOOL {
+        pub fn MoveFileExW(path: c.LPCWSTR, new_path: c.LPCWSTR, flags: c.DWORD) callconv(WINAPI) c.BOOL {
             if (MoveFileExX(path, new_path, flags)) |rv| return rv;
             return Original.MoveFileExW(path, new_path, flags);
         }
 
-        pub fn MoveFileExX(path: anytype, new_path: anytype, _: DWORD) ?BOOL {
+        pub fn MoveFileExX(path: anytype, new_path: anytype, _: c.DWORD) ?c.BOOL {
             if (redirector.Host.isRedirecting(.rename)) {
                 var converter = Wtf8Converter.init(.{});
                 defer converter.deinit();
-                const path_wtf8 = converter.convertTo(path) catch return FALSE;
-                const new_path_wtf8 = converter.convertTo(new_path) catch return FALSE;
+                const path_wtf8 = converter.convertTo(path) catch return c.FALSE;
+                const new_path_wtf8 = converter.convertTo(new_path) catch return c.FALSE;
                 var result: c_int = undefined;
                 if (redirector.rename(path_wtf8, new_path_wtf8, &result)) {
                     return saveError(result);
@@ -4029,82 +4058,82 @@ pub fn Win32Substitute(comptime redirector: type) type {
             return null;
         }
 
-        pub fn NtClose(handle: HANDLE) callconv(WINAPI) NTSTATUS {
+        pub fn NtClose(handle: c.HANDLE) callconv(WINAPI) c.NTSTATUS {
             if (isTemporaryHandle(handle)) {
                 destroyTemporaryHandle(handle);
-                return .SUCCESS;
+                return c.STATUS_SUCCESS;
             }
             const fd = toDescriptor(handle);
             var result: c_int = undefined;
             if (redirector.close(fd, &result)) {
-                return if (result == 0) .SUCCESS else .INVALID_HANDLE;
+                return if (result == 0) c.STATUS_SUCCESS else c.STATUS_INVALID_HANDLE;
             }
             return Original.NtClose(handle);
         }
 
         pub fn NtCreateFile(
-            handle: *HANDLE,
-            desired_access: ACCESS_MASK,
-            object_attributes: *OBJECT_ATTRIBUTES,
-            io_status_block: *IO_STATUS_BLOCK,
-            allocation_size: ?*LARGE_INTEGER,
-            file_attributes: ULONG,
-            share_access: ULONG,
-            create_disposition: ULONG,
-            create_options: ULONG,
+            handle: *c.HANDLE,
+            desired_access: c.ACCESS_MASK,
+            object_attributes: *c.OBJECT_ATTRIBUTES,
+            io_status_block: *c.IO_STATUS_BLOCK,
+            allocation_size: ?*c.LARGE_INTEGER,
+            file_attributes: c.ULONG,
+            share_access: c.ULONG,
+            create_disposition: c.ULONG,
+            create_options: c.ULONG,
             ea_buffer: ?*anyopaque,
-            ea_length: ULONG,
-        ) callconv(WINAPI) NTSTATUS {
+            ea_length: c.ULONG,
+        ) callconv(WINAPI) c.NTSTATUS {
             const dirfd: c_int = if (object_attributes.RootDirectory) |dh| toDescriptor(dh) else fd_cwd;
-            const dir_op = (create_options & std.os.windows.FILE_DIRECTORY_FILE) != 0;
+            const dir_op = (create_options & c.FILE_DIRECTORY_FILE) != 0;
             const object_name = object_attributes.ObjectName;
-            const name_len = @divExact(object_name.Length, 2);
-            const path = object_name.Buffer.?[0..name_len];
+            const name_len = @divExact(object_name.*.Length, 2);
+            const path = object_name.*.Buffer[0..name_len];
             var result: isize = undefined;
             if (isPrivateDescriptor(dirfd) or redirector.Host.isRedirecting(.any)) {
                 var converter = Wtf8Converter.init(.{ .save_error = false });
                 defer converter.deinit();
-                const path_wtf8 = converter.convertTo(path) catch return .NO_MEMORY;
-                if ((desired_access & std.os.windows.DELETE) != 0) {
+                const path_wtf8 = converter.convertTo(path) catch return c.STATUS_NO_MEMORY;
+                if ((desired_access & c.DELETE) != 0) {
                     // a delete or rename operation--remember the path for NtSetInformationFile()
                     if (isPrivateDescriptor(dirfd)) {
-                        handle.* = createTemporaryHandle(path_wtf8, dirfd, dir_op) catch return .NO_MEMORY;
+                        handle.* = createTemporaryHandle(path_wtf8, dirfd, dir_op) catch return c.STATUS_NO_MEMORY;
                         io_status_block.Information = c.FILE_CREATED;
-                        return .SUCCESS;
+                        return c.STATUS_SUCCESS;
                     }
-                } else if (dir_op and create_disposition == std.os.windows.FILE_CREATE) {
+                } else if (dir_op and create_disposition == c.FILE_CREATE) {
                     // creating a directory
                     var int_result: c_int = undefined;
                     if (redirector.mkdirat(dirfd, path_wtf8, 0, &int_result)) {
-                        if (int_result < 0) return .ACCESS_DENIED;
+                        if (int_result < 0) return c.STATUS_ACCESS_DENIED;
                         result = int_result;
-                        handle.* = createTemporaryHandle(path_wtf8, dirfd, dir_op) catch return .NO_MEMORY;
+                        handle.* = createTemporaryHandle(path_wtf8, dirfd, dir_op) catch return c.STATUS_NO_MEMORY;
                         io_status_block.Information = c.FILE_CREATED;
-                        return .SUCCESS;
+                        return c.STATUS_SUCCESS;
                     }
-                } else if (create_options == std.os.windows.FILE_OPEN_REPARSE_POINT | std.os.windows.FILE_SYNCHRONOUS_IO_NONALERT) {
+                } else if (create_options == c.FILE_OPEN_REPARSE_POINT | c.FILE_SYNCHRONOUS_IO_NONALERT) {
                     // reading a link
-                    const buf = c_allocator.alloc(u8, 4096) catch return .NO_MEMORY;
+                    const buf = c_allocator.alloc(u8, 4096) catch return c.STATUS_NO_MEMORY;
                     if (redirector.readlinkat(dirfd, path_wtf8, buf.ptr, @intCast(buf.len - 1), &result)) {
-                        if (result < 0) return .ACCESS_DENIED;
+                        if (result < 0) return c.STATUS_ACCESS_DENIED;
                         const len: usize = @intCast(result);
                         buf[len] = 0;
-                        handle.* = createTemporaryHandle(path_wtf8, dirfd, buf) catch return .NO_MEMORY;
+                        handle.* = createTemporaryHandle(path_wtf8, dirfd, buf) catch return c.STATUS_NO_MEMORY;
                         io_status_block.Information = c.FILE_CREATED;
                     }
-                    return .SUCCESS;
+                    return c.STATUS_SUCCESS;
                 } else {
                     var oflags: O = switch (create_disposition) {
-                        std.os.windows.FILE_SUPERSEDE => .{ .CREAT = true, .TRUNC = true },
-                        std.os.windows.FILE_CREATE => .{ .CREAT = true },
-                        std.os.windows.FILE_OPEN => .{},
-                        std.os.windows.FILE_OPEN_IF => .{ .CREAT = true },
-                        std.os.windows.FILE_OVERWRITE => .{ .CREAT = true, .TRUNC = true },
-                        std.os.windows.FILE_OVERWRITE_IF => .{ .CREAT = true, .TRUNC = true },
+                        c.FILE_SUPERSEDE => .{ .CREAT = true, .TRUNC = true },
+                        c.FILE_CREATE => .{ .CREAT = true },
+                        c.FILE_OPEN => .{},
+                        c.FILE_OPEN_IF => .{ .CREAT = true },
+                        c.FILE_OVERWRITE => .{ .CREAT = true, .TRUNC = true },
+                        c.FILE_OVERWRITE_IF => .{ .CREAT = true, .TRUNC = true },
                         else => .{},
                     };
-                    const r_access = (desired_access & std.os.windows.GENERIC_READ) != 0;
-                    const w_access = (desired_access & std.os.windows.GENERIC_WRITE) != 0;
+                    const r_access = (desired_access & c.GENERIC_READ) != 0;
+                    const w_access = (desired_access & c.GENERIC_WRITE) != 0;
                     if (r_access) {
                         oflags.ACCMODE = if (w_access) .RDWR else .RDONLY;
                     } else if (w_access) {
@@ -4114,48 +4143,47 @@ pub fn Win32Substitute(comptime redirector: type) type {
                     const oflags_int: u32 = @bitCast(oflags);
                     var fd: c_int = undefined;
                     if (redirector.openat(dirfd, path_wtf8, @intCast(oflags_int), 0, &fd)) {
-                        if (fd < 0) return .OBJECT_PATH_NOT_FOUND;
+                        if (fd < 0) return c.STATUS_OBJECT_PATH_NOT_FOUND;
                         handle.* = fromDescriptor(fd);
                         io_status_block.Information = switch (create_disposition) {
-                            std.os.windows.FILE_SUPERSEDE => c.FILE_SUPERSEDED,
-                            std.os.windows.FILE_CREATE => c.FILE_CREATED,
-                            std.os.windows.FILE_OPEN, std.os.windows.FILE_OPEN_IF => c.FILE_OPENED,
-                            std.os.windows.FILE_OVERWRITE, std.os.windows.FILE_OVERWRITE_IF => c.FILE_OVERWRITTEN,
+                            c.FILE_SUPERSEDE => c.FILE_SUPERSEDED,
+                            c.FILE_CREATE => c.FILE_CREATED,
+                            c.FILE_OPEN, c.FILE_OPEN_IF => c.FILE_OPENED,
+                            c.FILE_OVERWRITE, c.FILE_OVERWRITE_IF => c.FILE_OVERWRITTEN,
                             else => c.FILE_OPENED,
                         };
-                        return .SUCCESS;
+                        return c.STATUS_SUCCESS;
                     }
                 }
             }
-            if (isPrivateDescriptor(dirfd)) return .ACCESS_DENIED;
+            if (isPrivateDescriptor(dirfd)) return c.STATUS_ACCESS_DENIED;
             return Original.NtCreateFile(handle, desired_access, object_attributes, io_status_block, allocation_size, file_attributes, share_access, create_disposition, create_options, ea_buffer, ea_length);
         }
 
         pub fn NtFsControlFile(
-            handle: HANDLE,
-            event: ?HANDLE,
-            apc_routine: ?IO_APC_ROUTINE,
+            handle: c.HANDLE,
+            event: c.HANDLE,
+            apc_routine: c.PIO_APC_ROUTINE,
             apc_context: ?*anyopaque,
-            io_status_block: *IO_STATUS_BLOCK,
-            fs_control_code: ULONG,
+            io_status_block: *c.IO_STATUS_BLOCK,
+            fs_control_code: c.ULONG,
             input_buffer: ?*const anyopaque,
-            input_buffer_length: ULONG,
+            input_buffer_length: c.ULONG,
             output_buffer: ?*anyopaque,
-            output_buffer_length: ULONG,
-        ) callconv(WINAPI) NTSTATUS {
-            const w = std.os.windows;
+            output_buffer_length: c.ULONG,
+        ) callconv(WINAPI) c.NTSTATUS {
             if (isPrivateHandle(handle)) {
                 var converter = Wtf8Converter.init(.{ .save_error = false });
                 defer converter.deinit();
                 switch (fs_control_code) {
-                    w.FSCTL_GET_REPARSE_POINT => {
-                        const info = getTemporaryHandleInfo(handle) orelse return .ACCESS_DENIED;
+                    c.FSCTL_GET_REPARSE_POINT => {
+                        const info = getTemporaryHandleInfo(handle) orelse return c.STATUS_ACCESS_DENIED;
                         const src_path_wtf8: [*:0]const u8 = @ptrCast(info.buffer.?);
-                        const src_path = converter.convertFrom(src_path_wtf8) catch return .NO_MEMORY;
+                        const src_path = converter.convertFrom(src_path_wtf8) catch return c.STATUS_NO_MEMORY;
                         // copy path into reparse buffer
-                        const reparse_struct: *w.REPARSE_DATA_BUFFER = @ptrCast(@alignCast(output_buffer.?));
-                        const buf: *w.SYMBOLIC_LINK_REPARSE_BUFFER = @ptrCast(@alignCast(&reparse_struct.DataBuffer[0]));
-                        const dest_path: [*]WCHAR = @ptrCast(&buf.PathBuffer[0]);
+                        const reparse_struct: *REPARSE_DATA_BUFFER = @ptrCast(@alignCast(output_buffer.?));
+                        const buf: *SYMBOLIC_LINK_REPARSE_BUFFER = @ptrCast(@alignCast(&reparse_struct.DataBuffer[0]));
+                        const dest_path: [*]c.WCHAR = @ptrCast(&buf.PathBuffer[0]);
                         const bytes_avail: usize = output_buffer_length - (@intFromPtr(dest_path) - @intFromPtr(output_buffer.?));
                         const len = @min(src_path.len, (bytes_avail >> 1) - 1);
                         @memcpy(dest_path[0..len], src_path[0..len]);
@@ -4166,29 +4194,29 @@ pub fn Win32Substitute(comptime redirector: type) type {
                         buf.PrintNameLength = 0;
                         buf.Flags = 0;
                         const buf_len = @intFromPtr(&dest_path[len + 1]) - @intFromPtr(buf);
-                        reparse_struct.ReparseTag = w.IO_REPARSE_TAG_SYMLINK;
+                        reparse_struct.ReparseTag = c.IO_REPARSE_TAG_SYMLINK;
                         reparse_struct.ReparseDataLength = @intCast(buf_len);
                         reparse_struct.Reserved = 0;
-                        return .SUCCESS;
+                        return c.STATUS_SUCCESS;
                     },
-                    w.FSCTL_SET_REPARSE_POINT => {
-                        const reparse_struct: *const w.REPARSE_DATA_BUFFER = @ptrCast(@alignCast(input_buffer.?));
+                    c.FSCTL_SET_REPARSE_POINT => {
+                        const reparse_struct: *const REPARSE_DATA_BUFFER = @ptrCast(@alignCast(input_buffer.?));
                         switch (reparse_struct.ReparseTag) {
-                            w.IO_REPARSE_TAG_SYMLINK => {
-                                const buf: *const w.SYMBOLIC_LINK_REPARSE_BUFFER = @ptrCast(@alignCast(&reparse_struct.DataBuffer[0]));
+                            c.IO_REPARSE_TAG_SYMLINK => {
+                                const buf: *const SYMBOLIC_LINK_REPARSE_BUFFER = @ptrCast(@alignCast(&reparse_struct.DataBuffer[0]));
                                 const offset: usize = buf.SubstituteNameOffset >> 1;
                                 const len: usize = buf.SubstituteNameLength >> 1;
                                 const path = init: {
-                                    const ws: [*]const WCHAR = @ptrCast(&buf.PathBuffer[0]);
+                                    const ws: [*]const c.WCHAR = @ptrCast(&buf.PathBuffer[0]);
                                     break :init ws[offset .. offset + len];
                                 };
-                                const path_wtf8 = converter.convertTo(path) catch return .NO_MEMORY;
+                                const path_wtf8 = converter.convertTo(path) catch return c.STATUS_NO_MEMORY;
                                 const fd = toDescriptor(handle);
                                 var fd_path_buf: [128]u8 = undefined;
                                 const fd_path = std.fmt.bufPrintZ(&fd_path_buf, fd_format_string, .{fd}) catch unreachable;
                                 var result: c_int = undefined;
                                 if (redirector.symlink(path_wtf8, fd_path, &result) and result >= 0) {
-                                    return .SUCCESS;
+                                    return c.STATUS_SUCCESS;
                                 }
                             },
                             else => {},
@@ -4196,32 +4224,31 @@ pub fn Win32Substitute(comptime redirector: type) type {
                     },
                     else => {},
                 }
-                return .ACCESS_DENIED;
+                return c.STATUS_ACCESS_DENIED;
             }
             return Original.NtFsControlFile(handle, event, apc_routine, apc_context, io_status_block, fs_control_code, input_buffer, input_buffer_length, output_buffer, output_buffer_length);
         }
 
         pub fn NtLockFile(
-            handle: HANDLE,
-            event: ?HANDLE,
-            apc_routine: ?*IO_APC_ROUTINE,
+            handle: c.HANDLE,
+            event: c.HANDLE,
+            apc_routine: c.PIO_APC_ROUTINE,
             apc_context: *anyopaque,
-            io_status_block: *IO_STATUS_BLOCK,
-            offset: *const LARGE_INTEGER,
-            len: *const LARGE_INTEGER,
-            key: ?*ULONG,
-            fail_immediately: BOOLEAN,
-            exclusive: BOOLEAN,
-        ) callconv(WINAPI) NTSTATUS {
+            io_status_block: *c.IO_STATUS_BLOCK,
+            offset: *const c.LARGE_INTEGER,
+            len: *const c.LARGE_INTEGER,
+            key: ?*c.ULONG,
+            fail_immediately: c.BOOLEAN,
+            exclusive: c.BOOLEAN,
+        ) callconv(WINAPI) c.NTSTATUS {
             const fd = toDescriptor(handle);
             const lock = createLockStruct(offset, len, if (exclusive != 0) F.WRLCK else F.RDLCK);
             var result: c_int = undefined;
             if (redirector.fcntl(fd, F.SETLK, @intFromPtr(&lock), &result)) {
-                const status: NTSTATUS = if (result == 0) .SUCCESS else .LOCK_NOT_GRANTED;
-                const status_int = @intFromEnum(status);
-                io_status_block.Information = status_int;
+                const status: c.NTSTATUS = if (result == 0) c.STATUS_SUCCESS else c.STATUS_LOCK_NOT_GRANTED;
+                io_status_block.Information = @intCast(status);
                 if (apc_routine) |f| {
-                    f.*(apc_context, io_status_block, status_int);
+                    f(apc_context, io_status_block, @intCast(status));
                 }
                 return status;
             }
@@ -4229,40 +4256,40 @@ pub fn Win32Substitute(comptime redirector: type) type {
         }
 
         pub fn NtQueryDirectoryFile(
-            handle: HANDLE,
-            event: ?HANDLE,
-            apc_routine: ?IO_APC_ROUTINE,
+            handle: c.HANDLE,
+            event: c.HANDLE,
+            apc_routine: c.PIO_APC_ROUTINE,
             apc_context: ?*anyopaque,
-            io_status_block: *IO_STATUS_BLOCK,
+            io_status_block: *c.IO_STATUS_BLOCK,
             file_information: *anyopaque,
-            length: ULONG,
-            file_information_class: FILE_INFORMATION_CLASS,
-            return_single_entry: BOOLEAN,
-            file_name: ?*UNICODE_STRING,
-            restart_scan: BOOLEAN,
-        ) callconv(WINAPI) NTSTATUS {
+            length: c.ULONG,
+            file_information_class: c.FILE_INFORMATION_CLASS,
+            return_single_entry: c.BOOLEAN,
+            file_name: ?*c.UNICODE_STRING,
+            restart_scan: c.BOOLEAN,
+        ) callconv(WINAPI) c.NTSTATUS {
             const dirfd = toDescriptor(handle);
             if (isPrivateDescriptor(dirfd)) {
-                const file_information_classes: [3]struct { id: FILE_INFORMATION_CLASS, T: type } = .{
-                    .{ .id = .FileDirectoryInformation, .T = std.os.windows.FILE_DIRECTORY_INFORMATION },
-                    .{ .id = .FileBothDirectoryInformation, .T = std.os.windows.FILE_BOTH_DIR_INFORMATION },
-                    .{ .id = .FileNamesInformation, .T = c.FILE_NAMES_INFORMATION },
+                const file_information_classes: [3]struct { id: c.FILE_INFORMATION_CLASS, T: type } = .{
+                    .{ .id = c.FileDirectoryInformation, .T = c.FILE_DIRECTORY_INFORMATION },
+                    .{ .id = c.FileBothDirectoryInformation, .T = c.FILE_BOTH_DIR_INFORMATION },
+                    .{ .id = c.FileNamesInformation, .T = c.FILE_NAMES_INFORMATION },
                 };
                 inline for (file_information_classes) |cls| {
                     if (cls.id == file_information_class) break;
-                } else return .NOT_IMPLEMENTED;
-                if (restart_scan == TRUE) {
+                } else return c.STATUS_NOT_IMPLEMENTED;
+                if (restart_scan == c.TRUE) {
                     var seek_result: off64_t = undefined;
                     _ = redirector.lseek64(dirfd, 0, std.c.SEEK.SET, &seek_result);
-                    if (seek_result != 0) return .INVALID_HANDLE;
+                    if (seek_result != 0) return c.STATUS_INVALID_HANDLE;
                 }
                 var stb = std.heap.stackFallback(1024 * 8, c_allocator);
                 const allocator = stb.get();
-                const src_buffer = allocator.alloc(u8, length) catch return .NO_MEMORY;
+                const src_buffer = allocator.alloc(u8, length) catch return c.STATUS_NO_MEMORY;
                 defer allocator.free(src_buffer);
                 var result: c_int = undefined;
                 _ = redirector.getdentsT(std.os.wasi.dirent_t, dirfd, src_buffer.ptr, length, &result);
-                if (result < 0) return .NO_MORE_FILES;
+                if (result < 0) return c.STATUS_NO_MORE_FILES;
                 const src_used: usize = @intCast(result);
                 const src_name_offset = @sizeOf(std.os.wasi.dirent_t);
                 const buffer: [*]u8 = @ptrCast(file_information);
@@ -4297,9 +4324,9 @@ pub fn Win32Substitute(comptime redirector: type) type {
                             name[src_name.len] = 0;
                             if (@hasField(NtDirent, "FileAttributes")) {
                                 entry.FileAttributes = switch (src_entry.type) {
-                                    .DIRECTORY => std.os.windows.FILE_ATTRIBUTE_DIRECTORY,
-                                    .SYMBOLIC_LINK => std.os.windows.FILE_ATTRIBUTE_REPARSE_POINT,
-                                    else => std.os.windows.FILE_ATTRIBUTE_NORMAL,
+                                    .DIRECTORY => c.FILE_ATTRIBUTE_DIRECTORY,
+                                    .SYMBOLIC_LINK => c.FILE_ATTRIBUTE_REPARSE_POINT,
+                                    else => c.FILE_ATTRIBUTE_NORMAL,
                                 };
                             }
                             src_offset += src_name_offset + wtf8_name_len;
@@ -4310,57 +4337,58 @@ pub fn Win32Substitute(comptime redirector: type) type {
                         break;
                     }
                 } else unreachable;
-                const status: NTSTATUS = if (offset > 0) .SUCCESS else .NO_MORE_FILES;
+                const status: c.NTSTATUS = if (offset > 0) c.STATUS_SUCCESS else c.STATUS_NO_MORE_FILES;
                 io_status_block.Information = offset;
-                io_status_block.u.Status = status;
+                io_status_block.unnamed_0.Status = status;
                 return status;
             }
             return Original.NtQueryDirectoryFile(handle, event, apc_routine, apc_context, io_status_block, file_information, length, file_information_class, return_single_entry, file_name, restart_scan);
         }
 
         pub fn NtQueryInformationFile(
-            handle: HANDLE,
-            io_status_block: *IO_STATUS_BLOCK,
+            handle: c.HANDLE,
+            io_status_block: *c.IO_STATUS_BLOCK,
             file_information: *anyopaque,
-            length: ULONG,
-            file_information_class: FILE_INFORMATION_CLASS,
-        ) callconv(WINAPI) NTSTATUS {
+            length: c.ULONG,
+            file_information_class: c.FILE_INFORMATION_CLASS,
+        ) callconv(WINAPI) c.NTSTATUS {
             const fd = toDescriptor(handle);
             var stat: std.os.wasi.filestat_t = undefined;
             var result: c_int = undefined;
             if (redirector.fstatT(std.os.wasi.filestat_t, fd, &stat, &result)) {
                 const copy = struct {
-                    fn basic(d: *std.os.windows.FILE_BASIC_INFORMATION, s: std.os.wasi.filestat_t) void {
+                    fn basic(d: *c.FILE_BASIC_INFORMATION, s: std.os.wasi.filestat_t) void {
                         d.* = .{
                             .FileAttributes = switch (s.filetype) {
-                                .DIRECTORY => std.os.windows.FILE_ATTRIBUTE_DIRECTORY,
-                                else => std.os.windows.FILE_ATTRIBUTE_NORMAL,
+                                .DIRECTORY => c.FILE_ATTRIBUTE_DIRECTORY,
+                                else => c.FILE_ATTRIBUTE_NORMAL,
                             },
-                            .LastAccessTime = std.os.windows.toSysTime(s.atim),
-                            .LastWriteTime = std.os.windows.toSysTime(s.mtim),
-                            .ChangeTime = std.os.windows.toSysTime(s.ctim),
-                            .CreationTime = std.os.windows.toSysTime(s.ctim),
+                            .LastAccessTime = toSysTime(s.atim),
+                            .LastWriteTime = toSysTime(s.mtim),
+                            .ChangeTime = toSysTime(s.ctim),
+                            .CreationTime = toSysTime(s.ctim),
                         };
                     }
 
-                    fn internal(d: *std.os.windows.FILE_INTERNAL_INFORMATION, s: std.os.wasi.filestat_t) void {
-                        d.* = .{ .IndexNumber = @intCast(s.ino) };
+                    fn internal(d: *c.FILE_INTERNAL_INFORMATION, s: std.os.wasi.filestat_t) void {
+                        const index_number_ptr: *c_longlong = @ptrCast(&d.IndexNumber);
+                        index_number_ptr.* = @intCast(s.ino);
                     }
 
-                    fn name(d: *std.os.windows.FILE_NAME_INFORMATION, n: []const u8) void {
+                    fn name(d: *c.FILE_NAME_INFORMATION, n: []const u8) void {
                         d.FileNameLength = @intCast(n.len);
                         const buf: [*]u16 = @ptrCast(&d.FileName[0]);
                         _ = std.unicode.wtf8ToWtf16Le(buf[0..n.len], n) catch unreachable;
                         buf[n.len] = 0;
                     }
 
-                    fn standard(d: *std.os.windows.FILE_STANDARD_INFORMATION, s: std.os.wasi.filestat_t) void {
+                    fn standard(d: *c.FILE_STANDARD_INFORMATION, s: std.os.wasi.filestat_t) void {
                         d.* = .{
-                            .AllocationSize = @intCast(std.mem.alignForward(u64, s.size, 4096)),
-                            .EndOfFile = @intCast(s.size),
+                            .AllocationSize = toLargeInt(std.mem.alignForward(u64, s.size, 4096)),
+                            .EndOfFile = toLargeInt(s.size),
                             .NumberOfLinks = @intCast(s.nlink),
-                            .DeletePending = TRUE,
-                            .Directory = if (s.filetype == .DIRECTORY) TRUE else FALSE,
+                            .DeletePending = c.TRUE,
+                            .Directory = if (s.filetype == .DIRECTORY) c.TRUE else c.FALSE,
                         };
                     }
 
@@ -4369,8 +4397,8 @@ pub fn Win32Substitute(comptime redirector: type) type {
                     }
                 };
                 switch (file_information_class) {
-                    .FileAllInformation => {
-                        const info: *std.os.windows.FILE_ALL_INFORMATION = @ptrCast(@alignCast(file_information));
+                    c.FileAllInformation => {
+                        const info: *c.FILE_ALL_INFORMATION = @ptrCast(@alignCast(file_information));
                         copy.unsupported(&info.AccessInformation);
                         copy.unsupported(&info.AlignmentInformation);
                         copy.basic(&info.BasicInformation, stat);
@@ -4393,19 +4421,19 @@ pub fn Win32Substitute(comptime redirector: type) type {
                             copy.name(&info.NameInformation, n);
                         } else {
                             copy.unsupported(&info.NameInformation);
-                            return .BUFFER_OVERFLOW;
+                            return c.STATUS_BUFFER_OVERFLOW;
                         }
                     },
-                    .FileBasicInformation => {
-                        const info: *std.os.windows.FILE_BASIC_INFORMATION = @ptrCast(@alignCast(file_information));
+                    c.FileBasicInformation => {
+                        const info: *c.FILE_BASIC_INFORMATION = @ptrCast(@alignCast(file_information));
                         copy.basic(info, stat);
                     },
-                    .FileInternalInformation => {
-                        const info: *std.os.windows.FILE_INTERNAL_INFORMATION = @ptrCast(@alignCast(file_information));
+                    c.FileInternalInformation => {
+                        const info: *c.FILE_INTERNAL_INFORMATION = @ptrCast(@alignCast(file_information));
                         copy.internal(info, stat);
                     },
-                    .FileNameInformation => {
-                        const info: *std.os.windows.FILE_NAME_INFORMATION = @ptrCast(@alignCast(file_information));
+                    c.FileNameInformation => {
+                        const info: *c.FILE_NAME_INFORMATION = @ptrCast(@alignCast(file_information));
                         const name: ?[]u8 = get: {
                             const struct_size = @sizeOf(@TypeOf(info.*));
                             if (length > struct_size) {
@@ -4420,40 +4448,40 @@ pub fn Win32Substitute(comptime redirector: type) type {
                             copy.name(info, n);
                         } else {
                             copy.unsupported(info);
-                            return .BUFFER_OVERFLOW;
+                            return c.STATUS_BUFFER_OVERFLOW;
                         }
                     },
-                    .FileStandardInformation => {
-                        const info: *std.os.windows.FILE_STANDARD_INFORMATION = @ptrCast(@alignCast(file_information));
+                    c.FileStandardInformation => {
+                        const info: *c.FILE_STANDARD_INFORMATION = @ptrCast(@alignCast(file_information));
                         copy.standard(info, stat);
                     },
-                    else => return .ACCESS_DENIED,
+                    else => return c.STATUS_ACCESS_DENIED,
                 }
-                return .SUCCESS;
+                return c.STATUS_SUCCESS;
             }
             return Original.NtQueryInformationFile(handle, io_status_block, file_information, length, file_information_class);
         }
 
         pub fn NtQueryObject(
-            handle: HANDLE,
-            object_information_class: OBJECT_INFORMATION_CLASS,
-            object_information: LPVOID,
-            object_information_length: ULONG,
-            return_length: ?*ULONG,
-        ) callconv(WINAPI) NTSTATUS {
+            handle: c.HANDLE,
+            object_information_class: c.OBJECT_INFORMATION_CLASS,
+            object_information: c.LPVOID,
+            object_information_length: c.ULONG,
+            return_length: ?*c.ULONG,
+        ) callconv(WINAPI) c.NTSTATUS {
             const fd = toDescriptor(handle);
             if (isPrivateDescriptor(fd)) {
                 switch (object_information_class) {
-                    .ObjectNameInformation => {
+                    c.ObjectNameInformation => {
                         var wtf8_buf: [128]u8 = undefined;
                         const name = std.fmt.bufPrintZ(&wtf8_buf, fd_format_string, .{fd}) catch unreachable;
-                        const name_offset = @sizeOf(OBJECT_NAME_INFORMATION);
-                        if (object_information_length > @sizeOf(OBJECT_NAME_INFORMATION)) {
-                            const info: *OBJECT_NAME_INFORMATION = @ptrCast(@alignCast(object_information));
+                        const name_offset = @sizeOf(c.OBJECT_NAME_INFORMATION);
+                        if (object_information_length > @sizeOf(c.OBJECT_NAME_INFORMATION)) {
+                            const info: *c.OBJECT_NAME_INFORMATION = @ptrCast(@alignCast(object_information));
                             const info_bytes: [*]u8 = @ptrCast(object_information);
-                            const name_buf: [*]WCHAR = @ptrCast(@alignCast(info_bytes[name_offset..]));
+                            const name_buf: [*]c.WCHAR = @ptrCast(@alignCast(info_bytes[name_offset..]));
                             const max_len: usize = object_information_length - name_offset - 2;
-                            if (name.len * 2 > max_len) return .BUFFER_OVERFLOW;
+                            if (name.len * 2 > max_len) return c.STATUS_BUFFER_OVERFLOW;
                             const len = @max(name.len * 2, max_len);
                             _ = std.unicode.wtf8ToWtf16Le(name_buf[0..name.len], name) catch unreachable;
                             name_buf[name.len] = 0;
@@ -4464,81 +4492,81 @@ pub fn Win32Substitute(comptime redirector: type) type {
                             };
                         }
                         if (return_length) |ptr| ptr.* = @intCast(name_offset + (name.len + 1) * 2);
-                        return .SUCCESS;
+                        return c.STATUS_SUCCESS;
                     },
-                    else => return .INVALID_HANDLE,
+                    else => return c.STATUS_INVALID_HANDLE,
                 }
             }
             return Original.NtQueryObject(handle, object_information_class, object_information, object_information_length, return_length);
         }
 
         pub fn NtSetInformationFile(
-            handle: HANDLE,
-            io_status_block: *IO_STATUS_BLOCK,
-            file_information: LPVOID,
-            length: ULONG,
-            file_information_class: FILE_INFORMATION_CLASS,
-        ) callconv(WINAPI) NTSTATUS {
+            handle: c.HANDLE,
+            io_status_block: *c.IO_STATUS_BLOCK,
+            file_information: c.LPVOID,
+            length: c.ULONG,
+            file_information_class: c.FILE_INFORMATION_CLASS,
+        ) callconv(WINAPI) c.NTSTATUS {
             if (isPrivateHandle(handle)) {
-                const info = getTemporaryHandleInfo(handle) orelse return .ACCESS_DENIED;
+                const info = getTemporaryHandleInfo(handle) orelse return c.STATUS_ACCESS_DENIED;
                 var converter = Wtf8Converter.init(.{ .save_error = false });
                 defer converter.deinit();
                 var result: c_int = undefined;
                 switch (file_information_class) {
-                    .FileDispositionInformationEx, .FileDispositionInformation => {
+                    c.FileDispositionInformation, FileDispositionInformationEx => {
                         // an unlink or rmdir operation
                         const flags: c_int = if (info.is_dir) AT.REMOVEDIR else 0;
                         const handled = redirector.unlinkat(info.dirfd, info.path, flags, &result);
-                        if (!handled or result < 0) return .CANNOT_DELETE;
+                        if (!handled or result < 0) return c.STATUS_CANNOT_DELETE;
                     },
-                    inline .FileRenameInformation, .FileRenameInformationEx => |i| {
+                    inline c.FileRenameInformation, FileRenameInformationEx => |i| {
                         const INFO = switch (i) {
-                            .FileRenameInformation => std.os.windows.FILE_RENAME_INFORMATION,
-                            .FileRenameInformationEx => std.os.windows.FILE_RENAME_INFORMATION_EX,
+                            c.FileRenameInformation => c.FILE_RENAME_INFORMATION,
+                            FileRenameInformationEx => FILE_RENAME_INFORMATION_EX,
                             else => unreachable,
                         };
                         const rename: *INFO = @ptrCast(@alignCast(file_information));
                         const new_dirfd: c_int = if (rename.RootDirectory) |dh| toDescriptor(dh) else fd_cwd;
-                        const new_path = @as(LPCWSTR, @ptrCast(&rename.FileName))[0..(rename.FileNameLength / 2)];
-                        const new_path_wtf8 = converter.convertTo(new_path) catch return .NO_MEMORY;
+                        const new_path = @as(c.LPCWSTR, @ptrCast(&rename.FileName))[0..(rename.FileNameLength / 2)];
+                        const new_path_wtf8 = converter.convertTo(new_path) catch return c.STATUS_NO_MEMORY;
                         const handled = redirector.renameat(info.dirfd, info.path, new_dirfd, new_path_wtf8, &result);
-                        if (!handled or result < 0) return .OBJECT_PATH_NOT_FOUND;
+                        if (!handled or result < 0) return c.STATUS_OBJECT_PATH_NOT_FOUND;
                     },
                     else => {},
                 }
-                return .SUCCESS;
+                return c.STATUS_SUCCESS;
             }
             return Original.NtSetInformationFile(handle, io_status_block, file_information, length, file_information_class);
         }
 
         pub fn NtUnlockFile(
-            handle: HANDLE,
-            io_status_block: *IO_STATUS_BLOCK,
-            offset: *const LARGE_INTEGER,
-            len: *const LARGE_INTEGER,
-            key: ?*ULONG,
-        ) callconv(WINAPI) NTSTATUS {
+            handle: c.HANDLE,
+            io_status_block: *c.IO_STATUS_BLOCK,
+            offset: *const c.LARGE_INTEGER,
+            len: *const c.LARGE_INTEGER,
+            key: ?*c.ULONG,
+        ) callconv(WINAPI) c.NTSTATUS {
             const fd = toDescriptor(handle);
             const lock = createLockStruct(offset, len, F.UNLCK);
             var result: c_int = undefined;
             if (redirector.fcntl(fd, F.SETLK, @intFromPtr(&lock), &result)) {
-                const status: NTSTATUS = if (result == 0) .SUCCESS else .LOCK_NOT_GRANTED;
-                io_status_block.Information = @intFromEnum(status);
+                const status: c.NTSTATUS = if (result == 0) c.STATUS_SUCCESS else c.STATUS_LOCK_NOT_GRANTED;
+                io_status_block.Information = @intCast(status);
                 return status;
             }
             return Original.NtUnlockFile(handle, io_status_block, offset, len, key);
         }
 
         pub fn ReadFile(
-            handle: HANDLE,
-            buffer: LPVOID,
-            len: DWORD,
-            read: *DWORD,
-            overlapped: ?*OVERLAPPED,
-        ) callconv(WINAPI) BOOL {
+            handle: c.HANDLE,
+            buffer: c.LPVOID,
+            len: c.DWORD,
+            read: *c.DWORD,
+            overlapped: ?*c.OVERLAPPED,
+        ) callconv(WINAPI) c.BOOL {
             const fd = toDescriptor(handle);
             if (isPrivateDescriptor(fd)) {
-                const len_s = cast(off_t, len, true) catch return FALSE;
+                const len_s = cast(off_t, len, true) catch return c.FALSE;
                 var result: off_t = undefined;
                 var done = false;
                 signalBeginning(overlapped);
@@ -4559,27 +4587,27 @@ pub fn Win32Substitute(comptime redirector: type) type {
                     _ = redirector.read(fd, @ptrCast(buffer), len_s, &result);
                 }
                 if (result < 0) return saveError(result);
-                read.* = cast(DWORD, result, true) catch return FALSE;
-                return TRUE;
+                read.* = cast(c.DWORD, result, true) catch return c.FALSE;
+                return c.TRUE;
             }
             return Original.ReadFile(handle, buffer, len, read, overlapped);
         }
 
-        pub fn RemoveDirectory(path: LPCSTR) callconv(WINAPI) BOOL {
+        pub fn RemoveDirectory(path: c.LPCSTR) callconv(WINAPI) c.BOOL {
             if (RemoveDirectoryX(path)) |rv| return rv;
             return Original.RemoveDirectory(path);
         }
 
-        pub fn RemoveDirectoryW(path: LPCWSTR) callconv(WINAPI) BOOL {
+        pub fn RemoveDirectoryW(path: c.LPCWSTR) callconv(WINAPI) c.BOOL {
             if (RemoveDirectoryX(path)) |rv| return rv;
             return Original.RemoveDirectoryW(path);
         }
 
-        fn RemoveDirectoryX(path: anytype) ?BOOL {
+        fn RemoveDirectoryX(path: anytype) ?c.BOOL {
             if (redirector.Host.isRedirecting(.rmdir)) {
                 var converter = Wtf8Converter.init(.{});
                 defer converter.deinit();
-                const path_wtf8 = converter.convertTo(path) catch return FALSE;
+                const path_wtf8 = converter.convertTo(path) catch return c.FALSE;
                 var result: c_int = undefined;
                 if (redirector.rmdir(path_wtf8, &result)) {
                     return saveError(result);
@@ -4588,26 +4616,26 @@ pub fn Win32Substitute(comptime redirector: type) type {
             return null;
         }
 
-        pub fn SetEndOfFile(handle: HANDLE) callconv(WINAPI) BOOL {
+        pub fn SetEndOfFile(handle: c.HANDLE) callconv(WINAPI) c.BOOL {
             const fd = toDescriptor(handle);
             var result: c_int = undefined;
             if (redirector.ftruncateT(u64, fd, std.math.maxInt(u64), &result)) {
                 if (result < 0) {
                     _ = saveError(result);
-                    return FALSE;
+                    return c.FALSE;
                 }
                 _ = c.SetLastError(0);
-                return TRUE;
+                return c.TRUE;
             }
             return Original.SetEndOfFile(handle);
         }
 
         pub fn SetFilePointer(
-            handle: HANDLE,
-            offset: LONG,
-            offset_high: ?*LONG,
-            method: DWORD,
-        ) callconv(WINAPI) DWORD {
+            handle: c.HANDLE,
+            offset: c.LONG,
+            offset_high: ?*c.LONG,
+            method: c.DWORD,
+        ) callconv(WINAPI) c.DWORD {
             const fd = toDescriptor(handle);
             var offset_long: off64_t = offset;
             if (offset_high) |ptr| offset_long |= @as(i64, ptr.*) << 32;
@@ -4626,36 +4654,37 @@ pub fn Win32Substitute(comptime redirector: type) type {
         }
 
         pub fn SetFilePointerEx(
-            handle: HANDLE,
-            offset: LARGE_INTEGER,
-            new_pos: ?*LARGE_INTEGER,
-            method: DWORD,
-        ) callconv(WINAPI) BOOL {
+            handle: c.HANDLE,
+            offset: c.LARGE_INTEGER,
+            new_pos: ?*c.LARGE_INTEGER,
+            method: c.DWORD,
+        ) callconv(WINAPI) c.BOOL {
             const fd = toDescriptor(handle);
             const whence: c_int = @intCast(method);
             var result: off64_t = undefined;
-            if (redirector.lseek64(fd, offset, whence, &result)) {
+            const offset_ptr: *const c_longlong = @ptrCast(&offset);
+            if (redirector.lseek64(fd, offset_ptr.*, whence, &result)) {
                 if (result < 0) return saveError(result);
-                if (new_pos) |ptr| ptr.* = result;
-                return TRUE;
+                if (new_pos) |ptr| ptr.* = toLargeInt(result);
+                return c.TRUE;
             }
             return Original.SetFilePointerEx(handle, offset, new_pos, method);
         }
 
-        pub fn SetHandleInformation(handle: HANDLE, mask: DWORD, flags: DWORD) callconv(WINAPI) BOOL {
+        pub fn SetHandleInformation(handle: c.HANDLE, mask: c.DWORD, flags: c.DWORD) callconv(WINAPI) c.BOOL {
             if (isPrivateHandle(handle)) {
-                return FALSE;
+                return c.FALSE;
             }
             return Original.SetHandleInformation(handle, mask, flags);
         }
 
         pub fn UnlockFile(
-            handle: HANDLE,
-            offset_low: DWORD,
-            offset_high: DWORD,
-            len_low: DWORD,
-            len_high: DWORD,
-        ) callconv(WINAPI) BOOL {
+            handle: c.HANDLE,
+            offset_low: c.DWORD,
+            offset_high: c.DWORD,
+            len_low: c.DWORD,
+            len_high: c.DWORD,
+        ) callconv(WINAPI) c.BOOL {
             const fd = toDescriptor(handle);
             const lock = createLockStruct(.{ offset_low, offset_high }, .{ len_low, len_high }, F.UNLCK);
             var result: c_int = undefined;
@@ -4666,12 +4695,12 @@ pub fn Win32Substitute(comptime redirector: type) type {
         }
 
         pub fn UnlockFileEx(
-            handle: HANDLE,
-            flags: DWORD,
-            len_low: DWORD,
-            len_high: DWORD,
-            overlapped: *OVERLAPPED,
-        ) callconv(WINAPI) BOOL {
+            handle: c.HANDLE,
+            flags: c.DWORD,
+            len_low: c.DWORD,
+            len_high: c.DWORD,
+            overlapped: *c.OVERLAPPED,
+        ) callconv(WINAPI) c.BOOL {
             const fd = toDescriptor(handle);
             if (isPrivateDescriptor(fd)) {
                 signalBeginning(overlapped);
@@ -4685,15 +4714,15 @@ pub fn Win32Substitute(comptime redirector: type) type {
         }
 
         pub fn WriteFile(
-            handle: HANDLE,
-            buffer: LPCVOID,
-            len: DWORD,
-            written: *DWORD,
-            overlapped: ?*OVERLAPPED,
-        ) callconv(WINAPI) BOOL {
+            handle: c.HANDLE,
+            buffer: c.LPCVOID,
+            len: c.DWORD,
+            written: *c.DWORD,
+            overlapped: ?*c.OVERLAPPED,
+        ) callconv(WINAPI) c.BOOL {
             const fd = toDescriptor(handle);
             if (isPrivateDescriptor(fd)) {
-                const len_s = cast(off_t, len, true) catch return FALSE;
+                const len_s = cast(off_t, len, true) catch return c.FALSE;
                 var result: off_t = undefined;
                 var done = false;
                 signalBeginning(overlapped);
@@ -4719,27 +4748,27 @@ pub fn Win32Substitute(comptime redirector: type) type {
                     _ = redirector.write(fd, @ptrCast(buffer), len_s, &result);
                 }
                 if (result < 0) return saveError(result);
-                written.* = cast(DWORD, result, true) catch return FALSE;
-                return TRUE;
+                written.* = cast(c.DWORD, result, true) catch return c.FALSE;
+                return c.TRUE;
             }
             return Original.WriteFile(handle, buffer, len, written, overlapped);
         }
 
-        fn toDescriptor(handle: HANDLE) c_int {
+        fn toDescriptor(handle: c.HANDLE) c_int {
             if (handle == std.os.windows.INVALID_HANDLE_VALUE) return -1;
             return inline for (0..3) |i| {
                 if (handle == std_stream.get(i)) break @intCast(i);
             } else std.math.cast(c_int, @intFromPtr(handle) >> 1) orelse -1;
         }
 
-        fn fromDescriptor(fd: c_int) HANDLE {
+        fn fromDescriptor(fd: c_int) c.HANDLE {
             if (fd < 0) return std.os.windows.INVALID_HANDLE_VALUE;
             return inline for (0..3) |i| {
                 if (fd == @as(c_int, @intCast(i))) break std_stream.get(i);
             } else @ptrFromInt(@as(usize, @intCast(fd << 1)));
         }
 
-        fn isPrivateHandle(handle: HANDLE) bool {
+        fn isPrivateHandle(handle: c.HANDLE) bool {
             const fd = toDescriptor(handle);
             return isPrivateDescriptor(fd);
         }
@@ -4757,23 +4786,23 @@ pub fn Win32Substitute(comptime redirector: type) type {
             };
         }
 
-        fn saveError(result: anytype) BOOL {
+        fn saveError(result: anytype) c.BOOL {
             const code = translateError(result);
             if (code == 0) {
-                return TRUE;
+                return c.TRUE;
             } else {
                 _ = c.SetLastError(code);
-                return FALSE;
+                return c.FALSE;
             }
         }
 
-        fn translateError(result: anytype) DWORD {
+        fn translateError(result: anytype) c.DWORD {
             const T = @TypeOf(result);
             const err: std.c.E = switch (@typeInfo(T)) {
                 .@"enum" => result,
                 .int => if (result >= 0) return 0 else convert: {
                     const num: u16 = @intCast(-result);
-                    break :convert std.enums.fromInt(@This(), num) orelse .FAULT;
+                    break :convert std.enums.fromInt(std.c.E, num) orelse .FAULT;
                 },
                 else => @compileError("Unexpected"),
             };
@@ -4801,23 +4830,23 @@ pub fn Win32Substitute(comptime redirector: type) type {
             };
         }
 
-        fn extractOffset(overlapped: ?*OVERLAPPED) ?off64_t {
+        fn extractOffset(overlapped: ?*c.OVERLAPPED) ?off64_t {
             const ptr = overlapped orelse return null;
-            const offset = ptr.DUMMYUNIONNAME.DUMMYSTRUCTNAME.Offset;
-            const offset_high = ptr.DUMMYUNIONNAME.DUMMYSTRUCTNAME.OffsetHigh;
+            const offset = ptr.unnamed_0.unnamed_0.Offset;
+            const offset_high = ptr.unnamed_0.unnamed_0.OffsetHigh;
             if (offset == 0xffff_ffff and offset_high == 0xffff_ffff) return -1;
             const low = @as(u64, offset);
             const high = @as(u64, offset_high);
             return cast(off64_t, low | high << 32, true) catch null;
         }
 
-        fn signalBeginning(overlapped: ?*OVERLAPPED) void {
+        fn signalBeginning(overlapped: ?*c.OVERLAPPED) void {
             if (overlapped) |o| {
                 if (o.hEvent) |e| _ = c.ResetEvent(e);
             }
         }
 
-        fn signalCompletion(overlapped: ?*OVERLAPPED) void {
+        fn signalCompletion(overlapped: ?*c.OVERLAPPED) void {
             if (overlapped) |o| {
                 if (o.hEvent) |e| _ = c.SetEvent(e);
             }
@@ -4838,7 +4867,13 @@ pub fn Win32Substitute(comptime redirector: type) type {
             const T = @TypeOf(offset);
             const value = switch (@typeInfo(T)) {
                 .int => offset,
-                .pointer => offset.*,
+                .pointer => |pt| switch (pt.child) {
+                    c.union__LARGE_INTEGER => get: {
+                        const offset_ptr: *const c_longlong = @ptrCast(&offset);
+                        break :get offset_ptr.*;
+                    },
+                    else => offset.*,
+                },
                 .@"struct" => @as(u64, offset[0]) | @as(u64, offset[1]) << 32,
                 else => @compileError("Unexpected: " ++ @typeName(T)),
             };
@@ -4856,22 +4891,22 @@ pub fn Win32Substitute(comptime redirector: type) type {
             return .{ path, -1 };
         }
 
-        fn inferAttributes(stat: Stat) DWORD {
-            var attributes: DWORD = 0;
+        fn inferAttributes(stat: Stat) c.DWORD {
+            var attributes: c.DWORD = 0;
             if ((stat.mode & std.c.W_OK) == 0) {
-                attributes |= std.os.windows.FILE_ATTRIBUTE_READONLY;
+                attributes |= c.FILE_ATTRIBUTE_READONLY;
             }
             if ((stat.mode & S.IFDIR) != 0) {
-                attributes |= std.os.windows.FILE_ATTRIBUTE_DIRECTORY;
+                attributes |= c.FILE_ATTRIBUTE_DIRECTORY;
             }
             if (attributes == 0) {
-                attributes = std.os.windows.FILE_ATTRIBUTE_NORMAL;
+                attributes = c.FILE_ATTRIBUTE_NORMAL;
             }
             return attributes;
         }
 
-        fn createTemporaryHandle(path: [*:0]const u8, dirfd: c_int, arg: anytype) !HANDLE {
-            mutex.lock(io) catch unreachable;
+        fn createTemporaryHandle(path: [*:0]const u8, dirfd: c_int, arg: anytype) !c.HANDLE {
+            mutex.lockUncancelable(io);
             defer mutex.unlock(io);
             var fd: c_int = fd_temp_min;
             for (temp_handle_list.items) |item| {
@@ -4894,8 +4929,8 @@ pub fn Win32Substitute(comptime redirector: type) type {
             return fromDescriptor(fd);
         }
 
-        fn destroyTemporaryHandle(handle: HANDLE) !void {
-            mutex.lock(io) catch unreachable;
+        fn destroyTemporaryHandle(handle: c.HANDLE) void {
+            mutex.lockUncancelable(io);
             defer mutex.unlock(io);
             const fd = toDescriptor(handle);
             for (temp_handle_list.items, 0..) |item, i| {
@@ -4908,8 +4943,8 @@ pub fn Win32Substitute(comptime redirector: type) type {
             }
         }
 
-        fn getTemporaryHandleInfo(handle: HANDLE) !?TemporaryHandleInfo {
-            mutex.lock(io) catch unreachable;
+        fn getTemporaryHandleInfo(handle: c.HANDLE) ?TemporaryHandleInfo {
+            mutex.lockUncancelable(io);
             defer mutex.unlock(io);
             const fd = toDescriptor(handle);
             return for (temp_handle_list.items) |item| {
@@ -4917,7 +4952,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
             } else null;
         }
 
-        fn isTemporaryHandle(handle: HANDLE) bool {
+        fn isTemporaryHandle(handle: c.HANDLE) bool {
             const fd = toDescriptor(handle);
             return fd >= fd_temp_min;
         }
@@ -4927,7 +4962,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
                 0, 1, 2 => return true,
                 else => if (unseekable_descriptor_list.items.len == 0) return true,
             }
-            mutex.lock(io) catch unreachable;
+            mutex.lockUncancelable(io);
             defer mutex.unlock(io);
             return for (unseekable_descriptor_list.items) |ufd| {
                 if (ufd == fd) break false;
@@ -4935,7 +4970,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
         }
 
         fn addUnseekable(fd: c_int) void {
-            mutex.lock(io) catch unreachable;
+            mutex.lockUncancelable(io);
             defer mutex.unlock(io);
             unseekable_descriptor_list.append(c_allocator, fd) catch {};
         }
@@ -4947,7 +4982,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
             path: [:0]const u8,
             buffer: ?[]u8,
         };
-        var mutex: std.Io.Mutex = .{};
+        var mutex: std.Io.Mutex = .init;
         var temp_handle_list: std.ArrayList(TemporaryHandleInfo) = .empty;
         var unseekable_descriptor_list: std.ArrayList(c_int) = .empty;
 
@@ -4955,44 +4990,39 @@ pub fn Win32Substitute(comptime redirector: type) type {
         const fd_path_prefix = fd_format_string[0 .. fd_format_string.len - 3];
 
         const std_stream = struct {
-            var handles: [3]?HANDLE = .{ null, null, null };
-            fn get(comptime index: usize) HANDLE {
-                const ids = .{ std.os.windows.STD_INPUT_HANDLE, std.os.windows.STD_OUTPUT_HANDLE, std.os.windows.STD_ERROR_HANDLE };
+            var handles: [3]c.HANDLE = .{ null, null, null };
+            fn get(comptime index: usize) c.HANDLE {
+                const ids = .{ c.STD_INPUT_HANDLE, c.STD_OUTPUT_HANDLE, c.STD_ERROR_HANDLE };
                 return handles[index] orelse find: {
-                    const handle = std.os.windows.GetStdHandle(ids[index]) catch std.os.windows.INVALID_HANDLE_VALUE;
+                    const handle = c.GetStdHandle(ids[index]);
                     handles[index] = handle;
                     break :find handle;
                 };
             }
         };
 
-        const ACCESS_MASK = std.os.windows.ACCESS_MASK;
-        const BOOL = std.os.windows.BOOL;
-        const BOOLEAN = std.os.windows.BOOLEAN;
-        const BY_HANDLE_FILE_INFORMATION = std.os.windows.BY_HANDLE_FILE_INFORMATION;
-        const DWORD = std.os.windows.DWORD;
-        const FILE_INFORMATION_CLASS = std.os.windows.FILE_INFORMATION_CLASS;
-        const HANDLE = std.os.windows.HANDLE;
-        const IO_STATUS_BLOCK = std.os.windows.IO_STATUS_BLOCK;
-        const IO_APC_ROUTINE = std.os.windows.IO_APC_ROUTINE;
-        const LARGE_INTEGER = std.os.windows.LARGE_INTEGER;
-        const LONG = std.os.windows.LONG;
-        const LPCSTR = std.os.windows.LPCSTR;
-        const LPCVOID = std.os.windows.LPCVOID;
-        const LPCWSTR = std.os.windows.LPCWSTR;
-        const LPOVERLAPPED_COMPLETION_ROUTINE = std.os.windows.LPOVERLAPPED_COMPLETION_ROUTINE;
-        const LPVOID = std.os.windows.LPVOID;
-        const NTSTATUS = std.os.windows.NTSTATUS;
-        const OBJECT_ATTRIBUTES = std.os.windows.OBJECT_ATTRIBUTES;
-        const OBJECT_NAME_INFORMATION = std.os.windows.OBJECT_NAME_INFORMATION;
-        const OBJECT_INFORMATION_CLASS = std.os.windows.OBJECT_INFORMATION_CLASS;
-        const OVERLAPPED = std.os.windows.OVERLAPPED;
-        const SECURITY_ATTRIBUTES = std.os.windows.SECURITY_ATTRIBUTES;
-        const ULONG = std.os.windows.ULONG;
-        const UNICODE_STRING = std.os.windows.UNICODE_STRING;
-        const WCHAR = std.os.windows.WCHAR;
-        const FALSE = std.os.windows.FALSE;
-        const TRUE = std.os.windows.TRUE;
+        const FileDispositionInformationEx = 64;
+        const FileRenameInformationEx = 65;
+        const REPARSE_DATA_BUFFER = extern struct {
+            ReparseTag: c.ULONG,
+            ReparseDataLength: c.USHORT,
+            Reserved: c.USHORT,
+            DataBuffer: [1]c.UCHAR,
+        };
+        const SYMBOLIC_LINK_REPARSE_BUFFER = extern struct {
+            SubstituteNameOffset: c.USHORT,
+            SubstituteNameLength: c.USHORT,
+            PrintNameOffset: c.USHORT,
+            PrintNameLength: c.USHORT,
+            Flags: c.ULONG,
+            PathBuffer: [1]c.WCHAR,
+        };
+        const FILE_RENAME_INFORMATION_EX = extern struct {
+            Flags: c.ULONG,
+            RootDirectory: c.HANDLE,
+            FileNameLength: c.ULONG,
+            FileName: [1]c.WCHAR,
+        };
         const WINAPI: std.builtin.CallingConvention = if (builtin.cpu.arch == .x86) .{ .x86_stdcall = .{} } else .c;
 
         const Self = @This();
@@ -5048,34 +5078,34 @@ pub fn Win32SubstituteNonIO(comptime redirector: type) type {
 
     return struct {
         pub fn CreateThread(
-            thread_attributes: ?*SECURITY_ATTRIBUTES,
-            stack_size: SIZE_T,
-            start_address: LPTHREAD_START_ROUTINE,
-            parameter: ?LPVOID,
-            creation_flags: DWORD,
-            thread_id: ?*DWORD,
-        ) callconv(WINAPI) ?HANDLE {
+            thread_attributes: ?*c.SECURITY_ATTRIBUTES,
+            stack_size: c.SIZE_T,
+            start_address: c.LPTHREAD_START_ROUTINE,
+            parameter: c.LPVOID,
+            creation_flags: c.DWORD,
+            thread_id: ?*c.DWORD,
+        ) callconv(WINAPI) c.HANDLE {
             const instance = redirector.Host.getInstance();
             const info = c_allocator.create(ThreadInfo) catch {
                 _ = win32.saveError(std.c.E.NOMEM);
                 return null;
             };
-            info.* = .{ .proc = start_address, .arg = parameter, .instance = instance };
+            info.* = .{ .proc = start_address.?, .arg = parameter, .instance = instance };
             return Original.CreateThread(thread_attributes, stack_size, &setThreadContext, info, creation_flags, thread_id);
         }
 
-        pub fn FreeEnvironmentStrings(ptr: LPSTR) callconv(WINAPI) BOOL {
+        pub fn FreeEnvironmentStrings(ptr: c.LPSTR) callconv(WINAPI) c.BOOL {
             var list: [*:null]?[*:0]const u8 = undefined;
             var bytes: [*:0]const u8 = undefined;
             var count: usize = undefined;
             var len: usize = undefined;
             if (redirector.environ(&list, &bytes, &count, &len)) {
-                return TRUE;
+                return c.TRUE;
             }
             return Original.FreeEnvironmentStrings(ptr);
         }
 
-        pub fn FreeEnvironmentStringsW(ptr: LPWSTR) callconv(WINAPI) BOOL {
+        pub fn FreeEnvironmentStringsW(ptr: c.LPWSTR) callconv(WINAPI) c.BOOL {
             var list: [*:null]?[*:0]const u8 = undefined;
             var bytes: [*:0]const u8 = undefined;
             var count: usize = undefined;
@@ -5090,12 +5120,12 @@ pub fn Win32SubstituteNonIO(comptime redirector: type) type {
                     p = p[line_len + 1 ..];
                 }
                 c_allocator.free(ptr[0..total]);
-                return TRUE;
+                return c.TRUE;
             }
             return Original.FreeEnvironmentStringsW(ptr);
         }
 
-        pub fn GetEnvironmentStrings() callconv(WINAPI) ?LPSTR {
+        pub fn GetEnvironmentStrings() callconv(WINAPI) c.LPSTR {
             var list: [*:null]?[*:0]const u8 = undefined;
             var bytes: [*:0]const u8 = undefined;
             var count: usize = undefined;
@@ -5109,7 +5139,7 @@ pub fn Win32SubstituteNonIO(comptime redirector: type) type {
             return Original.GetEnvironmentStrings();
         }
 
-        pub fn GetEnvironmentStringsW() callconv(WINAPI) ?LPWSTR {
+        pub fn GetEnvironmentStringsW() callconv(WINAPI) c.LPWSTR {
             var list: [*:null]?[*:0]const u8 = undefined;
             var bytes: [*:0]const u8 = undefined;
             var count: usize = undefined;
@@ -5125,19 +5155,19 @@ pub fn Win32SubstituteNonIO(comptime redirector: type) type {
         }
 
         pub fn GetEnvironmentVariable(
-            name: LPCSTR,
-            buffer: ?LPSTR,
-            size: DWORD,
-        ) callconv(WINAPI) DWORD {
+            name: c.LPCSTR,
+            buffer: c.LPSTR,
+            size: c.DWORD,
+        ) callconv(WINAPI) c.DWORD {
             if (GetEnvironmentVariableX(name, buffer, size)) |rv| return rv;
             return Original.GetEnvironmentVariable(name, buffer, size);
         }
 
         pub fn GetEnvironmentVariableW(
-            name: LPCWSTR,
-            buffer: ?LPWSTR,
-            size: DWORD,
-        ) callconv(WINAPI) DWORD {
+            name: c.LPCWSTR,
+            buffer: c.LPWSTR,
+            size: c.DWORD,
+        ) callconv(WINAPI) c.DWORD {
             if (GetEnvironmentVariableX(name, buffer, size)) |rv| return rv;
             return Original.GetEnvironmentVariableW(name, buffer, size);
         }
@@ -5145,8 +5175,8 @@ pub fn Win32SubstituteNonIO(comptime redirector: type) type {
         fn GetEnvironmentVariableX(
             name: anytype,
             buffer: anytype,
-            size: DWORD,
-        ) ?DWORD {
+            size: c.DWORD,
+        ) ?c.DWORD {
             var converter = Wtf8Converter.init(.{ .adjust_path = false });
             defer converter.deinit();
             const name_wtf8 = converter.convertTo(name) catch return 0;
@@ -5184,9 +5214,9 @@ pub fn Win32SubstituteNonIO(comptime redirector: type) type {
             return null;
         }
 
-        fn setThreadContext(ptr: LPVOID) callconv(WINAPI) DWORD {
+        fn setThreadContext(ptr: c.LPVOID) callconv(WINAPI) c.DWORD {
             const info: *ThreadInfo = @ptrCast(@alignCast(ptr));
-            const proc: *const fn (?LPVOID) callconv(WINAPI) DWORD = @ptrCast(@alignCast(info.proc));
+            const proc: *const fn (c.LPVOID) callconv(WINAPI) c.DWORD = @ptrCast(@alignCast(info.proc));
             const arg = info.arg;
             const instance = info.instance;
             c_allocator.destroy(info);
@@ -5195,20 +5225,7 @@ pub fn Win32SubstituteNonIO(comptime redirector: type) type {
             return proc(arg);
         }
 
-        const BOOL = std.os.windows.BOOL;
-        const DWORD = std.os.windows.DWORD;
-        const HANDLE = std.os.windows.HANDLE;
-        const LPTHREAD_START_ROUTINE = std.os.windows.LPTHREAD_START_ROUTINE;
-        const LPCSTR = std.os.windows.LPCSTR;
-        const LPCWSTR = std.os.windows.LPCWSTR;
-        const LPSTR = std.os.windows.LPSTR;
-        const LPVOID = std.os.windows.LPVOID;
-        const LPWSTR = std.os.windows.LPWSTR;
-        const SECURITY_ATTRIBUTES = std.os.windows.SECURITY_ATTRIBUTES;
-        const SIZE_T = std.os.windows.SIZE_T;
         const WINAPI: std.builtin.CallingConvention = if (builtin.cpu.arch == .x86) .{ .x86_stdcall = .{} } else .c;
-        const TRUE = std.os.windows.TRUE;
-        const FALSE = std.os.windows.FALSE;
 
         const Self = @This();
         pub const Original = struct {
@@ -5259,10 +5276,10 @@ const Wtf8Converter = struct {
             .many, .c => s[0..std.mem.len(s)],
             else => unreachable,
         };
-        const CT = @TypeOf(s[0]);
+        const CT = @typeInfo(T).pointer.child;
         var slice: [:0]u8 = switch (CT) {
             u8 => @ptrCast(@constCast(original_slice)),
-            u16 => std.unicode.wtf16LeToWtf8AllocZ(self.allocator, original_slice) catch |err| {
+            c_ushort => std.unicode.wtf16LeToWtf8AllocZ(self.allocator, original_slice) catch |err| {
                 if (self.save_error) _ = c.SetLastError(c.ERROR_NOT_ENOUGH_MEMORY);
                 return err;
             },

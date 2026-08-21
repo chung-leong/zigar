@@ -7,6 +7,8 @@
 #ifdef _WIN32
     #include <windows.h>
     #include <winternl.h>
+    #include <winnt.h>
+    #include <ntstatus.h>
 #else
     #include <dirent.h>
     #include <errno.h>
