@@ -4058,6 +4058,25 @@ pub fn Win32Substitute(comptime redirector: type) type {
             return null;
         }
 
+        pub fn NtCancelIoFileEx(
+            handle: c.HANDLE,
+            overlapped: ?*c.OVERLAPPED,
+        ) callconv(WINAPI) c.BOOL {
+            const fd = toDescriptor(handle);
+            if (isPrivateDescriptor(fd)) {
+                return c.TRUE;
+            }
+            return Original.NtCancelIoFileEx(handle, overlapped);
+        }
+
+        pub fn NtCancelSynchronousIoFile(handle: c.HANDLE) callconv(WINAPI) c.BOOL {
+            const fd = toDescriptor(handle);
+            if (isPrivateDescriptor(fd)) {
+                return c.TRUE;
+            }
+            return Original.NtCancelSynchronousIoFile(handle);
+        }
+
         pub fn NtClose(handle: c.HANDLE) callconv(WINAPI) c.NTSTATUS {
             if (isTemporaryHandle(handle)) {
                 destroyTemporaryHandle(handle);
@@ -5174,6 +5193,8 @@ pub fn Win32Substitute(comptime redirector: type) type {
             pub var MoveFileEx: *const @TypeOf(Self.MoveFileEx) = undefined;
             pub var MoveFileW: *const @TypeOf(Self.MoveFileW) = undefined;
             pub var MoveFileExW: *const @TypeOf(Self.MoveFileExW) = undefined;
+            pub var NtCancelIoFileEx: *const @TypeOf(Self.NtCancelIoFileEx) = undefined;
+            pub var NtCancelSynchronousIoFile: *const @TypeOf(Self.NtCancelSynchronousIoFile) = undefined;
             pub var NtClose: *const @TypeOf(Self.NtClose) = undefined;
             pub var NtCreateFile: *const @TypeOf(Self.NtCreateFile) = undefined;
             pub var NtFsControlFile: *const @TypeOf(Self.NtFsControlFile) = undefined;
