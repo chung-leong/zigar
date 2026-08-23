@@ -4274,6 +4274,55 @@ pub fn Win32Substitute(comptime redirector: type) type {
             return Original.NtLockFile(handle, event, apc_routine, apc_context, io_status_block, offset, len, key, fail_immediately, exclusive);
         }
 
+        pub fn NtOpenFile(
+            handle: *c.HANDLE,
+            desired_access: c.ACCESS_MASK,
+            object_attributes: *c.OBJECT_ATTRIBUTES,
+            io_status_block: *c.IO_STATUS_BLOCK,
+            file_attributes: c.ULONG,
+            share_access: c.ULONG,
+            open_options: c.ULONG,
+        ) callconv(WINAPI) c.NTSTATUS {
+            const dirfd: c_int = if (object_attributes.RootDirectory) |dh| toDescriptor(dh) else fd_cwd;
+            const dir_op = (open_options & c.FILE_DIRECTORY_FILE) != 0;
+            const object_name = object_attributes.ObjectName;
+            const name_len = @divExact(object_name.*.Length, 2);
+            const path = object_name.*.Buffer[0..name_len];
+            if (isPrivateDescriptor(dirfd) or redirector.Host.isRedirecting(.any)) {
+                var converter = Wtf8Converter.init(.{ .save_error = false });
+                defer converter.deinit();
+                const path_wtf8 = converter.convertTo(path) catch return c.STATUS_NO_MEMORY;
+                if ((desired_access & c.DELETE) != 0) {
+                    // a delete or rename operation--remember the path for NtSetInformationFile()
+                    if (isPrivateDescriptor(dirfd)) {
+                        handle.* = createTemporaryHandle(path_wtf8, dirfd, dir_op) catch return c.STATUS_NO_MEMORY;
+                        io_status_block.Information = c.FILE_CREATED;
+                        return c.STATUS_SUCCESS;
+                    }
+                } else {
+                    var oflags: O = .{};
+                    const r_access = (desired_access & c.GENERIC_READ) != 0;
+                    const w_access = (desired_access & c.GENERIC_WRITE) != 0;
+                    if (r_access) {
+                        oflags.ACCMODE = if (w_access) .RDWR else .RDONLY;
+                    } else if (w_access) {
+                        oflags.ACCMODE = .WRONLY;
+                    }
+                    oflags.DIRECTORY = dir_op;
+                    const oflags_int: u32 = @bitCast(oflags);
+                    var fd: c_int = undefined;
+                    if (redirector.openat(dirfd, path_wtf8, @intCast(oflags_int), 0, &fd)) {
+                        if (fd < 0) return c.STATUS_OBJECT_PATH_NOT_FOUND;
+                        handle.* = fromDescriptor(fd);
+                        io_status_block.Information = c.FILE_OPENED;
+                        return c.STATUS_SUCCESS;
+                    }
+                }
+            }
+            if (isPrivateDescriptor(dirfd)) return c.STATUS_ACCESS_DENIED;
+            return Original.NtOpenFile(handle, desired_access, object_attributes, io_status_block, file_attributes, share_access, open_options);
+        }
+
         pub fn NtQueryDirectoryFile(
             handle: c.HANDLE,
             event: c.HANDLE,
@@ -5199,6 +5248,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
             pub var NtCreateFile: *const @TypeOf(Self.NtCreateFile) = undefined;
             pub var NtFsControlFile: *const @TypeOf(Self.NtFsControlFile) = undefined;
             pub var NtLockFile: *const @TypeOf(Self.NtLockFile) = undefined;
+            pub var NtOpenFile: *const @TypeOf(Self.NtOpenFile) = undefined;
             pub var NtQueryDirectoryFile: *const @TypeOf(Self.NtQueryDirectoryFile) = undefined;
             pub var NtQueryInformationFile: *const @TypeOf(Self.NtQueryInformationFile) = undefined;
             pub var NtQueryObject: *const @TypeOf(Self.NtQueryObject) = undefined;
