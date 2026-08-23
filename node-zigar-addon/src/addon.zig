@@ -363,9 +363,9 @@ const ModuleHost = struct {
         self.base_address = get: {
             switch (builtin.target.os.tag) {
                 .windows => {
-                    const MBI = std.os.windows.MEMORY_BASIC_INFORMATION;
+                    const MBI = c.MEMORY_BASIC_INFORMATION;
                     var mbi: MBI = undefined;
-                    _ = try std.os.windows.VirtualQuery(module, &mbi, @sizeOf(MBI));
+                    if (c.VirtualQuery(module, &mbi, @sizeOf(MBI)) != 0) return error.UnableToQueryModule;
                     break :get @intFromPtr(mbi.AllocationBase);
                 },
                 else => {

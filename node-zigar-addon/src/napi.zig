@@ -1440,8 +1440,8 @@ fn getErrorMessage(err: anytype) [:0]const u8 {
 }
 
 pub fn getProcAddress(name: [:0]const u8) *const anyopaque {
-    const module = std.os.windows.kernel32.GetModuleHandleW(null) orelse unreachable;
-    return std.os.windows.kernel32.GetProcAddress(module, name) orelse {
+    const module = c.GetModuleHandleA(null) orelse unreachable;
+    return c.GetProcAddress(module, name) orelse {
         var buffer: [256]u8 = undefined;
         const msg = std.fmt.bufPrint(&buffer, "Unable to import function: {s}", .{name}) catch &buffer;
         @panic(msg);
