@@ -15,15 +15,14 @@ pub const DynLib = struct {
     };
 
     pub fn open(path: []const u8) !@This() {
-        const path_copy = try std.heap.c_allocator.dupeZ(u8, path);
+        const offset: usize = switch (builtin.target.os.tag) {
+            .windows => if (std.mem.eql(u8, path[0..4], "\\??\\")) 4 else 0,
+            else => 0,
+        };
+        const path_copy = try std.heap.c_allocator.dupeZ(u8, path[offset..]);
         const handle = switch (builtin.target.os.tag) {
             .windows => load: {
-                var offset: usize = 0;
-                if (path[0] == '\\' and path[1] == '?' and path[2] == '?' and path[3] == '\\') {
-                    // + 4 to skip over the \??\
-                    offset = 4;
-                }
-                break :load c.LoadLibraryA(path.ptr + offset) orelse return error.FileNotFound;
+                break :load c.LoadLibraryA(path_copy.ptr) orelse return error.FileNotFound;
             },
             else => load: {
                 var flags: u32 = c.RTLD_LAZY;
