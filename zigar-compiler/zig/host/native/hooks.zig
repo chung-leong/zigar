@@ -5412,6 +5412,37 @@ pub fn Win32SubstituteNonIO(comptime redirector: type) type {
             return null;
         }
 
+        pub fn NtCreateThreadEx(
+            handle: *c.HANDLE,
+            desired_access: c.ACCESS_MASK,
+            object_attributes: [*c]const c.OBJECT_ATTRIBUTES,
+            process_handle: c.HANDLE,
+            start_routine: ?*anyopaque,
+            argument: c.PVOID,
+            create_flags: c.ULONG,
+            zero_bits: c.SIZE_T,
+            stack_size: c.SIZE_T,
+            maximum_stack_size: c.SIZE_T,
+            attribute_list: ?*anyopaque,
+        ) callconv(WINAPI) c.NTSTATUS {
+            const instance = redirector.Host.getInstance();
+            const info = c_allocator.create(ThreadInfo) catch return c.STATUS_NO_MEMORY;
+            info.* = .{ .proc = start_routine.?, .arg = argument, .instance = instance };
+            return Original.NtCreateThreadEx(
+                handle,
+                desired_access,
+                object_attributes,
+                process_handle,
+                start_routine,
+                argument,
+                create_flags,
+                zero_bits,
+                stack_size,
+                maximum_stack_size,
+                attribute_list,
+            );
+        }
+
         fn setThreadContext(ptr: c.LPVOID) callconv(WINAPI) c.DWORD {
             const info: *ThreadInfo = @ptrCast(@alignCast(ptr));
             const proc: *const fn (c.LPVOID) callconv(WINAPI) c.DWORD = @ptrCast(@alignCast(info.proc));
@@ -5434,6 +5465,7 @@ pub fn Win32SubstituteNonIO(comptime redirector: type) type {
             pub var GetEnvironmentStringsW: *const @TypeOf(Self.GetEnvironmentStringsW) = undefined;
             pub var GetEnvironmentVariable: *const @TypeOf(Self.GetEnvironmentVariable) = undefined;
             pub var GetEnvironmentVariableW: *const @TypeOf(Self.GetEnvironmentVariableW) = undefined;
+            pub var NtCreateThreadEx: *const @TypeOf(Self.NtCreateThreadEx) = undefined;
         };
         pub const calling_convention = WINAPI;
     };
