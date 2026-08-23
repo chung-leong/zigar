@@ -4058,6 +4058,25 @@ pub fn Win32Substitute(comptime redirector: type) type {
             return null;
         }
 
+        pub fn NtCancelIoFileEx(
+            handle: c.HANDLE,
+            overlapped: ?*c.OVERLAPPED,
+        ) callconv(WINAPI) c.BOOL {
+            const fd = toDescriptor(handle);
+            if (isPrivateDescriptor(fd)) {
+                return c.TRUE;
+            }
+            return Original.NtCancelIoFileEx(handle, overlapped);
+        }
+
+        pub fn NtCancelSynchronousIoFile(handle: c.HANDLE) callconv(WINAPI) c.BOOL {
+            const fd = toDescriptor(handle);
+            if (isPrivateDescriptor(fd)) {
+                return c.TRUE;
+            }
+            return Original.NtCancelSynchronousIoFile(handle);
+        }
+
         pub fn NtClose(handle: c.HANDLE) callconv(WINAPI) c.NTSTATUS {
             if (isTemporaryHandle(handle)) {
                 destroyTemporaryHandle(handle);
@@ -4253,6 +4272,55 @@ pub fn Win32Substitute(comptime redirector: type) type {
                 return status;
             }
             return Original.NtLockFile(handle, event, apc_routine, apc_context, io_status_block, offset, len, key, fail_immediately, exclusive);
+        }
+
+        pub fn NtOpenFile(
+            handle: *c.HANDLE,
+            desired_access: c.ACCESS_MASK,
+            object_attributes: *c.OBJECT_ATTRIBUTES,
+            io_status_block: *c.IO_STATUS_BLOCK,
+            file_attributes: c.ULONG,
+            share_access: c.ULONG,
+            open_options: c.ULONG,
+        ) callconv(WINAPI) c.NTSTATUS {
+            const dirfd: c_int = if (object_attributes.RootDirectory) |dh| toDescriptor(dh) else fd_cwd;
+            const dir_op = (open_options & c.FILE_DIRECTORY_FILE) != 0;
+            const object_name = object_attributes.ObjectName;
+            const name_len = @divExact(object_name.*.Length, 2);
+            const path = object_name.*.Buffer[0..name_len];
+            if (isPrivateDescriptor(dirfd) or redirector.Host.isRedirecting(.any)) {
+                var converter = Wtf8Converter.init(.{ .save_error = false });
+                defer converter.deinit();
+                const path_wtf8 = converter.convertTo(path) catch return c.STATUS_NO_MEMORY;
+                if ((desired_access & c.DELETE) != 0) {
+                    // a delete or rename operation--remember the path for NtSetInformationFile()
+                    if (isPrivateDescriptor(dirfd)) {
+                        handle.* = createTemporaryHandle(path_wtf8, dirfd, dir_op) catch return c.STATUS_NO_MEMORY;
+                        io_status_block.Information = c.FILE_CREATED;
+                        return c.STATUS_SUCCESS;
+                    }
+                } else {
+                    var oflags: O = .{};
+                    const r_access = (desired_access & c.GENERIC_READ) != 0;
+                    const w_access = (desired_access & c.GENERIC_WRITE) != 0;
+                    if (r_access) {
+                        oflags.ACCMODE = if (w_access) .RDWR else .RDONLY;
+                    } else if (w_access) {
+                        oflags.ACCMODE = .WRONLY;
+                    }
+                    oflags.DIRECTORY = dir_op;
+                    const oflags_int: u32 = @bitCast(oflags);
+                    var fd: c_int = undefined;
+                    if (redirector.openat(dirfd, path_wtf8, @intCast(oflags_int), 0, &fd)) {
+                        if (fd < 0) return c.STATUS_OBJECT_PATH_NOT_FOUND;
+                        handle.* = fromDescriptor(fd);
+                        io_status_block.Information = c.FILE_OPENED;
+                        return c.STATUS_SUCCESS;
+                    }
+                }
+            }
+            if (isPrivateDescriptor(dirfd)) return c.STATUS_ACCESS_DENIED;
+            return Original.NtOpenFile(handle, desired_access, object_attributes, io_status_block, file_attributes, share_access, open_options);
         }
 
         pub fn NtQueryDirectoryFile(
@@ -4500,6 +4568,49 @@ pub fn Win32Substitute(comptime redirector: type) type {
             return Original.NtQueryObject(handle, object_information_class, object_information, object_information_length, return_length);
         }
 
+        pub fn NtReadFile(
+            handle: c.HANDLE,
+            event: c.HANDLE,
+            apc_routine: c.PIO_APC_ROUTINE,
+            apc_context: c.PVOID,
+            io_status_block: *c.IO_STATUS_BLOCK,
+            buffer: c.PVOID,
+            len: c.ULONG,
+            byte_offset: c.PLARGE_INTEGER,
+            key: c.PULONG,
+        ) callconv(WINAPI) c.NTSTATUS {
+            const fd = toDescriptor(handle);
+            if (isPrivateDescriptor(fd)) {
+                const len_s = cast(off_t, len, true) catch return c.STATUS_INVALID_PARAMETER;
+                var result: off_t = undefined;
+                var done = false;
+                if (event) |e| _ = c.ResetEvent(e);
+                defer {
+                    if (event) |e| _ = c.SetEvent(e);
+                }
+                if (isSeekable(fd)) {
+                    if (byte_offset) |offset_ptr| {
+                        const offset = offset_ptr.*.QuadPart;
+                        var result64: off64_t = undefined;
+                        _ = redirector.pread64(fd, @ptrCast(buffer), len_s, offset, &result64);
+                        result = @intCast(result64);
+                        if (result != -@as(off_t, @intFromEnum(std.c.E.SPIPE))) {
+                            done = true;
+                        } else {
+                            addUnseekable(fd);
+                        }
+                    }
+                }
+                if (!done) {
+                    _ = redirector.read(fd, @ptrCast(buffer), len_s, &result);
+                }
+                if (result < 0) return translateNtError(result);
+                io_status_block.Information = @intCast(result);
+                return c.STATUS_SUCCESS;
+            }
+            return Original.NtReadFile(handle, event, apc_routine, apc_context, io_status_block, buffer, len, byte_offset, key);
+        }
+
         pub fn NtSetInformationFile(
             handle: c.HANDLE,
             io_status_block: *c.IO_STATUS_BLOCK,
@@ -4555,6 +4666,54 @@ pub fn Win32Substitute(comptime redirector: type) type {
                 return status;
             }
             return Original.NtUnlockFile(handle, io_status_block, offset, len, key);
+        }
+
+        pub fn NtWriteFile(
+            handle: c.HANDLE,
+            event: c.HANDLE,
+            apc_routine: c.PIO_APC_ROUTINE,
+            apc_context: c.PVOID,
+            io_status_block: *c.IO_STATUS_BLOCK,
+            buffer: c.PVOID,
+            len: c.ULONG,
+            byte_offset: c.PLARGE_INTEGER,
+            key: c.PULONG,
+        ) callconv(WINAPI) c.NTSTATUS {
+            const fd = toDescriptor(handle);
+            if (isPrivateDescriptor(fd)) {
+                const len_s = cast(off_t, len, true) catch return c.STATUS_INVALID_PARAMETER;
+                var result: off_t = undefined;
+                var done = false;
+                if (event) |e| _ = c.ResetEvent(e);
+                defer {
+                    if (event) |e| _ = c.SetEvent(e);
+                }
+                if (isSeekable(fd)) {
+                    if (byte_offset) |offset_ptr| {
+                        const offset = offset_ptr.*.QuadPart;
+                        if (offset != -1) {
+                            var result64: off64_t = undefined;
+                            _ = redirector.pwrite64(fd, @ptrCast(buffer), len_s, offset, &result64);
+                            result = @intCast(result64);
+                            if (result != -@as(off_t, @intFromEnum(std.c.E.SPIPE))) {
+                                done = true;
+                            } else {
+                                addUnseekable(fd);
+                            }
+                        } else {
+                            var seek_result64: off64_t = undefined;
+                            _ = redirector.lseek64(fd, 0, 2, &seek_result64);
+                        }
+                    }
+                }
+                if (!done) {
+                    _ = redirector.write(fd, @ptrCast(buffer), len_s, &result);
+                }
+                if (result < 0) return translateNtError(result);
+                io_status_block.Information = @intCast(result);
+                return c.STATUS_SUCCESS;
+            }
+            return Original.NtWriteFile(handle, event, apc_routine, apc_context, io_status_block, buffer, len, byte_offset, key);
         }
 
         pub fn ReadFile(
@@ -4830,6 +4989,40 @@ pub fn Win32Substitute(comptime redirector: type) type {
             };
         }
 
+        fn translateNtError(result: anytype) c.NTSTATUS {
+            const T = @TypeOf(result);
+            const err: std.c.E = switch (@typeInfo(T)) {
+                .@"enum" => result,
+                .int => if (result >= 0) return 0 else convert: {
+                    const num: u16 = @intCast(-result);
+                    break :convert std.enums.fromInt(std.c.E, num) orelse .FAULT;
+                },
+                else => @compileError("Unexpected"),
+            };
+            return switch (err) {
+                .SUCCESS => 0,
+                .PERM => c.STATUS_ACCESS_DENIED,
+                .NOENT => c.STATUS_OBJECT_NAME_NOT_FOUND,
+                .BADF => c.STATUS_INVALID_HANDLE,
+                .NOMEM => c.STATUS_NO_MEMORY,
+                .ACCES => c.STATUS_ACCESS_DENIED,
+                .FAULT => c.STATUS_INVALID_ADDRESS,
+                .BUSY => c.STATUS_DEVICE_BUSY,
+                .NOTDIR => c.STATUS_NOT_A_DIRECTORY,
+                .NODEV => c.STATUS_NO_SUCH_DEVICE,
+                .EXIST => c.STATUS_OBJECT_NAME_COLLISION,
+                .INVAL => c.STATUS_INVALID_PARAMETER,
+                .NFILE, .MFILE => c.STATUS_TOO_MANY_OPENED_FILES,
+                .FBIG => c.STATUS_FILE_TOO_LARGE,
+                .NOSPC => c.STATUS_DISK_FULL,
+                .SPIPE => c.STATUS_INVALID_DEVICE_REQUEST,
+                .NAMETOOLONG => c.STATUS_NAME_TOO_LONG,
+                .NOLCK => c.STATUS_FILE_LOCK_CONFLICT,
+                .NOTEMPTY => c.STATUS_DIRECTORY_NOT_EMPTY,
+                else => c.STATUS_INVALID_PARAMETER,
+            };
+        }
+
         fn extractOffset(overlapped: ?*c.OVERLAPPED) ?off64_t {
             const ptr = overlapped orelse return null;
             const offset = ptr.unnamed_0.unnamed_0.Offset;
@@ -5049,15 +5242,20 @@ pub fn Win32Substitute(comptime redirector: type) type {
             pub var MoveFileEx: *const @TypeOf(Self.MoveFileEx) = undefined;
             pub var MoveFileW: *const @TypeOf(Self.MoveFileW) = undefined;
             pub var MoveFileExW: *const @TypeOf(Self.MoveFileExW) = undefined;
+            pub var NtCancelIoFileEx: *const @TypeOf(Self.NtCancelIoFileEx) = undefined;
+            pub var NtCancelSynchronousIoFile: *const @TypeOf(Self.NtCancelSynchronousIoFile) = undefined;
             pub var NtClose: *const @TypeOf(Self.NtClose) = undefined;
             pub var NtCreateFile: *const @TypeOf(Self.NtCreateFile) = undefined;
             pub var NtFsControlFile: *const @TypeOf(Self.NtFsControlFile) = undefined;
             pub var NtLockFile: *const @TypeOf(Self.NtLockFile) = undefined;
+            pub var NtOpenFile: *const @TypeOf(Self.NtOpenFile) = undefined;
             pub var NtQueryDirectoryFile: *const @TypeOf(Self.NtQueryDirectoryFile) = undefined;
             pub var NtQueryInformationFile: *const @TypeOf(Self.NtQueryInformationFile) = undefined;
             pub var NtQueryObject: *const @TypeOf(Self.NtQueryObject) = undefined;
+            pub var NtReadFile: *const @TypeOf(Self.NtReadFile) = undefined;
             pub var NtSetInformationFile: *const @TypeOf(Self.NtSetInformationFile) = undefined;
             pub var NtUnlockFile: *const @TypeOf(Self.NtUnlockFile) = undefined;
+            pub var NtWriteFile: *const @TypeOf(Self.NtWriteFile) = undefined;
             pub var ReadFile: *const @TypeOf(Self.ReadFile) = undefined;
             pub var RemoveDirectory: *const @TypeOf(Self.RemoveDirectory) = undefined;
             pub var RemoveDirectoryW: *const @TypeOf(Self.RemoveDirectoryW) = undefined;
@@ -5214,6 +5412,37 @@ pub fn Win32SubstituteNonIO(comptime redirector: type) type {
             return null;
         }
 
+        pub fn NtCreateThreadEx(
+            handle: *c.HANDLE,
+            desired_access: c.ACCESS_MASK,
+            object_attributes: [*c]const c.OBJECT_ATTRIBUTES,
+            process_handle: c.HANDLE,
+            start_routine: ?*anyopaque,
+            argument: c.PVOID,
+            create_flags: c.ULONG,
+            zero_bits: c.SIZE_T,
+            stack_size: c.SIZE_T,
+            maximum_stack_size: c.SIZE_T,
+            attribute_list: ?*anyopaque,
+        ) callconv(WINAPI) c.NTSTATUS {
+            const instance = redirector.Host.getInstance();
+            const info = c_allocator.create(ThreadInfo) catch return c.STATUS_NO_MEMORY;
+            info.* = .{ .proc = start_routine.?, .arg = argument, .instance = instance };
+            return Original.NtCreateThreadEx(
+                handle,
+                desired_access,
+                object_attributes,
+                process_handle,
+                start_routine,
+                argument,
+                create_flags,
+                zero_bits,
+                stack_size,
+                maximum_stack_size,
+                attribute_list,
+            );
+        }
+
         fn setThreadContext(ptr: c.LPVOID) callconv(WINAPI) c.DWORD {
             const info: *ThreadInfo = @ptrCast(@alignCast(ptr));
             const proc: *const fn (c.LPVOID) callconv(WINAPI) c.DWORD = @ptrCast(@alignCast(info.proc));
@@ -5236,6 +5465,7 @@ pub fn Win32SubstituteNonIO(comptime redirector: type) type {
             pub var GetEnvironmentStringsW: *const @TypeOf(Self.GetEnvironmentStringsW) = undefined;
             pub var GetEnvironmentVariable: *const @TypeOf(Self.GetEnvironmentVariable) = undefined;
             pub var GetEnvironmentVariableW: *const @TypeOf(Self.GetEnvironmentVariableW) = undefined;
+            pub var NtCreateThreadEx: *const @TypeOf(Self.NtCreateThreadEx) = undefined;
         };
         pub const calling_convention = WINAPI;
     };
