@@ -8,5 +8,6 @@
     #include <semaphore.h>
     #include <fcntl.h>
     #include <time.h>
-    #include <pthread.h>
 #endif
+
+#include <pthread.h>
