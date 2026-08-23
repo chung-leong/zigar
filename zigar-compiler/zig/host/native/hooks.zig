@@ -4500,6 +4500,49 @@ pub fn Win32Substitute(comptime redirector: type) type {
             return Original.NtQueryObject(handle, object_information_class, object_information, object_information_length, return_length);
         }
 
+        pub fn NtReadFile(
+            handle: c.HANDLE,
+            event: c.HANDLE,
+            apc_routine: c.PIO_APC_ROUTINE,
+            apc_context: c.PVOID,
+            io_status_block: *c.IO_STATUS_BLOCK,
+            buffer: c.PVOID,
+            len: c.ULONG,
+            byte_offset: c.PLARGE_INTEGER,
+            key: c.PULONG,
+        ) callconv(WINAPI) c.NTSTATUS {
+            const fd = toDescriptor(handle);
+            if (isPrivateDescriptor(fd)) {
+                const len_s = cast(off_t, len, true) catch return c.STATUS_INVALID_PARAMETER;
+                var result: off_t = undefined;
+                var done = false;
+                if (event) |e| _ = c.ResetEvent(e);
+                defer {
+                    if (event) |e| _ = c.SetEvent(e);
+                }
+                if (isSeekable(fd)) {
+                    if (byte_offset) |offset_ptr| {
+                        const offset = offset_ptr.*.QuadPart;
+                        var result64: off64_t = undefined;
+                        _ = redirector.pread64(fd, @ptrCast(buffer), len_s, offset, &result64);
+                        result = @intCast(result64);
+                        if (result != -@as(off_t, @intFromEnum(std.c.E.SPIPE))) {
+                            done = true;
+                        } else {
+                            addUnseekable(fd);
+                        }
+                    }
+                }
+                if (!done) {
+                    _ = redirector.read(fd, @ptrCast(buffer), len_s, &result);
+                }
+                if (result < 0) return translateNtError(result);
+                io_status_block.Information = @intCast(result);
+                return c.STATUS_SUCCESS;
+            }
+            return Original.NtReadFile(handle, event, apc_routine, apc_context, io_status_block, buffer, len, byte_offset, key);
+        }
+
         pub fn NtSetInformationFile(
             handle: c.HANDLE,
             io_status_block: *c.IO_STATUS_BLOCK,
@@ -5138,6 +5181,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
             pub var NtQueryDirectoryFile: *const @TypeOf(Self.NtQueryDirectoryFile) = undefined;
             pub var NtQueryInformationFile: *const @TypeOf(Self.NtQueryInformationFile) = undefined;
             pub var NtQueryObject: *const @TypeOf(Self.NtQueryObject) = undefined;
+            pub var NtReadFile: *const @TypeOf(Self.NtReadFile) = undefined;
             pub var NtSetInformationFile: *const @TypeOf(Self.NtSetInformationFile) = undefined;
             pub var NtUnlockFile: *const @TypeOf(Self.NtUnlockFile) = undefined;
             pub var NtWriteFile: *const @TypeOf(Self.NtWriteFile) = undefined;
