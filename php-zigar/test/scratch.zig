@@ -14,3 +14,7 @@ pub fn print(dir: std.Io.Dir) !void {
         std.debug.print("{s} ({s})\n", .{ entry.name, entry_type });
     }
 }
+
+pub fn hello() void {
+    std.debug.print("Hello world!\n", .{});
+}
