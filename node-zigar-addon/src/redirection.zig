@@ -104,7 +104,7 @@ pub fn Controller(comptime Host: type) type {
 
                 const file = try std.Io.Dir.openFileAbsolute(io, lib.path, .{});
                 defer file.close(io);
-                const header = try readStruct(host, MachHeader, file, 0);
+                const header = try readStruct(MachHeader, file, 0);
                 // process mach-o commands
                 const DataSegment = struct {
                     index: usize,
@@ -124,13 +124,13 @@ pub fn Controller(comptime Host: type) type {
                 var bindings: []Binding = bindings_buffer[0..0];
                 var pos: usize = @sizeOf(MachHeader);
                 for (0..header.ncmds) |_| {
-                    const load_cmd = try readStruct(host, LoadCommand, file, pos);
+                    const load_cmd = try readStruct(LoadCommand, file, pos);
                     switch (load_cmd.cmd) {
                         if (bits == 64) std.macho.LC.SEGMENT_64 else std.macho.LC.SEGMENT => {
                             // look for data sections
                             const segment_cmd = try readStruct(SegmentCommand, file, pos);
                             const index = data_segments.len;
-                            if ((segment_cmd.initprot & std.macho.PROT.WRITE) != 0 and index < 8) {
+                            if (segment_cmd.initprot.WRITE and index < 8) {
                                 data_segments.len = index + 1;
                                 data_segments[index].offset = segment_cmd.vmaddr;
                                 data_segments[index].index = index + 1;
@@ -140,7 +140,6 @@ pub fn Controller(comptime Host: type) type {
                         std.macho.LC.SYMTAB => {
                             // load symbols
                             const symtab_cmd = try readStruct(SymtabCommand, file, pos);
-                            try file.seekTo(symtab_cmd.symoff);
                             symbols = try readStructs(NList, allocator, file, symtab_cmd.nsyms, symtab_cmd.symoff);
                             symbol_strs = try readStructs(u8, allocator, file, symtab_cmd.strsize, symtab_cmd.stroff);
                         },
@@ -165,7 +164,7 @@ pub fn Controller(comptime Host: type) type {
                 defer if (symbol_strs.len > 0) allocator.free(symbol_strs);
                 defer for (bindings) |b| allocator.free(b.byte_codes);
                 const base_address: usize = for (symbols) |s| {
-                    if (s.n_type & std.macho.N_EXT != 0) {
+                    if (s.n_type.bits.ext) {
                         const symbol_name_ptr: [*:0]const u8 = @ptrCast(&symbol_strs[s.n_strx]);
                         const symbol_name_len = std.mem.len(symbol_name_ptr);
                         const symbol_name: [:0]const u8 = @ptrCast(symbol_name_ptr[0..symbol_name_len]);

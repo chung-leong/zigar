@@ -10,7 +10,7 @@ const builtin = @import("builtin");
 
 const c = @import("c");
 const off_t = c.off_t;
-const off64_t = c.off64_t;
+const off64_t = if (@hasDecl(c, "off64_t")) c.off64_t else c.off_t;
 
 const io = @import("../../system.zig").io;
 const fn_transform = @import("../../zigft/fn-transform.zig");
