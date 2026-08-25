@@ -1,8 +1,12 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 const c = @import("c");
 
 pub fn check(file: std.Io.File) bool {
-    const fd = file.handle;
+    const fd = switch (builtin.target.os.tag) {
+        .windows => c._open_osfhandle(@as(isize, @bitCast(@intFromPtr(file.handle))), 0),
+        else => file.handle,
+    };
     return c.isatty(fd) != 0;
 }
