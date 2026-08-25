@@ -691,6 +691,7 @@ export function addTests(importModule, options) {
     })
     skip.entirely.if(target === 'win32').
     it('should retrieve stat of file in directory in file system using posix function', async function() {
+      // this test doesn't on older Mac due to incorrect function name
       const { __zigar, stat } = await importTest('stat-file-at-dir-in-file-system-with-posix-function', { useLibc: true });
       if (target === 'wasm32') {
         const { WASI } = await import('wasi');
@@ -835,6 +836,7 @@ export function addTests(importModule, options) {
       }
     })
     it('should get stats of an opened file in the file system using posix function', async function() {
+      // this test doesn't on older Mac due to incorrect function name
       const { __zigar, print } = await importTest('stat-opened-file-in-file-system-with-posix-function', { useLibc: true });
       if (target === 'wasm32') {
         const { WASI } = await import('wasi');
