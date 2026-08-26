@@ -365,7 +365,7 @@ const ModuleHost = struct {
                 .windows => {
                     const MBI = c.MEMORY_BASIC_INFORMATION;
                     var mbi: MBI = undefined;
-                    if (c.VirtualQuery(module, &mbi, @sizeOf(MBI)) != 0) return error.UnableToQueryModule;
+                    if (c.VirtualQuery(module, &mbi, @sizeOf(MBI)) == 0) return error.UnableToQueryModule;
                     break :get @intFromPtr(mbi.AllocationBase);
                 },
                 else => {
