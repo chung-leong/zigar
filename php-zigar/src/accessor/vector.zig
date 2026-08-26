@@ -18,7 +18,7 @@ const Attributes = union(enum) {
     gmp: Arg(accessor.Gmp),
     float: Arg(accessor.Float),
 
-    pub fn bitSize(comptime self: @This()) usize {
+    pub fn bitSize(comptime self: @This(), is_packed: bool) usize {
         const T = switch (self) {
             .bool => bool,
             .int => |int| @Int(int.signedness, int.bit_size),
@@ -32,7 +32,7 @@ const Attributes = union(enum) {
                 else => @compileError("Unknow float type"),
             },
         };
-        return @sizeOf(T) * 8;
+        return if (is_packed) @bitSizeOf(T) else @sizeOf(T) * 8;
     }
 
     pub fn Primitive(comptime self: @This(), comptime use_bit_offset: bool) type {
@@ -60,19 +60,41 @@ pub fn Vector(comptime attrs: Attributes) type {
             comptime attributes: Attributes = attrs,
 
             pub fn getElement(self: @This(), buffer: *ByteBuffer, index: usize) Error!Value {
-                const bit_size = attrs.bitSize();
+                const is_packed = buffer.flags.contains_packed_data;
+                const bit_size = attrs.bitSize(is_packed);
                 const bit_index = index * bit_size;
                 const byte_index = bit_index / 8;
-                const p_acc = self.primitiveAt(byte_index, false);
-                return try p_acc.get(buffer);
+                if (is_packed) {
+                    const bit_offset = (buffer.bit_offset + bit_index) % 8;
+                    const p_acc = self.primitiveAt(byte_index, true);
+                    return inline for (.{ 0, 1, 2, 3, 4, 5, 6, 7 }) |possible_offset| {
+                        if (bit_offset == possible_offset) {
+                            break try p_acc.getAt(buffer, possible_offset);
+                        }
+                    } else unreachable;
+                } else {
+                    const p_acc = self.primitiveAt(byte_index, false);
+                    return try p_acc.get(buffer);
+                }
             }
 
             pub fn setElement(self: @This(), buffer: *ByteBuffer, index: usize, value: *const Value) Error!void {
-                const bit_size = attrs.bitSize();
+                const is_packed = buffer.flags.contains_packed_data;
+                const bit_size = attrs.bitSize(is_packed);
                 const bit_index = index * bit_size;
                 const byte_index = bit_index / 8;
-                const p_acc = self.primitiveAt(byte_index, false);
-                return try p_acc.set(buffer, value);
+                if (is_packed) {
+                    const bit_offset = (buffer.bit_offset + bit_index) % 8;
+                    const p_acc = self.primitiveAt(byte_index, true);
+                    return inline for (.{ 0, 1, 2, 3, 4, 5, 6, 7 }) |possible_offset| {
+                        if (bit_offset == possible_offset) {
+                            break try p_acc.setAt(buffer, possible_offset, value);
+                        }
+                    } else unreachable;
+                } else {
+                    const p_acc = self.primitiveAt(byte_index, false);
+                    return try p_acc.set(buffer, value);
+                }
             }
 
             fn primitiveAt(self: @This(), byte_offset: usize, comptime use_bit_offset: bool) attrs.Primitive(use_bit_offset) {
@@ -92,17 +114,39 @@ pub fn Vector(comptime attrs: Attributes) type {
             comptime attributes: Attributes = attrs,
 
             pub fn getElement(self: @This(), buffer: *ByteBuffer, index: usize) Error!Value {
+                const is_packed = buffer.flags.contains_packed_data;
                 const bit_index = index * self.bit_size;
                 const byte_index = bit_index / 8;
-                const p_acc = self.primitiveAt(byte_index, false);
-                return try p_acc.get(buffer);
+                if (is_packed) {
+                    const bit_offset = bit_index % 8;
+                    const p_acc = self.primitiveAt(byte_index, true);
+                    return inline for (.{ 0, 1, 2, 3, 4, 5, 6, 7 }) |possible_offset| {
+                        if (bit_offset == possible_offset) {
+                            return try p_acc.getAt(buffer, possible_offset);
+                        }
+                    } else unreachable;
+                } else {
+                    const p_acc = self.primitiveAt(byte_index, false);
+                    return try p_acc.get(buffer);
+                }
             }
 
             pub fn setElement(self: @This(), buffer: *ByteBuffer, index: usize, value: *const Value) Error!void {
+                const is_packed = buffer.flags.contains_packed_data;
                 const bit_index = index * self.bit_size;
                 const byte_index = bit_index / 8;
-                const p_acc = self.primitiveAt(byte_index, false);
-                return try p_acc.set(buffer, value);
+                if (is_packed) {
+                    const bit_offset = bit_index % 8;
+                    const p_acc = self.primitiveAt(byte_index, true);
+                    inline for (.{ 0, 1, 2, 3, 4, 5, 6, 7 }) |possible_offset| {
+                        if (bit_offset == possible_offset) {
+                            return try p_acc.setAt(buffer, possible_offset, value);
+                        }
+                    } else unreachable;
+                } else {
+                    const p_acc = self.primitiveAt(byte_index, false);
+                    return try p_acc.set(buffer, value);
+                }
             }
 
             fn primitiveAt(self: @This(), byte_offset: usize, comptime use_bit_offset: bool) attrs.Primitive(use_bit_offset) {
