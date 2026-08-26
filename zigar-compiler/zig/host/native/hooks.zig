@@ -1172,11 +1172,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn mkdir(path: [*:0]const u8, mode: c_int, result: *c_int) callconv(.c) bool {
-            // function only has one argument on Windows
-            return switch (builtin.target.os.tag) {
-                .windows => mkdirat(fd_cwd, path, 0o777, result),
-                else => mkdirat(fd_cwd, path, mode, result),
-            };
+            return mkdirat(fd_cwd, path, mode, result);
         }
 
         pub fn mkdirat(dirfd: c_int, path: [*:0]const u8, mode: c_int, result: *c_int) callconv(.c) bool {
@@ -4117,7 +4113,21 @@ pub fn Win32Substitute(comptime redirector: type) type {
                 const path_wtf8 = converter.convertTo(path) catch return c.STATUS_NO_MEMORY;
                 if ((desired_access & c.DELETE) != 0) {
                     // a delete or rename operation--remember the path for NtSetInformationFile()
-                    if (isPrivateDescriptor(dirfd)) {
+                    const redirecting = init: {
+                        if (isPrivateDescriptor(dirfd)) break :init true;
+                        if (dirfd != fd_cwd) break :init false;
+                        // the only way we can tell if the path refers to a virtual file is by
+                        // trying to open it
+                        var fd: c_int = undefined;
+                        if (redirector.openat(dirfd, path_wtf8, 0, 0, &fd)) {
+                            var close_result: c_int = undefined;
+                            defer _ = redirector.close(fd, &close_result);
+                            break :init true;
+                        } else {
+                            break :init false;
+                        }
+                    };
+                    if (redirecting) {
                         handle.* = createTemporaryHandle(path_wtf8, dirfd, dir_op) catch return c.STATUS_NO_MEMORY;
                         io_status_block.Information = c.FILE_CREATED;
                         return c.STATUS_SUCCESS;
@@ -4290,6 +4300,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
             const object_name = object_attributes.ObjectName;
             const name_len = @divExact(object_name.*.Length, 2);
             const path = object_name.*.Buffer[0..name_len];
+            std.debug.print("NtOpenFile\n", .{});
             if (isPrivateDescriptor(dirfd) or redirector.Host.isRedirecting(.any)) {
                 var converter = Wtf8Converter.init(.{ .save_error = false });
                 defer converter.deinit();
