@@ -1172,7 +1172,10 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn mkdir(path: [*:0]const u8, mode: c_int, result: *c_int) callconv(.c) bool {
-            return mkdirat(fd_cwd, path, mode, result);
+            return switch (builtin.target.os.tag) {
+                .windows => mkdirat(fd_cwd, path, 0o777, result),
+                else => mkdirat(fd_cwd, path, mode, result),
+            };
         }
 
         pub fn mkdirat(dirfd: c_int, path: [*:0]const u8, mode: c_int, result: *c_int) callconv(.c) bool {
