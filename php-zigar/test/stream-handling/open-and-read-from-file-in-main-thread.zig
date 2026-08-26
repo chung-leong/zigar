@@ -14,6 +14,7 @@ pub fn hash(path: []const u8) ![std.crypto.hash.Sha1.digest_length * 2]u8 {
             error.EndOfStream => break,
             else => return err,
         };
+        if (read == 0) break;
         sha1.update(buffer[0..read]);
     }
     const digest = sha1.finalResult();
