@@ -16,6 +16,7 @@ pub fn print(dir: std.Io.Dir, name: []const u8) !void {
             error.EndOfStream => break,
             else => return err,
         };
+        if (len == 0) break;
         _ = try stderr.write(buffer[0..len]);
     }
     try stderr.flush();
