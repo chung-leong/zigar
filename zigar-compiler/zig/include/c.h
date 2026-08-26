@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #ifdef _WIN32
     #include <windows.h>
@@ -13,7 +14,6 @@
     #include <dirent.h>
     #include <errno.h>
     #include <dlfcn.h>
-    #include <sys/stat.h>
 #endif
 
 #ifdef __APPLE__

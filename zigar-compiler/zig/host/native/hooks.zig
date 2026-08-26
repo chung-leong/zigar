@@ -2712,6 +2712,44 @@ pub fn PthreadSubsituteWindows(comptime redirector: type) type {
             return Original._beginthreadex(security, stack_size, &setThreadContextEx, info, initflag, thrdaddr);
         }
 
+        pub fn _fstat32i64(fd: c_int, buf: *c.struct__stat32i64) callconv(.c) c_int {
+            var result: c_int = undefined;
+            var stat: Stat64 = undefined;
+            if (redirector.fstat64(fd, &stat, &result)) {
+                if (result == 0) {
+                    buf.st_atime = @truncate(stat.atime);
+                    buf.st_ctime = @truncate(stat.ctime);
+                    buf.st_mtime = @truncate(stat.mtime);
+                    buf.st_dev = stat.dev;
+                    buf.st_mode = stat.mode;
+                    buf.st_nlink = @intCast(stat.nlink);
+                    buf.st_rdev = stat.rdev;
+                    buf.st_size = @truncate(stat.size);
+                }
+                return posix.saveError(result);
+            }
+            return Original._fstat32i64(fd, buf);
+        }
+
+        pub fn _fstat64i32(fd: c_int, buf: *c.struct__stat64i32) callconv(.c) c_int {
+            var result: c_int = undefined;
+            var stat: Stat64 = undefined;
+            if (redirector.fstat64(fd, &stat, &result)) {
+                if (result == 0) {
+                    buf.st_atime = @truncate(stat.atime);
+                    buf.st_ctime = @truncate(stat.ctime);
+                    buf.st_mtime = @truncate(stat.mtime);
+                    buf.st_dev = stat.dev;
+                    buf.st_mode = stat.mode;
+                    buf.st_nlink = @intCast(stat.nlink);
+                    buf.st_rdev = stat.rdev;
+                    buf.st_size = @truncate(stat.size);
+                }
+                return posix.saveError(result);
+            }
+            return Original._fstat64i32(fd, buf);
+        }
+
         fn setThreadContext(ptr: ?*anyopaque) callconv(.c) void {
             const info: *ThreadInfo = @ptrCast(@alignCast(ptr.?));
             const proc: *const fn (?*anyopaque) callconv(.c) void = @ptrCast(@alignCast(info.proc));
@@ -2738,6 +2776,8 @@ pub fn PthreadSubsituteWindows(comptime redirector: type) type {
         pub const Original = struct {
             pub var _beginthread: *const @TypeOf(Self._beginthread) = undefined;
             pub var _beginthreadex: *const @TypeOf(Self._beginthreadex) = undefined;
+            pub var _fstat32i64: *const @TypeOf(Self._fstat32i64) = undefined;
+            pub var _fstat64i32: *const @TypeOf(Self._fstat64i32) = undefined;
         };
         pub const calling_convention = std.builtin.CallingConvention.c;
     };
@@ -4300,7 +4340,6 @@ pub fn Win32Substitute(comptime redirector: type) type {
             const object_name = object_attributes.ObjectName;
             const name_len = @divExact(object_name.*.Length, 2);
             const path = object_name.*.Buffer[0..name_len];
-            std.debug.print("NtOpenFile\n", .{});
             if (isPrivateDescriptor(dirfd) or redirector.Host.isRedirecting(.any)) {
                 var converter = Wtf8Converter.init(.{ .save_error = false });
                 defer converter.deinit();
