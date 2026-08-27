@@ -793,7 +793,7 @@ const execFileAsync = node_util.promisify(node_child_process.execFile);
 
 async function test(srcPath, options) {
   const { silent = false, extraArgs = [] } = options;
-  const config = await createConfig(srcPath, '', options);
+  const config = await createConfig(srcPath, '', { ...options, useRedirection: false });
   const { zigPath, moduleBuildDir } = config;
   // create config file
   await createProject(config);

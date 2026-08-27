@@ -6,7 +6,7 @@ const cfg = @import("build.cfg.zig");
 const extra = @import("build.extra.zig");
 
 pub fn build(b: *std.Build) !void {
-    if (builtin.zig_version.major != 0 or builtin.zig_version.minor != 15) {
+    if (builtin.zig_version.major != 0 or builtin.zig_version.minor != 16) {
         @compileError("Unsupported Zig version");
     }
     const target = b.standardTargetOptions(.{});
@@ -16,15 +16,22 @@ pub fn build(b: *std.Build) !void {
         if (builtin.target.cpu.arch == .x86_64 and cfg.multithreaded) break :default true;
         break :default null;
     };
+    const root_translate_c = b.addTranslateC(.{
+        .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "include/c.h" },
+        .target = target,
+        .optimize = optimize,
+    });
+    const root = b.addModule("root", .{
+        .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "stub.zig" },
+        .target = target,
+        .optimize = optimize,
+        .single_threaded = !cfg.multithreaded,
+        .imports = &.{.{ .name = "c", .module = root_translate_c.createModule() }},
+    });
     const lib = b.addLibrary(.{
         .linkage = .dynamic,
         .name = cfg.module_name,
-        .root_module = b.addModule("root", .{
-            .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "stub.zig" },
-            .target = target,
-            .optimize = optimize,
-            .single_threaded = !cfg.multithreaded,
-        }),
+        .root_module = root,
         .use_llvm = use_llvm,
     });
     const zigar = b.createModule(.{
@@ -37,6 +44,19 @@ pub fn build(b: *std.Build) !void {
         .{ .name = "zigar", .module = zigar },
         .{ .name = "number", .module = number },
     };
+    const use_c_header = @TypeOf(cfg.c_header_path) != @TypeOf(null);
+    const translate_c = switch (use_c_header) {
+        true => b.addTranslateC(.{
+            .root_source_file = .{ .cwd_relative = cfg.c_header_path },
+            .target = target,
+            .optimize = optimize,
+        }),
+        false => {},
+    };
+    const c_import: []const Import = switch (use_c_header) {
+        true => &.{.{ .name = "c", .module = translate_c.createModule() }},
+        false => &.{},
+    };
     const extra_imports: []const Import = switch (@hasDecl(extra, "getImports")) {
         true => @call(.always_inline, extra.getImports, .{ b, .{
             .library = lib,
@@ -45,12 +65,13 @@ pub fn build(b: *std.Build) !void {
         } }),
         false => &.{},
     };
-    const imports = try std.mem.concat(b.allocator, Import, &.{ zigar_imports, extra_imports });
+    const imports = try std.mem.concat(b.allocator, Import, &.{ zigar_imports, c_import, extra_imports });
     const mod = b.createModule(.{
         .root_source_file = .{ .cwd_relative = cfg.module_path },
         .target = target,
         .optimize = optimize,
         .imports = imports,
+        .link_libc = cfg.use_libc,
     });
     mod.addIncludePath(.{ .cwd_relative = cfg.module_dir });
     lib.root_module.addImport("module", mod);
@@ -80,9 +101,6 @@ pub fn build(b: *std.Build) !void {
         const path = try std.fs.path.resolve(b.allocator, &.{ cfg.module_dir, inc_path });
         lib.addIncludePath(.{ .file = .{ .cwd_relative = path } });
     }
-    if (cfg.use_libc) {
-        lib.linkLibC();
-    }
     if (cfg.is_wasm) {
         // WASM needs to be compiled as exe
         lib.kind = .exe;
@@ -95,7 +113,7 @@ pub fn build(b: *std.Build) !void {
         lib.stack_size = cfg.stack_size;
         lib.max_memory = cfg.max_memory;
     } else if (cfg.use_redirection) {
-        lib.addCSourceFile(.{ .file = .{ .cwd_relative = cfg.zigar_src_path ++ "host/native/hooks.c" } });
+        mod.addCSourceFile(.{ .file = .{ .cwd_relative = cfg.zigar_src_path ++ "host/native/hooks.c" } });
     }
     const options = b.addOptions();
     options.addOption(comptime_int, "eval_branch_quota", cfg.eval_branch_quota);
@@ -103,6 +121,7 @@ pub fn build(b: *std.Build) !void {
     options.addOption(bool, "omit_variables", cfg.omit_variables);
     options.addOption(bool, "use_redirection", cfg.use_redirection);
     options.addOption(bool, "use_pthread_emulation", cfg.use_pthread_emulation);
+    options.addOption([:0]const u8, "module_path", cfg.module_path);
     lib.root_module.addOptions("options.zig", options);
     const wf = b.addUpdateSourceFiles();
     wf.addCopyFileToSource(lib.getEmittedBin(), cfg.output_path);

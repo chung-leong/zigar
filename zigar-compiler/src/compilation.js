@@ -14,7 +14,7 @@ const execFileAsync = promisify(execFile);
 
 export async function test(srcPath, options) {
   const { silent = false, extraArgs = [] } = options;
-  const config = await createConfig(srcPath, '', options);
+  const config = await createConfig(srcPath, '', { ...options, useRedirection: false });
   const { zigPath, moduleBuildDir } = config;
   // create config file
   await createProject(config, moduleBuildDir);

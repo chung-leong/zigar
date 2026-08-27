@@ -311,13 +311,13 @@ describe('Compilation', function() {
       const modPath = getModuleCachePath(srcPath, options);
       const { sourcePaths } = await compile(srcPath, modPath, options);
       const hasMainFile = !!sourcePaths.find(p => p.includes('print.zig'));
-      const hasCFile = !!sourcePaths.find(p => p.includes('hello.c'));
+      const hasBuildExtra = !!sourcePaths.find(p => p.includes('build.extra.h'));
       const hasZigFile = !!sourcePaths.find(p => p.includes('hello.zig'));
-      const hasExporter = !!sourcePaths.find(p => p.includes('exporter.zig'));
+      const hasExport = !!sourcePaths.find(p => p.includes('export.zig'));
       expect(hasMainFile).to.be.true;
-      expect(hasCFile).to.be.true;
+      expect(hasBuildExtra).to.be.true;
       expect(hasZigFile).to.be.true;
-      expect(hasExporter).to.be.true;
+      expect(hasExport).to.be.true;
     })
     it('should include build and package manager config file in list of files involved in build', async function() {
       const srcPath = absolute('./zig-samples/custom/custom.zig');
@@ -364,6 +364,7 @@ describe('Compilation', function() {
       const srcPath = absolute('./zig-samples/basic/test.zig');
       const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch(), silent: true };
       const { code, stderr } = await test(srcPath, options);
+      console.log(stderr);
       expect(code).to.equal(1);
       expect(stderr).to.contain(`error: 'test.test.Test 3' failed`);
     })
