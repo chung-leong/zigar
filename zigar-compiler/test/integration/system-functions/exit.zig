@@ -1,2 +1,2 @@
 const std = @import("std");
-pub const exit = std.posix.exit;
+pub const exit = std.c.exit;
