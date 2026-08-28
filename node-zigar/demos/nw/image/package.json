@@ -10,6 +10,6 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "node-zigar": "^0.15.3"
+    "node-zigar": "0.16.0-alpha.1"
   }
 }
