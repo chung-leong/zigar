@@ -20,6 +20,7 @@ $ignore = <<<PATTERNS
 demos
 doc
 extensions
+lib
 php-devel
 test
 vendor/myclabs
@@ -40,7 +41,7 @@ composer.*
 package$
 package.php
 phpunit.xml
-php-zigar-\d+.\d+.\d+.zip.*
+php-zigar-.*?.zip.*
 zstd-tarball
 PATTERNS;
 $filters = preg_split('/[\r\n]+/', $ignore, -1, PREG_SPLIT_NO_EMPTY);
