@@ -469,7 +469,76 @@ const DT = switch (os) {
     else => std.c.DT,
 };
 const F = switch (os) {
-    .windows => std.os.linux.F,
+    .linux, .windows => struct {
+        pub const DUPFD = 0;
+        pub const GETFD = 1;
+        pub const SETFD = 2;
+        pub const GETFL = 3;
+        pub const SETFL = 4;
+
+        pub const GETLK = GET_SET_LK.GETLK;
+        pub const SETLK = GET_SET_LK.SETLK;
+        pub const SETLKW = GET_SET_LK.SETLKW;
+
+        const is_mips = builtin.cpu.arch.isMIPS();
+        const is_sparc = builtin.cpu.arch.isSpirV();
+        const GET_SET_LK = if (@sizeOf(usize) == 8) extern struct {
+            pub const GETLK = if (is_mips) 14 else if (is_sparc) 7 else 5;
+            pub const SETLK = if (is_mips) 6 else if (is_sparc) 8 else 6;
+            pub const SETLKW = if (is_mips) 7 else if (is_sparc) 9 else 7;
+        } else extern struct {
+            // Ensure that 32-bit code uses the large-file variants (GETLK64, etc).
+
+            pub const GETLK = if (is_mips) 33 else 12;
+            pub const SETLK = if (is_mips) 34 else 13;
+            pub const SETLKW = if (is_mips) 35 else 14;
+        };
+
+        pub const SETOWN = if (is_mips) 24 else if (is_sparc) 6 else 8;
+        pub const GETOWN = if (is_mips) 23 else if (is_sparc) 5 else 9;
+
+        pub const SETSIG = 10;
+        pub const GETSIG = 11;
+
+        pub const SETOWN_EX = 15;
+        pub const GETOWN_EX = 16;
+
+        pub const GETOWNER_UIDS = 17;
+
+        pub const OFD_GETLK = 36;
+        pub const OFD_SETLK = 37;
+        pub const OFD_SETLKW = 38;
+
+        pub const RDLCK = if (is_sparc) 1 else 0;
+        pub const WRLCK = if (is_sparc) 2 else 1;
+        pub const UNLCK = if (is_sparc) 3 else 2;
+
+        pub const LINUX_SPECIFIC_BASE = 1024;
+
+        pub const SETLEASE = LINUX_SPECIFIC_BASE + 0;
+        pub const GETLEASE = LINUX_SPECIFIC_BASE + 1;
+        pub const NOTIFY = LINUX_SPECIFIC_BASE + 2;
+        pub const DUPFD_QUERY = LINUX_SPECIFIC_BASE + 3;
+        pub const CREATED_QUERY = LINUX_SPECIFIC_BASE + 4;
+        pub const CANCELLK = LINUX_SPECIFIC_BASE + 5;
+        pub const DUPFD_CLOEXEC = LINUX_SPECIFIC_BASE + 6;
+        pub const SETPIPE_SZ = LINUX_SPECIFIC_BASE + 7;
+        pub const GETPIPE_SZ = LINUX_SPECIFIC_BASE + 8;
+        pub const ADD_SEALS = LINUX_SPECIFIC_BASE + 9;
+        pub const GET_SEALS = LINUX_SPECIFIC_BASE + 10;
+
+        pub const SEAL_SEAL = 0x0001;
+        pub const SEAL_SHRINK = 0x0002;
+        pub const SEAL_GROW = 0x0004;
+        pub const SEAL_WRITE = 0x0008;
+        pub const SEAL_FUTURE_WRITE = 0x0010;
+        pub const SEAL_EXEC = 0x0020;
+
+        pub const GET_RW_HINT = LINUX_SPECIFIC_BASE + 11;
+        pub const SET_RW_HINT = LINUX_SPECIFIC_BASE + 12;
+        pub const GET_FILE_RW_HINT = LINUX_SPECIFIC_BASE + 13;
+        pub const SET_FILE_RW_HINT = LINUX_SPECIFIC_BASE + 14;
+    },
     else => std.c.F,
 };
 const O = switch (os) {
