@@ -29,6 +29,15 @@
 // hence the need to keep the header from being included
 #define ZEND_ATOMIC_H
 
+// Neon header file causes translate-c to segfault
+#define __ARM_NEON_H
+
+// message.h has structs with bitfields that it immediately asserts the size of
+#define _MACH_MESSAGE_H_
+
+// mach_voucher_types_h uses types defined in mach_message.h
+#define _MACH_VOUCHER_TYPES_H_
+
 typedef struct zend_atomic_bool_s {
 	volatile _Bool value;
 } zend_atomic_bool;
