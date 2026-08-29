@@ -4,8 +4,9 @@ const api_translator = @import("zigft/api-translator.zig");
 const camelize = api_translator.camelize;
 const snakify = api_translator.snakify;
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     // create instance of generator
+    const io = init.io;
     var gpa: std.heap.DebugAllocator(.{}) = .init;
     var generator: *api_translator.CodeGenerator(.{
         .include_paths = &.{"../node_modules/node-api-headers/include"},
@@ -25,7 +26,7 @@ pub fn main() !void {
         .param_is_input_fn = isParamInput,
         .ptr_is_many_fn = isPointerMany,
         .doc_comment_fn = getDocComment,
-    }) = try .init(gpa.allocator());
+    }) = try .init(gpa.allocator(), io);
     defer generator.deinit();
     // analyze the headers
     try generator.analyze();
@@ -38,18 +39,22 @@ pub fn main() !void {
         generator.cwd,
         "gen-napi-custom.zig",
     });
-    var output_file = try std.fs.createFileAbsolute(output_path, .{});
-    defer output_file.close();
-    var custom_file = try std.fs.openFileAbsolute(custom_path, .{});
-    defer custom_file.close();
+    var output_file = try std.Io.Dir.createFileAbsolute(io, output_path, .{});
+    defer output_file.close(io);
+    var custom_file = try std.Io.Dir.openFileAbsolute(io, custom_path, .{});
+    defer custom_file.close(io);
     var write_buffer: [4096]u8 = undefined;
-    var file_writer = output_file.writer(&write_buffer);
+    var file_writer = output_file.writer(io, &write_buffer);
     const writer = &file_writer.interface;
     try generator.print(writer);
     _ = try writer.print("\n", .{});
     while (true) {
         var read_buffer: [1024]u8 = undefined;
-        const count = try custom_file.read(&read_buffer);
+        const slices: [1][]u8 = .{&read_buffer};
+        const count = custom_file.readStreaming(io, &slices) catch |err| switch (err) {
+            error.EndOfStream => break,
+            else => return err,
+        };
         if (count == 0) break;
         _ = try writer.write(read_buffer[0..count]);
     }

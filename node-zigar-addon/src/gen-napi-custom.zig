@@ -92,8 +92,10 @@ pub fn createCallback(
                 args[offset] = @ptrCast(@alignCast(ptr.?));
                 offset += 1;
             }
+            comptime var env_index: usize = undefined;
             if (need_env) {
                 args[offset] = env;
+                env_index = offset;
                 offset += 1;
             }
             if (need_this) {
@@ -104,7 +106,7 @@ pub fn createCallback(
                 args[offset + i] = if (i < argc) argv[i] else try env.getUndefined();
             }
             // call function
-            const retval = @call(.auto, func, args);
+            const retval = @call(.always_inline, func, args);
             // check for error if it's possible
             const result = switch (@typeInfo(@TypeOf(retval))) {
                 .error_union => try retval,

@@ -771,6 +771,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
         arena: std.heap.ArenaAllocator,
         allocator: std.mem.Allocator,
         cwd: []const u8,
+        io: std.Io,
         indent_level: usize,
         indented: bool,
         close_bracket_stack: std.ArrayList([]const u8),
@@ -790,12 +791,13 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
         invalid_value_map: std.AutoHashMap(*const Expression, InvalidValue),
         return_error_map: std.AutoHashMap(*const Expression, bool),
 
-        pub fn init(allocator: std.mem.Allocator) !*@This() {
+        pub fn init(allocator: std.mem.Allocator, io: std.Io) !*@This() {
             var arena: std.heap.ArenaAllocator = .init(allocator);
             var self = try arena.allocator().create(@This());
             self.arena = arena;
             self.allocator = self.arena.allocator();
-            self.cwd = try std.process.getCwdAlloc(self.allocator);
+            self.cwd = try std.process.currentPathAlloc(io, self.allocator);
+            self.io = io;
             self.indent_level = 0;
             self.indented = false;
             self.close_bracket_stack = .empty;
@@ -2507,11 +2509,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
                 try self.printTxt("const inout = api_translator.inout;\n");
             }
             try self.printTxt("\n");
-            try self.printFmt("const {s} = @cImport({{\n", .{options.c_import});
-            for (options.header_paths) |path| {
-                try self.printFmt("@cInclude(\"{s}\");\n", .{path});
-            }
-            try self.printTxt("}});\n\n");
+            try self.printFmt("const {s} = @import(\"{s}\");\n\n", .{ options.c_import, options.c_import });
         }
 
         const PrintError = std.Io.Writer.Error || std.mem.Allocator.Error;
@@ -2859,11 +2857,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
                 const arg = try self.allocPrint("-D{s}", .{define});
                 try self.append(&argv, arg);
             }
-            const result = try std.process.Child.run(.{
-                .allocator = self.allocator,
-                .argv = argv,
-                .max_output_bytes = 1024 * 1024 * 128,
-            });
+            const result = try std.process.run(self.allocator, self.io, .{ .argv = argv });
             if (result.stderr.len != 0) {
                 std.debug.print("{s}\n", .{result.stderr});
                 return error.Failure;
@@ -2878,7 +2872,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
                     include_path,
                     path,
                 });
-                if (std.fs.accessAbsolute(full_path, .{})) |_| {
+                if (std.Io.Dir.accessAbsolute(self.io, full_path, .{})) |_| {
                     return full_path;
                 } else |_| self.allocator.free(full_path);
             }
