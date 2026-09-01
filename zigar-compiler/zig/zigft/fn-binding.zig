@@ -2420,6 +2420,12 @@ pub const ExecutablePageAllocator = struct {
         .resize = std.heap.PageAllocator.vtable.resize,
         .free = std.heap.PageAllocator.vtable.free,
     };
+    const enable_hints = switch (builtin.target.os.tag) {
+        .openbsd => false,
+        else => true,
+    };
+    const stack_direction = builtin.target.stackGrowth();
+    var addr_hint: ?[*]align(page_size_min) u8 = null;
 
     pub fn map(n: usize, alignment: mem.Alignment) ?[*]u8 {
         const page_size = std.heap.pageSize();
@@ -2474,12 +2480,12 @@ pub const ExecutablePageAllocator = struct {
             }
         }
 
-        const aligned_len = mem.alignForward(usize, n, page_size);
+        const page_aligned_len = mem.alignForward(usize, n, page_size);
         const max_drop_len = alignment_bytes - @min(alignment_bytes, page_size);
-        const overalloc_len = if (max_drop_len <= aligned_len - n)
-            aligned_len
+        const overalloc_len = if (max_drop_len <= page_aligned_len - n)
+            page_aligned_len
         else
-            mem.alignForward(usize, aligned_len + max_drop_len, page_size);
+            mem.alignForward(usize, page_aligned_len + max_drop_len, page_size);
         var map_flags: std.posix.MAP = .{ .TYPE = .PRIVATE, .ANONYMOUS = true };
         if (builtin.target.os.tag.isDarwin()) {
             // set MAP_JIT
@@ -2487,8 +2493,26 @@ pub const ExecutablePageAllocator = struct {
             map_flags_u32 |= 0x0800;
             map_flags = @bitCast(map_flags_u32);
         }
+        const maybe_unaligned_hint, const hint = blk: {
+            if (!enable_hints) break :blk .{ null, null };
+
+            const maybe_unaligned_hint = @atomicLoad(@TypeOf(addr_hint), &addr_hint, .unordered);
+
+            // For the very first mmap, let the kernel pick a good starting address;
+            // we'll begin doing our hinting from there.
+            if (maybe_unaligned_hint == null) break :blk .{ null, null };
+
+            // Aligning hint does not use mem.alignPointer, because it is slow.
+            // Aligning hint does not use mem.alignForward, because it asserts that there will be no overflow.
+            const hint: ?[*]align(page_size_min) u8 = @ptrFromInt(switch (stack_direction) {
+                .down => ((@intFromPtr(maybe_unaligned_hint) -% page_aligned_len) & ~(alignment_bytes - 1)) -% max_drop_len,
+                .up => (@intFromPtr(maybe_unaligned_hint) +% (alignment_bytes - 1)) & ~(alignment_bytes - 1),
+            });
+
+            break :blk .{ maybe_unaligned_hint, hint };
+        };
         const slice = posix.mmap(
-            null,
+            hint,
             overalloc_len,
             .{ .READ = true, .WRITE = true, .EXEC = true },
             map_flags,
@@ -2502,7 +2526,14 @@ pub const ExecutablePageAllocator = struct {
         const drop_len = result_ptr - slice.ptr;
         if (drop_len != 0) posix.munmap(slice[0..drop_len]);
         const remaining_len = overalloc_len - drop_len;
-        if (remaining_len > aligned_len) posix.munmap(@alignCast(result_ptr[aligned_len..remaining_len]));
+        if (remaining_len > page_aligned_len) posix.munmap(@alignCast(result_ptr[page_aligned_len..remaining_len]));
+        if (enable_hints) {
+            const new_hint: [*]align(page_size_min) u8 = @alignCast(result_ptr + switch (stack_direction) {
+                .up => page_aligned_len,
+                .down => 0,
+            });
+            _ = @cmpxchgStrong(@TypeOf(addr_hint), &addr_hint, maybe_unaligned_hint, new_hint, .monotonic, .monotonic);
+        }
         return result_ptr;
     }
 
