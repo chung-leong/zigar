@@ -34,7 +34,10 @@ pub const Function = struct {
         argument_class: *ZigClassEntry = undefined,
         first_arg_class: ?*ZigClassEntry = null,
 
-        pub fn init(self: *@This(), class_obj: *Object, ) !void {
+        pub fn init(
+            self: *@This(),
+            class_obj: *Object,
+        ) !void {
             const class = ZigClassEntry.fromObject(class_obj);
             const thunk_buf = class.instance.template.buffer orelse return error.Unexpected;
             self.thunk_address = @intFromPtr(thunk_buf.bytes.ptr);

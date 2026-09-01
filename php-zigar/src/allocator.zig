@@ -154,8 +154,14 @@ pub const AllocatorStatic = struct {
 
 pub const ExternalAllocator = struct {
     const CallContext = struct {};
+    const vtable: std.mem.Allocator.VTable = .{
+        .alloc = alloc,
+        .free = free,
+        .remap = remap,
+        .resize = resize,
+    };
 
-    pub fn fromValue(value: *Value) !std.mem.Allocator {
+    pub fn fromValue(value: *const Value) !std.mem.Allocator {
         const obj = try php.getValueObject(value);
         return fromObject(obj);
     }
@@ -169,17 +175,24 @@ pub const ExternalAllocator = struct {
         if (allocator_class.host.module.attributes.debug != debug) {
             return .{
                 .ptr = allocator_struct,
-                .vtable = &.{
-                    .alloc = alloc,
-                    .free = free,
-                    .remap = remap,
-                    .resize = resize,
-                },
+                .vtable = &vtable,
             };
         } else {
             const allocator_ptr: *std.mem.Allocator = @ptrCast(@alignCast(allocator_struct.buffer.bytes.ptr));
             return allocator_ptr.*;
         }
+    }
+
+    pub fn toValue(allocator: *const std.mem.Allocator) Value {
+        const ptr: *anyopaque = init: {
+            if (allocator.vtable == &vtable) {
+                const allocator_struct: *structure.Struct = @ptrCast(@alignCast(allocator.ptr));
+                break :init allocator_struct.buffer.bytes.ptr;
+            } else {
+                break :init @constCast(allocator);
+            }
+        };
+        return php.createValuePointer(ptr);
     }
 
     fn invoke(context: *anyopaque, comptime name: []const u8, arg_struct: *ArgStruct(name)) !void {

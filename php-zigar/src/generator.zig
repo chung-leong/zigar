@@ -7,6 +7,7 @@ const CallDispatcher = @import("dispatch.zig").CallDispatcher;
 const failure = @import("failure.zig");
 const php = @import("php.zig");
 const ArgumentIterator = php.ArgumentIterator;
+const ExternalAllocator = @import("./allocator.zig").ExternalAllocator;
 const ExecuteData = php.ExecuteData;
 const Fiber = php.Fiber;
 const Function = php.Function;
@@ -145,7 +146,7 @@ pub const GeneratorStatic = struct {
         yield: Function,
     };
     const CallbackContext = struct {
-        allocator: ?*std.mem.Allocator,
+        allocator: ?std.mem.Allocator,
         argument_class: *ZigClassEntry,
         pointer: Value,
         call_cache: FunctionCallCache,
@@ -156,10 +157,7 @@ pub const GeneratorStatic = struct {
             const attached_allocator = get: {
                 if (generator_struct.getProperty(N("allocator"), null)) |av| {
                     defer php.release(&av);
-                    const allocator_struct = try structure.Struct.fromValue(&av);
-                    const allocator_bytes = try allocator_struct.buffer.data(0, false);
-                    const allocator_ptr: *std.mem.Allocator = @ptrCast(@alignCast(@constCast(allocator_bytes.ptr)));
-                    break :get allocator_ptr;
+                    break :get try ExternalAllocator.fromValue(&av);
                 } else |_| break :get null;
             };
             const callback_value = try generator_struct.getProperty(N("callback"), null);
@@ -172,9 +170,10 @@ pub const GeneratorStatic = struct {
             const arg_name = if (attached_allocator != null) N("2") else N("1");
             const arg_class = try structure.Function.getArgumentClass(&fn_value, arg_name);
             // allocator has to be passed by name
-            const named_params = if (attached_allocator) |a| create: {
+            const named_params = if (attached_allocator) |*a| create: {
                 const ht = php.createArray();
-                const allocator_value = php.createValuePointer(a);
+                const allocator_value = ExternalAllocator.toValue(a);
+                // const allocator_value = php.createValuePointer(@constCast(a));
                 php.setHashEntry(ht, N("allocator"), &allocator_value);
                 break :create ht;
             } else null;
@@ -182,7 +181,7 @@ pub const GeneratorStatic = struct {
             errdefer php.release(&ptr_value);
             return .{
                 .call_cache = try .init(&fn_value),
-                .allocator = attached_allocator orelse extern_allocator,
+                .allocator = attached_allocator orelse if (extern_allocator) |ea| ea.* else null,
                 .argument_class = arg_class,
                 .pointer = ptr_value,
                 .named_params = named_params,
@@ -196,7 +195,7 @@ pub const GeneratorStatic = struct {
         }
 
         pub fn send(self: *@This(), value: *const Value) !Value {
-            if (self.allocator) |a| {
+            if (self.allocator) |*a| {
                 const converted_value = try structure.Function.allocateArgument(a, value, self.argument_class);
                 defer php.release(&converted_value);
                 self.call_cache.useNamedArguments(self.named_params);

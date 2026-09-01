@@ -7,6 +7,7 @@ const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const failure = @import("../failure.zig");
 const Error = failure.Error;
+const ExternalAllocator = @import("../allocator.zig").ExternalAllocator;
 const Generator = @import("../generator.zig").Generator;
 const GeneratorStatic = @import("../generator.zig").GeneratorStatic;
 const ZigObject = @import("../object.zig").ZigObject;
@@ -31,6 +32,7 @@ pub const ArgStruct = struct {
         has_generator: bool = false,
         has_abort_signal: bool = false,
     } align(@alignOf(*anyopaque)) = .{},
+    allocator: std.mem.Allocator = undefined,
     table: Value = undefined,
     buffer: *ByteBuffer = undefined,
 
@@ -320,12 +322,17 @@ pub const ArgStruct = struct {
             }
         }
         ht_ptr.* = args;
+        if (self.flags.has_allocator) {
+            const allocator_member = static.allocator orelse return error.Unexpected;
+            const allocator_value = try allocator_member.accessors.get(self);
+            defer php.release(&allocator_value);
+            self.allocator = try ExternalAllocator.fromValue(&allocator_value);
+        }
     }
 
     fn attachAllocator(self: *@This(), dest_value: *const Value) !void {
         const dest_struct = try structure.Struct.fromValue(dest_value);
-        const allocator = try self.getAllocator();
-        dest_struct.buffer.attachAllcator(allocator);
+        dest_struct.buffer.attachAllcator(&self.allocator);
     }
 
     pub fn hasAsyncCallback(self: *@This()) bool {
@@ -354,8 +361,7 @@ pub const ArgStruct = struct {
         var allocated_obj: *Object = undefined;
         var allocated: Value = undefined;
         if (need_allocated) {
-            const allocator = try self.getAllocator();
-            allocated_obj = try static.retval.class.createObject(allocator, value, false);
+            allocated_obj = try static.retval.class.createObject(&self.allocator, value, false);
             allocated = php.createValueObject(allocated_obj);
         }
         defer if (need_allocated) php.release(&allocated);
@@ -381,7 +387,7 @@ pub const ArgStruct = struct {
     pub fn sendReturnValue(self: *@This(), value: *const Value) !void {
         // don't do anything when a callback function was retrieved
         if (self.flags.has_callback) return;
-        const allocator = if (self.flags.has_allocator) try self.getAllocator() else null;
+        const allocator = if (self.flags.has_allocator) &self.allocator else null;
         if (self.flags.has_promise) {
             self.resolvePromise(value, allocator) catch |err| {
                 const new_err = switch (err) {
@@ -399,17 +405,6 @@ pub const ArgStruct = struct {
                 return php.triggerWarning(new_err);
             };
         }
-    }
-
-    pub fn getAllocator(self: *@This()) !*std.mem.Allocator {
-        const class = ZigClassEntry.fromStructure(self);
-        const static = class.getStaticData(@This());
-        const allocator_member = static.allocator orelse return error.Unexpected;
-        const allocator_value = try allocator_member.accessors.get(self);
-        defer php.release(&allocator_value);
-        const allocator_struct = try structure.Struct.fromValue(&allocator_value);
-        const allocator_bytes = try allocator_struct.buffer.data(0, false);
-        return @ptrCast(@alignCast(@constCast(allocator_bytes.ptr)));
     }
 
     pub fn getSpecialArgument(self: *@This(), comptime T: type) !*structure.Struct {
