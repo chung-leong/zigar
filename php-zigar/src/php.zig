@@ -490,15 +490,27 @@ pub fn createValueNewObject(name: *const String, params: []const Value) !Value {
     const obj = result.value.obj;
     const ctor = obj.*.handlers.*.get_constructor.?(obj);
     if (ctor) |f| {
-        pc.zend_call_known_function(
-            f,
-            obj,
-            obj.*.ce,
-            null,
-            @intCast(params.len),
-            @constCast(params.ptr),
-            null,
-        );
+        switch (@hasDecl(c, "zend_call_known_function_ex")) {
+            true => pc.zend_call_known_function_ex(
+                f,
+                obj,
+                obj.*.ce,
+                null,
+                @intCast(params.len),
+                @constCast(params.ptr),
+                null,
+                0,
+            ),
+            false => pc.zend_call_known_function(
+                f,
+                obj,
+                obj.*.ce,
+                null,
+                @intCast(params.len),
+                @constCast(params.ptr),
+                null,
+            ),
+        }
     }
     return result;
 }
@@ -586,7 +598,18 @@ pub fn createValueStream(strm: *Stream) Value {
 
 pub fn createValueClosure(func: *Function, scope: ?*ClassEntry, called_scope: ?*ClassEntry, this_ptr: ?*const Value) Value {
     var result: Value = undefined;
-    pc.zend_create_closure(&result, func, scope, called_scope, @constCast(this_ptr));
+    const Fn = @TypeOf(c.zend_create_closure);
+    const Arg4 = @typeInfo(Fn).@"fn".params[4].type.?;
+    if (Arg4 == [*c]Object) {
+        // 8.6
+        const obj = if (this_ptr) |ptr|
+            getValueObject(ptr) catch null
+        else
+            null;
+        pc.zend_create_closure(&result, func, scope, called_scope, obj);
+    } else {
+        pc.zend_create_closure(&result, func, scope, called_scope, @constCast(this_ptr));
+    }
     return result;
 }
 
@@ -1249,7 +1272,7 @@ pub fn isObjectFreed(obj: *Object) bool {
 }
 
 pub fn isCallable(callable: *const Value) bool {
-    return pc.zend_is_callable(@constCast(callable), 0, null);
+    return pc.zend_is_callable_ex(@constCast(callable), null, 0, null, null, null);
 }
 
 pub fn invokeMethod(container: ?*const Value, fn_name: *const Value, arguments: []const Value) !Value {
@@ -1376,7 +1399,9 @@ pub fn MethodCallCaches(comptime names: anytype) type {
     };
 }
 
-pub fn emptyArgInfo(comptime count: usize, comptime is_variadic: bool) []const InternalArgInfo {
+const InternalFunctionArgInfo = @typeInfo(@FieldType(c.zend_internal_function, "arg_info")).pointer.child;
+
+pub fn emptyArgInfo(comptime count: usize, comptime is_variadic: bool) []const InternalFunctionArgInfo {
     const len = count + if (is_variadic) 1 else 0;
     const rem = @rem(len, 8);
     if (rem > 0) {
@@ -1386,8 +1411,12 @@ pub fn emptyArgInfo(comptime count: usize, comptime is_variadic: bool) []const I
     } else {
         const ns = struct {
             const array = init: {
-                var buffer: [len]InternalArgInfo = undefined;
-                for (&buffer) |*ptr| ptr.* = .{ .name = "" };
+                var buffer: [len]InternalFunctionArgInfo = undefined;
+                if (InternalFunctionArgInfo == c.zend_arg_info) {
+                    for (&buffer) |*ptr| ptr.* = .{ .name = getStaticString("") }; // 8.6
+                } else {
+                    for (&buffer) |*ptr| ptr.* = .{ .name = "" };
+                }
                 break :init buffer;
             };
         };
@@ -1689,7 +1718,7 @@ pub fn efree(ptr: ?*anyopaque, comptime src: std.builtin.SourceLocation) void {
     switch (comptime argCount(@TypeOf(pc._efree))) {
         5 => pc._efree(ptr, src.file, src.line, null, 0),
         1 => pc._efree(ptr),
-        else => @compileError("Unexpected ptr argument count"),
+        else => @compileError("Unexpected _efree argument count"),
     }
 }
 
@@ -1853,9 +1882,11 @@ pub fn getDescriptor(strm: *Stream) ?c_int {
     if (!isStdIOStream(strm)) return null;
     return inline for (.{ c.PHP_STREAM_AS_FD_FOR_SELECT, c.PHP_STREAM_AS_FD }) |as| {
         var fd: c_int align(@alignOf(*anyopaque)) = undefined;
-        if (pc._php_stream_cast(strm, as, @ptrCast(&fd), 0) == SUCCESS) {
-            break fd;
-        }
+        const result = switch (@hasDecl(c, "_php_stream_cast")) {
+            false => pc.php_stream_cast(strm, as, @ptrCast(&fd), 0),
+            true => pc._php_stream_cast(strm, as, @ptrCast(&fd)),
+        };
+        if (result == SUCCESS) break fd;
     } else null;
 }
 
@@ -1864,23 +1895,35 @@ pub fn close(strm: *Stream, destroy: bool) void {
         true => c.PHP_STREAM_FREE_CLOSE,
         false => c.PHP_STREAM_FREE_KEEP_RSRC | c.PHP_STREAM_FREE_CALL_DTOR | c.PHP_STREAM_FREE_RELEASE_STREAM,
     };
-    _ = pc._php_stream_free(strm, options);
+    _ = switch (@hasDecl(c, "_php_stream_free")) {
+        false => pc.php_stream_free(strm, options), // 8.6
+        true => pc._php_stream_free(strm, options),
+    };
 }
 
 pub fn flush(strm: *Stream) void {
-    _ = pc._php_stream_flush(strm, 0);
+    _ = switch (@hasDecl(c, "_php_stream_flush")) {
+        false => pc.php_stream_flush(strm), // 8.6
+        true => pc._php_stream_flush(strm, 0),
+    };
 }
 
 pub fn read(strm: *Stream, buf: [*]const u8, size: usize) !usize {
-    const r = pc._php_stream_read(strm, @constCast(buf), size);
-    if (r < 0) return error.Failure;
-    return @intCast(r);
+    const result = switch (@hasDecl(c, "_php_stream_read")) {
+        false => pc.php_stream_read(strm, @constCast(buf), size), // 8.6
+        true => pc._php_stream_read(strm, @constCast(buf), size),
+    };
+    if (result < 0) return error.Failure;
+    return @intCast(result);
 }
 
 pub fn write(strm: *Stream, buf: [*]const u8, size: usize) !usize {
-    const w = pc._php_stream_write(strm, buf, size);
-    if (w < 0) return error.Failure;
-    return @intCast(w);
+    const result = switch (@hasDecl(c, "_php_stream_write")) {
+        false => pc.php_stream_write(strm, buf, size), // 8.6
+        true => pc._php_stream_write(strm, buf, size),
+    };
+    if (result < 0) return error.Failure;
+    return @intCast(result);
 }
 
 pub fn seek(strm: *Stream, offset: i64, whence: u32) !void {
@@ -1888,21 +1931,30 @@ pub fn seek(strm: *Stream, offset: i64, whence: u32) !void {
     const flags = get_stream_flags(strm);
     if (ops.seek == null) return error.Unseekable;
     if (flags & c.PHP_STREAM_FLAG_NO_SEEK != 0) return error.Unseekable;
-    const pos = pc._php_stream_seek(strm, offset, @intCast(whence));
-    if (pos < 0) return error.Failure;
+    const pos = switch (@hasDecl(c, "_php_stream_seek")) {
+        false => pc.php_stream_seek(strm, offset, @intCast(whence)), // 8.6
+        true => pc._php_stream_seek(strm, offset, @intCast(whence)),
+    };
+    if (pos < 0) return error.InvalidOffset;
 }
 
 pub fn stat(path: *const String, context: ?*StreamContext, _: std.os.wasi.lookupflags_t, out: *std.os.wasi.filestat_t) !void {
     const p = getStringContent(path);
     var stat_buf: c.php_stream_statbuf = undefined;
-    const result = pc._php_stream_stat_path(p.ptr, 0, &stat_buf, context);
+    const result = switch (@hasDecl(c, "_php_stream_stat_path")) {
+        false => pc.php_stream_stat_path_ex(p.ptr, 0, &stat_buf, context),
+        true => pc._php_stream_stat_path(p.ptr, 0, &stat_buf, context),
+    };
     if (result != SUCCESS) return error.Failure;
     copyStat(&stat_buf.sb, out);
 }
 
 pub fn fstat(strm: *Stream, out: *std.os.wasi.filestat_t) !void {
     var stat_buf: c.php_stream_statbuf = undefined;
-    const result = pc._php_stream_stat(strm, &stat_buf);
+    const result = switch (@hasDecl(c, "_php_stream_stat")) {
+        false => pc.php_stream_stat(strm, &stat_buf), // 8.6
+        true => pc._php_stream_stat(strm, &stat_buf),
+    };
     if (result != SUCCESS) return error.Failure;
     copyStat(&stat_buf.sb, out);
 }
@@ -2001,25 +2053,37 @@ pub fn rename(path: *const String, new_path: *const String, context: ?*StreamCon
 }
 
 pub fn tell(strm: *Stream) !u64 {
-    const pos = pc._php_stream_tell(strm);
+    const pos = switch (@hasDecl(c, "_php_stream_tell")) {
+        false => pc.php_stream_tell(strm), // 8.6
+        true => pc._php_stream_tell(strm),
+    };
     if (pos < 0) return error.Failure;
     return @intCast(pos);
 }
 
 pub fn truncate(strm: *Stream, len: u64) !void {
-    const result = pc._php_stream_truncate_set_size(strm, @intCast(len));
+    const result = switch (@hasDecl(c, "_php_stream_truncate_set_size")) {
+        false => pc.php_stream_truncate_set_size(strm, @intCast(len)), // 8.6
+        true => pc._php_stream_truncate_set_size(strm, @intCast(len)),
+    };
     if (result != 0) return error.Failure;
 }
 
 pub fn mkdir(path: *const String, mode: u32, context: ?*StreamContext) !void {
     const p = getStringContent(path);
-    const result = pc._php_stream_mkdir(p.ptr, @intCast(mode), 0, context);
+    const result = switch (@hasDecl(c, "_php_stream_mkdir")) {
+        false => pc.php_stream_mkdir(p.ptr, @intCast(mode), 0, context), // 8.6
+        true => pc._php_stream_mkdir(p.ptr, @intCast(mode), 0, context),
+    };
     if (result == 0) return error.Failure;
 }
 
 pub fn rmdir(path: *const String, context: ?*StreamContext) !void {
     const p = getStringContent(path);
-    const result = pc._php_stream_rmdir(p.ptr, 0, context);
+    const result = switch (@hasDecl(c, "_php_stream_rmdir")) {
+        false => pc.php_stream_rmdir(p.ptr, 0, context), // 8.6
+        true => pc._php_stream_rmdir(p.ptr, 0, context),
+    };
     if (result == 0) return error.Failure;
 }
 
@@ -2034,52 +2098,54 @@ pub fn opendir(path: *String, options: c_int, context: ?*StreamContext) !*Stream
 }
 
 pub fn readdir(strm: *Stream, ent: *DirEntry) bool {
-    return pc._php_stream_readdir(strm, ent) != null;
+    const result = switch (@hasDecl(c, "_php_stream_readdir")) {
+        false => pc.php_stream_readdir(strm, ent), // 8.6
+        true => pc.php_stream_readdir(strm, ent),
+    };
+    return result != null;
 }
 
 pub fn closedir(strm: *Stream) void {
-    _ = pc.php_stream_free(strm, c.PHP_STREAM_FREE_CLOSE);
+    close(strm, true);
 }
 
 pub fn copyFileRange(in_strm: *Stream, out_strm: *Stream, in_offset: ?*i64, out_offset: ?*i64, len: u64) !u32 {
-    var original_in_pos: i64 = 0;
-    var original_out_pos: i64 = 0;
-    var copied: i64 = 0;
+    var original_in_pos: u64 = 0;
+    var original_out_pos: u64 = 0;
+    var copied: usize = 0;
     if (in_offset) |ptr| {
         const new_in_pos = ptr.*;
-        original_in_pos = pc._php_stream_tell(in_strm);
+        original_in_pos = try tell(in_strm);
         if (original_in_pos < 0) return error.Failure;
         if (original_in_pos != new_in_pos) {
-            const pos = pc._php_stream_seek(in_strm, @intCast(new_in_pos), c.SEEK_SET);
-            if (pos < 0) return error.InvalidOffset;
+            try seek(in_strm, new_in_pos, c.SEEK_SET);
         }
     }
     if (out_offset) |ptr| {
         const new_out_pos = ptr.*;
-        original_out_pos = pc._php_stream_tell(out_strm);
+        original_out_pos = try tell(out_strm);
         if (original_out_pos < 0) return error.Failure;
         if (original_out_pos != new_out_pos) {
-            const pos = pc._php_stream_seek(out_strm, @intCast(new_out_pos), c.SEEK_SET);
-            if (pos < 0) return error.InvalidOffset;
+            try seek(out_strm, new_out_pos, c.SEEK_SET);
         }
     }
     var buf: [8192]u8 = undefined;
     var remaining = len;
     while (remaining > 0) {
-        const bytes_read = pc._php_stream_read(in_strm, &buf, @min(remaining, buf.len));
+        const bytes_read = try read(in_strm, &buf, @min(remaining, buf.len));
         if (bytes_read == 0) break;
-        const written = pc._php_stream_write(out_strm, &buf, @intCast(bytes_read));
+        const written = try write(out_strm, &buf, @intCast(bytes_read));
         if (written < 0) return error.Failure;
         copied += bytes_read;
         remaining -= @intCast(bytes_read);
     }
     if (in_offset) |ptr| {
-        ptr.* += copied;
-        _ = pc._php_stream_seek(in_strm, original_in_pos, c.SEEK_SET);
+        ptr.* += @intCast(copied);
+        try seek(in_strm, @intCast(original_in_pos), c.SEEK_SET);
     }
     if (out_offset) |ptr| {
-        ptr.* += copied;
-        _ = pc._php_stream_seek(out_strm, original_out_pos, c.SEEK_SET);
+        ptr.* += @intCast(copied);
+        try seek(out_strm, @intCast(original_out_pos), c.SEEK_SET);
     }
     return @intCast(copied);
 }
@@ -2115,13 +2181,19 @@ pub fn getStreamWrapperProperty(strm: *Stream, name: *String) ?Value {
 pub fn setBlocking(strm: *Stream, set: bool) !void {
     const id = c.PHP_STREAM_OPTION_BLOCKING;
     const value: c_int = if (set) 1 else 0;
-    const result = pc._php_stream_set_option(strm, id, value, null);
+    const result = switch (@hasDecl(c, "_php_stream_set_option")) {
+        false => pc.php_stream_set_option(strm, id, value, null), // 8.6
+        true => pc._php_stream_set_option(strm, id, value, null),
+    };
     if (result < 0) return error.Failure;
 }
 
 pub fn setLock(strm: *Stream, lock_type: c_int) !void {
     const id = c.PHP_STREAM_OPTION_LOCKING;
-    const result = pc._php_stream_set_option(strm, id, lock_type, null);
+    const result = switch (@hasDecl(c, "_php_stream_set_option")) {
+        false => pc.php_stream_set_option(strm, id, lock_type, null), // 8.6
+        true => pc._php_stream_set_option(strm, id, lock_type, null),
+    };
     if (result != SUCCESS) return error.Failure;
 }
 

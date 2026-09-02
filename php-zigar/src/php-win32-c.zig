@@ -74,6 +74,7 @@ const ZendFastCall = enum {
 };
 
 fn Ptr(comptime name: []const u8) type {
+    if (!@hasDecl(c, name)) return void;
     const T = @TypeOf(@field(c, name));
     if (@hasField(ZendFastCall, name)) {
         const info = @typeInfo(T).@"fn";
@@ -115,8 +116,8 @@ pub var _php_stream_readdir: Ptr("_php_stream_readdir") = undefined;
 pub var _php_stream_rmdir: Ptr("_php_stream_rmdir") = undefined;
 pub var _php_stream_seek: Ptr("_php_stream_seek") = undefined;
 pub var _php_stream_set_option: Ptr("_php_stream_set_option") = undefined;
-pub var _php_stream_stat_path: Ptr("_php_stream_stat_path") = undefined;
 pub var _php_stream_stat: Ptr("_php_stream_stat") = undefined;
+pub var _php_stream_stat_path: Ptr("_php_stream_stat_path") = undefined;
 pub var _php_stream_tell: Ptr("_php_stream_tell") = undefined;
 pub var _php_stream_truncate_set_size: Ptr("_php_stream_truncate_set_size") = undefined;
 pub var _php_stream_write: Ptr("_php_stream_write") = undefined;
@@ -167,6 +168,7 @@ pub var tsrm_get_ls_cache: switch (@hasDecl(c, "ZTS")) {
 pub var zend_atol: Ptr("zend_atol") = undefined;
 pub var zend_call_function: Ptr("zend_call_function") = undefined;
 pub var zend_call_known_function: Ptr("zend_call_known_function") = undefined;
+pub var zend_call_known_function_ex: Ptr("zend_call_known_function_ex") = undefined;
 pub var zend_ce_aggregate: Ptr("zend_ce_aggregate") = undefined;
 pub var zend_ce_arrayaccess: Ptr("zend_ce_arrayaccess") = undefined;
 pub var zend_ce_countable: Ptr("zend_ce_countable") = undefined;
@@ -207,7 +209,7 @@ pub var zend_hash_str_find: Ptr("zend_hash_str_find") = undefined;
 pub var zend_hash_str_update: Ptr("zend_hash_str_update") = undefined;
 pub var zend_hash_update: Ptr("zend_hash_update") = undefined;
 pub var zend_initialize_class_data: Ptr("zend_initialize_class_data") = undefined;
-pub var zend_is_callable: Ptr("zend_is_callable") = undefined;
+pub var zend_is_callable_ex: Ptr("zend_is_callable_ex") = undefined;
 pub var zend_is_valid_class_name: Ptr("zend_is_valid_class_name") = undefined;
 pub var zend_iterator_dtor: Ptr("zend_iterator_dtor") = undefined;
 pub var zend_iterator_init: Ptr("zend_iterator_init") = undefined;
@@ -232,6 +234,27 @@ pub var zend_throw_exception_object: Ptr("zend_throw_exception_object") = undefi
 pub var zend_trace_to_string: Ptr("zend_trace_to_string") = undefined;
 pub var zend_unregister_ini_entries: Ptr("zend_unregister_ini_entries") = undefined;
 pub var zval_ptr_dtor: Ptr("zval_ptr_dtor") = undefined;
+
+// renamed functions in 8.6
+fn PtrNew(comptime name: []const u8) type {
+    if (@hasDecl(c, name)) return void;
+    return Ptr(name[1..]);
+}
+
+pub var php_stream_cast: PtrNew("_php_stream_cast") = undefined;
+pub var php_stream_flush: PtrNew("_php_stream_flush") = undefined;
+pub var php_stream_free: PtrNew("_php_stream_free") = undefined;
+pub var php_stream_mkdir: PtrNew("_php_stream_mkdir") = undefined;
+pub var php_stream_read: PtrNew("_php_stream_read") = undefined;
+pub var php_stream_readdir: PtrNew("_php_stream_readdir") = undefined;
+pub var php_stream_rmdir: PtrNew("_php_stream_rmdir") = undefined;
+pub var php_stream_seek: PtrNew("_php_stream_seek") = undefined;
+pub var php_stream_set_option: PtrNew("_php_stream_set_option") = undefined;
+pub var php_stream_stat: PtrNew("_php_stream_stat") = undefined;
+pub var php_stream_stat_path_ex: Ptr("php_stream_stat_path_ex") = undefined;
+pub var php_stream_tell: PtrNew("_php_stream_tell") = undefined;
+pub var php_stream_truncate_set_size: PtrNew("_php_stream_truncate_set_size") = undefined;
+pub var php_stream_write: PtrNew("_php_stream_write") = undefined;
 
 pub fn zend_string_release(arg_s: [*c]c.zend_string) callconv(.c) void {
     var s = arg_s;
