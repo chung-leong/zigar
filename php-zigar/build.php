@@ -53,7 +53,7 @@ class Settings {
 
     function save() {
         $lines = [];
-        $versions = [ '8.1', '8.2', '8.3', '8.4', '8.5' ];
+        $versions = [ '8.1', '8.2', '8.3', '8.4', '8.5', '8.6' ];
         foreach ($versions as $version) {
             $prefix = in_array($version, $this->versions) ? '' : '; ';
             $lines[] = $prefix . "versions[] = $version";
@@ -93,6 +93,7 @@ $menu = (new CliMenuBuilder)
             '8.3' => "8.3.x",
             '8.4' => "8.4.x", 
             '8.5' => "8.5.x",
+            '8.6' => "8.6.x",
         ];
         $cb = function($menu) use($versions, $settings) {
             $item = $menu->getSelectedItem();
@@ -224,6 +225,19 @@ foreach ($settings->versions as $version) {
                     echo "Unable to scan PHP download directory\n";
                     exit(1);
                 }
+            }
+            if (!isset($links[$version])) {
+                $dir_url = "https://downloads.php.net/~windows/qa/";
+                $dir_contents = file_get_contents($dir_url);
+                $qa_links = [];
+                // https://downloads.php.net/~windows/qa/php-8.6.0beta2-nts-Win32-vs18-x64.zip                
+                if (preg_match_all('/href="(php-devel\-pack\-(8\.\d)\.\d+(\w+)-nts\-.*?\-x64\.zip)"/', $dir_contents, $matches, PREG_SET_ORDER)) {
+                    foreach ($matches as $m) {
+                        $qa_links[$m[2]] = $dir_url . $m[1];
+                    }
+                }
+                $links = array_merge($qa_links, $links);
+                print_r($links);
             }
             $link = $links[$version];
             if (!in_array('https', stream_get_wrappers())) {
