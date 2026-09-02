@@ -150,7 +150,7 @@ pub const GeneratorStatic = struct {
         argument_class: *ZigClassEntry,
         pointer: Value,
         call_cache: FunctionCallCache,
-        named_params: ?*HashTable,
+        named_params: ?*HashTable = null,
 
         pub fn init(generator: *const Value, extern_allocator: ?*std.mem.Allocator) !@This() {
             const generator_struct = try structure.Struct.fromValue(generator);
@@ -169,14 +169,6 @@ pub const GeneratorStatic = struct {
             // argument; the value argument is therefore "2" instead of "1"
             const arg_name = if (attached_allocator != null) N("2") else N("1");
             const arg_class = try structure.Function.getArgumentClass(&fn_value, arg_name);
-            // allocator has to be passed by name
-            const named_params = if (attached_allocator) |*a| create: {
-                const ht = php.createArray();
-                const allocator_value = ExternalAllocator.toValue(a);
-                // const allocator_value = php.createValuePointer(@constCast(a));
-                php.setHashEntry(ht, N("allocator"), &allocator_value);
-                break :create ht;
-            } else null;
             const ptr_value = try generator_struct.getProperty(N("ptr"), null);
             errdefer php.release(&ptr_value);
             return .{
@@ -184,7 +176,6 @@ pub const GeneratorStatic = struct {
                 .allocator = attached_allocator orelse if (extern_allocator) |ea| ea.* else null,
                 .argument_class = arg_class,
                 .pointer = ptr_value,
-                .named_params = named_params,
             };
         }
 
@@ -198,7 +189,15 @@ pub const GeneratorStatic = struct {
             if (self.allocator) |*a| {
                 const converted_value = try structure.Function.allocateArgument(a, value, self.argument_class);
                 defer php.release(&converted_value);
-                self.call_cache.useNamedArguments(self.named_params);
+                // allocator has to be passed by name
+                const named_params = self.named_params orelse create: {
+                    const ht = php.createArray();
+                    const allocator_value = ExternalAllocator.toValue(a);
+                    php.setHashEntry(ht, N("allocator"), &allocator_value);
+                    self.named_params = ht;
+                    break :create ht;
+                };
+                self.call_cache.useNamedArguments(named_params);
                 const result = try self.call_cache.invoke(&.{ self.pointer, converted_value });
                 try structure.Function.externalizeArgument(a, &converted_value);
                 return result;
