@@ -77,7 +77,11 @@ class Settings {
             $lines[] = $prefix . "optimize = $mode";
         }
         $lines[] = "";
-        file_put_contents($this->ini_path, join(PHP_EOL, $lines));
+        $contents = join(PHP_EOL, $lines);
+        $old_contents = @file_get_contents($this->ini_path);
+        if ($contents != $old_contents) {
+            file_put_contents($this->ini_path, $contents);
+        }
     }
 }
 
@@ -168,7 +172,12 @@ $menu = (new CliMenuBuilder)
         }
     })
     ->addLineBreak('-')
-    ->addItem('Build', function($menu) use(&$build) {
+    ->addItem('Build', function($menu) use(&$build, $settings) {
+        if ($settings->debug && $settings->optimize != 'Debug') {
+            $flash = $menu->flash("Unable to build debug version optimized for release");
+            $flash->display();
+            return;
+        }
         $build = true;
         $menu->close();
     })
@@ -191,6 +200,7 @@ switch ($action) {
             exit(1);
         }
         $menu->open();
+        $settings->save();
         break;
     default:
         echo "Unknown action: $action\n";
@@ -198,9 +208,12 @@ switch ($action) {
 }
 if (!$build) exit(0);
 
-$settings->save();
 $results = [];
 $links = [];
+if ($settings->debug && $settings->optimize != 'Debug') {
+    echo "Unable to build debug version at optimization level \"$settings->optimize\"\n";
+    exit(1);
+}
 foreach ($settings->versions as $version) {
     foreach ($settings->targets as $target) {
         if (str_ends_with($target, '-ts')) {
