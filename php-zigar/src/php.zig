@@ -1884,7 +1884,7 @@ pub fn getDescriptor(strm: *Stream) ?c_int {
         var fd: c_int align(@alignOf(*anyopaque)) = undefined;
         const result = switch (@hasDecl(c, "_php_stream_cast")) {
             false => pc.php_stream_cast(strm, as, @ptrCast(&fd), 0),
-            true => pc._php_stream_cast(strm, as, @ptrCast(&fd)),
+            true => pc._php_stream_cast(strm, as, @ptrCast(&fd), 0),
         };
         if (result == SUCCESS) break fd;
     } else null;
@@ -2100,7 +2100,7 @@ pub fn opendir(path: *String, options: c_int, context: ?*StreamContext) !*Stream
 pub fn readdir(strm: *Stream, ent: *DirEntry) bool {
     const result = switch (@hasDecl(c, "_php_stream_readdir")) {
         false => pc.php_stream_readdir(strm, ent), // 8.6
-        true => pc.php_stream_readdir(strm, ent),
+        true => pc._php_stream_readdir(strm, ent),
     };
     return result != null;
 }

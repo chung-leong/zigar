@@ -76,26 +76,30 @@ const ZendFastCall = enum {
 fn Ptr(comptime name: []const u8) type {
     if (!@hasDecl(c, name)) return void;
     const T = @TypeOf(@field(c, name));
-    if (@hasField(ZendFastCall, name)) {
-        const info = @typeInfo(T).@"fn";
-        var param_types: [info.params.len]type = undefined;
-        var param_attrs: [info.params.len]std.builtin.Type.Fn.Param.Attributes = undefined;
-        for (info.params, 0..) |param, i| {
-            param_types[i] = param.type.?;
-            param_attrs[i] = .{};
-        }
-        const attrs: std.builtin.Type.Fn.Attributes = .{
-            .@"callconv" = switch (builtin.target.cpu.arch) {
-                .x86_64 => .{ .x86_64_vectorcall = .{} },
-                .x86 => .{ .x86_vectorcall = .{} },
-                else => .c,
-            },
-        };
-        const F = @Fn(&param_types, &param_attrs, info.return_type.?, attrs);
-        return *const F;
-    } else {
-        return *const T;
+    switch (@typeInfo(T)) {
+        .@"fn" => |f| {
+            if (f.calling_convention == .@"inline") return void;
+            if (@hasField(ZendFastCall, name)) {
+                var param_types: [f.params.len]type = undefined;
+                var param_attrs: [f.params.len]std.builtin.Type.Fn.Param.Attributes = undefined;
+                for (f.params, 0..) |param, i| {
+                    param_types[i] = param.type.?;
+                    param_attrs[i] = .{};
+                }
+                const attrs: std.builtin.Type.Fn.Attributes = .{
+                    .@"callconv" = switch (builtin.target.cpu.arch) {
+                        .x86_64 => .{ .x86_64_vectorcall = .{} },
+                        .x86 => .{ .x86_vectorcall = .{} },
+                        else => .c,
+                    },
+                };
+                const F = @Fn(&param_types, &param_attrs, f.return_type.?, attrs);
+                return *const F;
+            }
+        },
+        else => {},
     }
+    return *const T;
 }
 
 pub var __zend_malloc: Ptr("__zend_malloc") = undefined;
