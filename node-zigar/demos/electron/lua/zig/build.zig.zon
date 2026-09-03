@@ -16,8 +16,8 @@
     // internet connectivity.
     .dependencies = .{
         .zlua = .{
-            .url = "https://github.com/natecraddock/ziglua/archive/refs/heads/zig-0.15.2.zip",
-            .hash = "zlua-0.1.0-hGRpCxFDBQBTLH7HYIvzCfvr_8xFE6kqLzLFxkcgdWNl",
+            .url = "https://github.com/natecraddock/ziglua/archive/refs/tags/0.7.0.zip",
+            .hash = "zlua-0.1.0-hGRpC1mUBQCNQf4CnmRTM4I7gxE3YpCvZ-p2EarlcyER",
         },
     },
     .paths = .{
