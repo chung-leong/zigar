@@ -72,7 +72,10 @@ pub const ModuleHost = struct {
         var lib: DynLib = try DynLib.open(path);
         errdefer lib.close();
         const module = lib.lookup(*Module, "zig_module") orelse return error.MissingSymbol;
-        if (module.version != Module.current_version) return error.IncorrectVersion;
+        if (module.revision != Module.current_revision) return error.IncorrectVersion;
+        if (module.attributes.persistent) {
+            try lib.retain();
+        }
         var self: *@This() = try php.allocator.create(@This());
         errdefer php.allocator.destroy(self);
         const cache_mask = std.hash.CityHash64.hash(std.mem.asBytes(&prev_cache_mask));

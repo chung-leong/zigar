@@ -15,20 +15,21 @@ pub const Jscall = extern struct {
 
 pub fn Module(comptime Value: type) type {
     return extern struct {
-        version: u32 = current_version,
+        revision: u32 = current_revision,
         attributes: Attributes,
         module_path: [*:0]const u8,
         imports: *Imports,
         exports: *const Exports,
 
-        pub const current_version = 7;
+        pub const current_revision = 8;
         pub const Attributes = packed struct(u32) {
             little_endian: bool,
             runtime_safety: bool,
             libc: bool,
             io_redirection: bool,
             debug: bool,
-            _: u27 = 0,
+            persistent: bool,
+            _: u26 = 0,
         };
         pub const Imports = extern struct { // vtable that's filled by the addon
             create_bool: *const fn (*Host, bool, *Value) callconv(.c) E,

@@ -358,7 +358,7 @@ const ModuleHost = struct {
         var lib = try DynLib.open(path_s);
         errdefer lib.close();
         const module = lib.lookup(*Module, "zig_module") orelse return error.MissingSymbol;
-        if (module.version != Module.current_version) return error.IncorrectVersion;
+        if (module.revision != Module.current_revision) return error.IncorrectVersion;
         self.module = module;
         self.base_address = get: {
             switch (builtin.target.os.tag) {

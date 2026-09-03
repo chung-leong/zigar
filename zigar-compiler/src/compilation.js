@@ -147,7 +147,8 @@ export function formatProjectConfig(config) {
   const fields = [
     'moduleName', 'modulePath', 'moduleDir', 'outputPath', 'pdbPath', 'zigarSrcPath',
     'cHeaderPath', 'useLibc', 'useLLVM', 'usePthreadEmulation', 'useRedirection', 'isWASM',
-    'multithreaded', 'stackSize', 'maxMemory', 'evalBranchQuota', 'omitFunctions', 'omitVariables',
+    'multithreaded', 'persistent', 'stackSize', 'maxMemory', 'evalBranchQuota', 'omitFunctions',
+    'omitVariables',
   ];
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
@@ -223,6 +224,7 @@ export async function createConfig(srcPath, modPath, options = {}) {
     zigPath = 'zig',
     zigArgs: zigArgsStr = '',
     multithreaded = (isWASM) ? false : true,
+    persistent = false,
     stackSize = 256 * 1024,
     maxMemory = (isWASM && multithreaded) ? 64 * 1024 * 1024 : undefined,
     evalBranchQuota = 2000000,
@@ -339,6 +341,7 @@ export async function createConfig(srcPath, modPath, options = {}) {
     usePthreadEmulation,
     isWASM,
     multithreaded,
+    persistent,
     stackSize,
     maxMemory,
     evalBranchQuota,

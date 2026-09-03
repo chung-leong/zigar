@@ -416,6 +416,7 @@ pub fn createModule(comptime module_ns: type) Module {
             .libc = builtin.link_libc,
             .io_redirection = exporter.options.use_redirection,
             .debug = builtin.mode == .Debug,
+            .persistent = exporter.options.persistent,
         },
         .module_path = switch (builtin.mode) {
             .Debug => exporter.options.module_path.ptr,
@@ -450,7 +451,7 @@ test "createModule" {
         }
     };
     const m = createModule(Test);
-    try expectEqual(4, m.version);
+    try expectEqual(Module.current_revision, m.revision);
     try expectEqual((builtin.target.cpu.arch.endian() == .little), m.attributes.little_endian);
 }
 

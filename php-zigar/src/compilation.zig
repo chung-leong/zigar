@@ -186,6 +186,7 @@ pub const ZigCompiler = struct {
             .use_redirection,
             .is_wasm,
             .multithreaded,
+            .persistent,
             .stack_size,
             .max_memory,
             .eval_branch_quota,

@@ -31,6 +31,7 @@ pub const Options = struct {
     omit_functions: bool = false,
     omit_variables: bool = false,
     multithreaded: bool = true,
+    persistent: bool = false,
     use_libc: bool = true,
     use_llvm: ?bool = null,
     use_redirection: bool = true,

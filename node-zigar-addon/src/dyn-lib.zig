@@ -73,6 +73,25 @@ pub const DynLib = struct {
         };
         return @ptrCast(@alignCast(@constCast(ptr)));
     }
+
+    pub fn retain(self: *@This()) !void {
+        const success = switch (builtin.target.os.tag) {
+            .windows => set: {
+                var unused: c.HMODULE = undefined;
+                const result = c.GetModuleHandleExA(c.GET_MODULE_HANDLE_EX_FLAG_PIN, self.path, &unused);
+                break :set result == c.TRUE;
+            },
+            else => set: {
+                var flags: u32 = c.RTLD_LAZY | c.RTLD_NODELETE | c.RTLD_NOLOAD;
+                if (@hasDecl(c, "RTLD_DEEPBIND")) {
+                    flags |= c.RTLD_DEEPBIND;
+                }
+                const result = std.c.dlopen(self.path, @bitCast(flags));
+                break :set result != null;
+            },
+        };
+        if (!success) return error.UnableToRetainLibrary;
+    }
 };
 
 pub fn fixEnvironment() void {
