@@ -375,16 +375,17 @@ fn Factory(comptime host: type, comptime module: type) type {
                 // define the shape so that static members can be instances of the structure
                 try host.beginStructure(structure);
                 // add static variables and functions, excluding internal util and problematic namespaces
-                const ignore = switch (T) {
-                    std.Io.File, std.Io.Dir => true,
-                    else => comptime util.getInternalType(T) != null,
-                };
-                if (!ignore) {
-                    try setProperties(static, .{
-                        .members = try self.getStaticMembers(T),
-                        .template = try self.getStaticTemplate(T),
-                    });
-                }
+                const type_name = @typeName(T);
+                const ignore = comptime if (std.mem.startsWith(u8, type_name, "Io."))
+                    true
+                else if (std.mem.eql(u8, type_name, "Io"))
+                    true
+                else
+                    util.getInternalType(T) != null;
+                try setProperties(static, .{
+                    .members = try self.getStaticMembers(T, ignore),
+                    .template = try self.getStaticTemplate(T, ignore),
+                });
                 // indicate that structure is complete
                 try host.finishStructure(structure);
                 break :result structure;
@@ -760,60 +761,62 @@ fn Factory(comptime host: type, comptime module: type) type {
             return try host.createTemplate(memory, slots);
         }
 
-        fn getStaticMembers(self: @This(), comptime T: type) !?Value {
+        fn getStaticMembers(self: @This(), comptime T: type, comptime ignore_decl: bool) !?Value {
             comptime var offset: usize = 0;
             const list = try createList(.{});
-            switch (@typeInfo(T)) {
-                .@"struct", .@"union", .@"enum", .@"opaque" => if (comptime !arg_struct.is(T, null) and !slice.is(T)) {
-                    const DeclEnum = std.meta.DeclEnum(T);
-                    inline for (comptime std.meta.declarations(T), 0..) |decl, index| {
-                        if (comptime std.mem.startsWith(u8, decl.name, "meta(")) continue;
-                        const decl_enum = comptime std.meta.stringToEnum(DeclEnum, decl.name).?;
-                        const decl_ptr = &@field(T, decl.name);
-                        const PT = @TypeOf(decl_ptr);
-                        if (comptime supported.is(PT)) {
-                            const decl_value = decl_ptr.*;
-                            const DT = @TypeOf(decl_value);
-                            // export type only if it's supported
-                            const is_value_supported = switch (DT) {
-                                type => supported.is(decl_value),
-                                else => true,
-                            };
-                            const should_export = if (is_value_supported) switch (@typeInfo(DT)) {
-                                .@"fn" => !options.omit_functions,
-                                else => !options.omit_variables or @typeInfo(PT).pointer.is_const,
-                            } else false;
-                            if (should_export) {
-                                checkStaticMember(DT);
-                                const can_be_string = comptime canBeString(DT);
-                                const is_string = comptime can_be_string and meta.call("isDeclString", .{ T, decl_enum });
-                                const can_be_clamped_array = comptime !is_string and canBeClampedArray(DT);
-                                const is_clamped_array = comptime can_be_clamped_array and meta.call("isDeclClampedArray", .{ T, decl_enum });
-                                const can_be_typed_array = comptime !is_string and !is_clamped_array and canBeTypedArray(DT);
-                                const is_typed_array = comptime can_be_typed_array and meta.call("isDeclTypedArray", .{ T, decl_enum });
-                                const can_be_plain = comptime !is_string and !is_typed_array and !is_clamped_array and canBePlain(DT);
-                                const is_plain = comptime can_be_plain and meta.call("isDeclPlain", .{ T, decl_enum });
-                                try appendList(list, .{
-                                    .name = decl.name,
-                                    .type = MemberType.object,
-                                    .flags = MemberFlags{
-                                        .is_read_only = @typeInfo(PT).pointer.is_const,
-                                        .is_method = method.is(T, DT, false),
-                                        .is_expecting_instance = method.is(T, DT, true),
-                                        .is_string = is_string,
-                                        .is_plain = is_plain,
-                                        .is_typed_array = is_typed_array,
-                                        .is_clamped_array = is_clamped_array,
-                                    },
-                                    .slot = index,
-                                    .structure = try self.getStructure(DT),
-                                });
+            if (!ignore_decl) {
+                switch (@typeInfo(T)) {
+                    .@"struct", .@"union", .@"enum", .@"opaque" => if (comptime !arg_struct.is(T, null) and !slice.is(T)) {
+                        const DeclEnum = std.meta.DeclEnum(T);
+                        inline for (comptime std.meta.declarations(T), 0..) |decl, index| {
+                            if (comptime std.mem.startsWith(u8, decl.name, "meta(")) continue;
+                            const decl_enum = comptime std.meta.stringToEnum(DeclEnum, decl.name).?;
+                            const decl_ptr = &@field(T, decl.name);
+                            const PT = @TypeOf(decl_ptr);
+                            if (comptime supported.is(PT)) {
+                                const decl_value = decl_ptr.*;
+                                const DT = @TypeOf(decl_value);
+                                // export type only if it's supported
+                                const is_value_supported = switch (DT) {
+                                    type => supported.is(decl_value),
+                                    else => true,
+                                };
+                                const should_export = if (is_value_supported) switch (@typeInfo(DT)) {
+                                    .@"fn" => !options.omit_functions,
+                                    else => !options.omit_variables or @typeInfo(PT).pointer.is_const,
+                                } else false;
+                                if (should_export) {
+                                    checkStaticMember(DT);
+                                    const can_be_string = comptime canBeString(DT);
+                                    const is_string = comptime can_be_string and meta.call("isDeclString", .{ T, decl_enum });
+                                    const can_be_clamped_array = comptime !is_string and canBeClampedArray(DT);
+                                    const is_clamped_array = comptime can_be_clamped_array and meta.call("isDeclClampedArray", .{ T, decl_enum });
+                                    const can_be_typed_array = comptime !is_string and !is_clamped_array and canBeTypedArray(DT);
+                                    const is_typed_array = comptime can_be_typed_array and meta.call("isDeclTypedArray", .{ T, decl_enum });
+                                    const can_be_plain = comptime !is_string and !is_typed_array and !is_clamped_array and canBePlain(DT);
+                                    const is_plain = comptime can_be_plain and meta.call("isDeclPlain", .{ T, decl_enum });
+                                    try appendList(list, .{
+                                        .name = decl.name,
+                                        .type = MemberType.object,
+                                        .flags = MemberFlags{
+                                            .is_read_only = @typeInfo(PT).pointer.is_const,
+                                            .is_method = method.is(T, DT, false),
+                                            .is_expecting_instance = method.is(T, DT, true),
+                                            .is_string = is_string,
+                                            .is_plain = is_plain,
+                                            .is_typed_array = is_typed_array,
+                                            .is_clamped_array = is_clamped_array,
+                                        },
+                                        .slot = index,
+                                        .structure = try self.getStructure(DT),
+                                    });
+                                }
                             }
+                            offset += 1;
                         }
-                        offset += 1;
-                    }
-                },
-                else => {},
+                    },
+                    else => {},
+                }
             }
             // add implicit static members
             switch (@typeInfo(T)) {
@@ -845,43 +848,45 @@ fn Factory(comptime host: type, comptime module: type) type {
             return list;
         }
 
-        fn getStaticTemplate(self: @This(), comptime T: type) !?Value {
+        fn getStaticTemplate(self: @This(), comptime T: type, comptime ignore_decl: bool) !?Value {
             comptime var offset: usize = 0;
             var slots: ?Value = null;
-            switch (@typeInfo(T)) {
-                .@"struct", .@"union", .@"enum", .@"opaque" => if (comptime !arg_struct.is(T, null)) {
-                    inline for (comptime std.meta.declarations(T), 0..) |decl, index| {
-                        if (comptime std.mem.startsWith(u8, decl.name, "meta(")) continue;
-                        const decl_ptr = &@field(T, decl.name);
-                        const PT = @TypeOf(decl_ptr);
-                        if (comptime supported.is(PT)) {
-                            const decl_value = decl_ptr.*;
-                            const DT = @TypeOf(decl_value);
-                            const is_value_supported = switch (DT) {
-                                type => supported.is(decl_value),
-                                else => true,
-                            };
-                            const should_export = if (is_value_supported) switch (@typeInfo(DT)) {
-                                .@"fn" => !options.omit_functions,
-                                else => !options.omit_variables or @typeInfo(PT).pointer.is_const,
-                            } else false;
-                            if (should_export) {
-                                const target_ptr = comptime switch (@typeInfo(DT)) {
-                                    .@"fn" => |f| switch (f.calling_convention) {
-                                        .@"inline" => &fn_transform.uninline(decl_value),
-                                        else => decl_ptr,
-                                    },
-                                    else => decl_ptr,
+            if (!ignore_decl) {
+                switch (@typeInfo(T)) {
+                    .@"struct", .@"union", .@"enum", .@"opaque" => if (comptime !arg_struct.is(T, null)) {
+                        inline for (comptime std.meta.declarations(T), 0..) |decl, index| {
+                            if (comptime std.mem.startsWith(u8, decl.name, "meta(")) continue;
+                            const decl_ptr = &@field(T, decl.name);
+                            const PT = @TypeOf(decl_ptr);
+                            if (comptime supported.is(PT)) {
+                                const decl_value = decl_ptr.*;
+                                const DT = @TypeOf(decl_value);
+                                const is_value_supported = switch (DT) {
+                                    type => supported.is(decl_value),
+                                    else => true,
                                 };
-                                const value_obj = try self.exportPointerTarget(target_ptr, true);
-                                if (slots == null) slots = try host.createObject();
-                                try host.setSlotValue(slots.?, index, value_obj);
+                                const should_export = if (is_value_supported) switch (@typeInfo(DT)) {
+                                    .@"fn" => !options.omit_functions,
+                                    else => !options.omit_variables or @typeInfo(PT).pointer.is_const,
+                                } else false;
+                                if (should_export) {
+                                    const target_ptr = comptime switch (@typeInfo(DT)) {
+                                        .@"fn" => |f| switch (f.calling_convention) {
+                                            .@"inline" => &fn_transform.uninline(decl_value),
+                                            else => decl_ptr,
+                                        },
+                                        else => decl_ptr,
+                                    };
+                                    const value_obj = try self.exportPointerTarget(target_ptr, true);
+                                    if (slots == null) slots = try host.createObject();
+                                    try host.setSlotValue(slots.?, index, value_obj);
+                                }
                             }
+                            offset += 1;
                         }
-                        offset += 1;
-                    }
-                },
-                else => {},
+                    },
+                    else => {},
+                }
             }
             switch (@typeInfo(T)) {
                 .@"enum" => |en| {
