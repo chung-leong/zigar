@@ -30,7 +30,8 @@
 #define ZEND_ATOMIC_H
 
 // Neon header file causes translate-c to segfault
-#define __ARM_NEON_H
+#undef _M_ARM64
+#undef __aarch64__
 
 // message.h has structs with bitfields that it immediately asserts the size of
 #define _MACH_MESSAGE_H_

@@ -31,7 +31,8 @@
 #define ZEND_ATOMIC_H
 
 // Neon header file causes translate-c to segfault
-#define __ARM_NEON_H
+#undef _M_ARM64
+#undef __aarch64__
 
 typedef struct zend_atomic_bool_s {
 	volatile _Bool value;
