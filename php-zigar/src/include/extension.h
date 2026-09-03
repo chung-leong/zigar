@@ -1,6 +1,6 @@
 #ifndef PHP_ZIGAR_H
 #define PHP_ZIGAR_H
-#define PHP_ZIGAR_VERSION "0.15.3"
+#define PHP_ZIGAR_VERSION "0.16.0"
 
 #include "php.h"
 
