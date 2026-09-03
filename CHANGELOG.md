@@ -1,3 +1,10 @@
+## 0.16.0
+
+* Support for Zig 0.16.0
+* Added support for PHP 8.6
+* Added persistent option
+* Fixed problems when php-zigar and a module uses different optimization
+
 ## 0.15.3
 
 * Introduced php-zigar
