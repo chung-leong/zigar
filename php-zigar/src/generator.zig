@@ -31,6 +31,7 @@ pub const Generator = struct {
     index: isize = 0,
     transform: ?Transform = null,
     buffer: *ByteBuffer,
+    arguments: ?*HashTable = null,
 
     pub fn create(callback: ?Value) !*@This() {
         const alignment: std.mem.Alignment = .fromByteUnits(@alignOf(@This()));
@@ -67,9 +68,16 @@ pub const Generator = struct {
             }
             php.release(&self.result);
             php.release(&self.fiber);
+            if (self.arguments) |args| {
+                php.release(args);
+            }
         }
         // this needs to happen last, since self points to the memory in the buffer
         self.buffer.release();
+    }
+
+    pub fn retain(self: *@This(), args: *HashTable) void {
+        self.arguments = args;
     }
 
     pub fn moveForward(self: *@This()) !void {

@@ -10,6 +10,7 @@ const ExecuteData = php.ExecuteData;
 const Fiber = php.Fiber;
 const Function = php.Function;
 const FunctionCallCache = php.FunctionCallCache;
+const HashTable = php.HashTable;
 const N = php.getStaticString;
 const Object = php.Object;
 const String = php.String;
@@ -25,6 +26,7 @@ pub const Promise = struct {
     callback_cache: FunctionCallCache,
     transform: ?Transform = null,
     buffer: *ByteBuffer,
+    arguments: ?*HashTable = null,
 
     pub fn create(callback: ?Value) !*@This() {
         const alignment: std.mem.Alignment = .fromByteUnits(@alignOf(@This()));
@@ -54,9 +56,16 @@ pub const Promise = struct {
             }
             php.release(&self.result);
             php.release(&self.fiber);
+            if (self.arguments) |args| {
+                php.release(args);
+            }
         }
         // this needs to happen last, since self points to the memory in the buffer
         self.buffer.release();
+    }
+
+    pub fn retain(self: *@This(), args: *HashTable) void {
+        self.arguments = args;
     }
 
     pub fn detach(self: *@This()) void {

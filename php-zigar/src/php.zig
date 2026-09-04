@@ -213,6 +213,13 @@ pub const ArgumentIterator = struct {
         }
     }
 
+    pub fn createList(self: *@This()) *HashTable {
+        self.reset();
+        const ht = createArray();
+        while (self.next()) |value| _ = appendHashEntryRef(ht, value);
+        return ht;
+    }
+
     pub fn extractNamed(self: *@This(), set: anytype, using: anytype) void {
         if (self.named_params == null) return;
         const ht = getValueHashTable(&self.named_params.?) catch unreachable;

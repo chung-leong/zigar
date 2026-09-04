@@ -277,6 +277,8 @@ pub const Function = struct {
                             if (!CallDispatcher.event_loop.isProper()) {
                                 return failure.report("callback functions cannot be used without a proper event loop", .{});
                             }
+                            // hang onto function arguments until promise is released
+                            promise.retain(arg_iter.createList());
                             // bump ref count and instruct the promise to release itself when the callback is invoked
                             promise.detach();
                             break :get php.createValueNull();
@@ -284,6 +286,8 @@ pub const Function = struct {
                     } else if (arg_struct.flags.has_generator) {
                         const generator_struct = try arg_struct.getSpecialArgument(Generator);
                         const generator = try generator_struct.getSpecialContext(Generator);
+                        // hang onto function arguments until generator is released
+                        generator.retain(arg_iter.createList());
                         generator.transform = self.transform;
                         if (generator.callback == null) {
                             // return generator

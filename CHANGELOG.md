@@ -4,6 +4,7 @@
 * Added support for PHP 8.6
 * Added persistent option
 * Fixed problems when php-zigar and a module uses different optimization
+* Fixed premature garbage collection of arguments passed to async functions in php-zigar
 
 ## 0.15.3
 
