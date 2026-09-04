@@ -16,7 +16,7 @@ describe('Feature: dir', function() {
         [ 'hello.txt', { type: 'file' } ],
       ]);
       const dir = env.createDirectory(map);
-      expect(dir.fd).to.be.a('number');
+      expect(dir.handle).to.be.a('number');
     })
     it('should return the same object if it has a fd property', async function() {
       const env = new Env();
