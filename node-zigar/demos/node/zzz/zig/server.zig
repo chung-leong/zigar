@@ -73,11 +73,13 @@ pub fn setCatHandler(f: ?*const ContentFn) void {
 fn main(host: []const u8, port: u16, promise: zigar.function.Promise(anyerror!void)) !void {
     errdefer |err| promise.resolve(err);
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{ .thread_safe = true }){};
+    var gpa = std.heap.DebugAllocator(.{ .thread_safe = true }){};
     const allocator = gpa.allocator();
     defer _ = gpa.deinit();
 
-    var t = try Tardy.init(allocator, .{ .threading = .auto });
+    var threaded_io = std.Io.Threaded.init(allocator, .{});
+    const io = threaded_io.io();
+    var t = try Tardy.init(allocator, io, .{ .threading = .auto });
     defer t.deinit();
 
     var router = try Router.init(allocator, &.{
@@ -87,7 +89,7 @@ fn main(host: []const u8, port: u16, promise: zigar.function.Promise(anyerror!vo
     defer router.deinit(allocator);
 
     // create socket for tardy
-    var socket = try Socket.init(.{ .tcp = .{ .host = host, .port = port } });
+    var socket = try Socket.init(io, .{ .tcp = .{ .host = host, .port = port } });
     defer socket.close_blocking();
     try socket.bind();
     try socket.listen(4096);
