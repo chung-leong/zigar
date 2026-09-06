@@ -110,9 +110,8 @@ fn main(host: []const u8, port: u16, promise: zigar.function.Promise(anyerror!vo
                     .keepalive_count_max = null,
                     .connection_count_max = 1024,
                 });
-                p.promise.resolve(
-                    server.serve(rt, p.router, .{ .normal = p.socket }),
-                );
+                try server.serve(rt, p.router, .{ .normal = p.socket });
+                p.promise.resolve({});
             }
         }.entry,
     ) catch {};
