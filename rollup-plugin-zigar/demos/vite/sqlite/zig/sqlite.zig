@@ -23,25 +23,16 @@ const sql = .{
 };
 var stmt: define: {
     const sql_fields = std.meta.fields(@TypeOf(sql));
-    var fields: [sql_fields.len]std.builtin.Type.StructField = undefined;
+    var field_names: [sql_fields.len][]const u8 = undefined;
+    var field_types: [sql_fields.len]type = undefined;
+    var field_attrs: [sql_fields.len]std.builtin.Type.StructField.Attributes = undefined;
     for (sql_fields, 0..) |sql_field, i| {
         const T = sqlite.StatementType(.{}, @field(sql, sql_field.name));
-        fields[i] = .{
-            .name = sql_field.name,
-            .type = T,
-            .default_value_ptr = null,
-            .is_comptime = false,
-            .alignment = @alignOf(T),
-        };
+        field_names[i] = sql_field.name;
+        field_types[i] = T;
+        field_attrs[i] = .{};
     }
-    break :define @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .fields = &fields,
-            .decls = &.{},
-            .is_tuple = false,
-        },
-    });
+    break :define @Struct(.auto, null, &field_names, &field_types, &field_attrs);
 } = undefined;
 
 pub fn openDb(path: [:0]const u8) !void {

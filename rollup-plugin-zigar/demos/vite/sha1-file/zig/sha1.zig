@@ -1,4 +1,7 @@
 const std = @import("std");
+var threaded_io = std.Io.Threaded.init_single_threaded;
+
+const io = threaded_io.io();
 
 const zigar = @import("zigar");
 
@@ -15,11 +18,11 @@ pub const sha1 = work_queue.promisify(worker.sha1);
 
 const worker = struct {
     pub fn sha1(file: std.Io.File) ![std.crypto.hash.Sha1.digest_length * 2]u8 {
-        defer file.close();
+        defer file.close(io);
         var hash: std.crypto.hash.Sha1 = .init(.{});
         var buffer: [1024 * 4]u8 = undefined;
         while (true) {
-            const len = try file.read(&buffer);
+            const len = try file.readStreaming(io, &[1][]u8{&buffer});
             if (len == 0) break;
             hash.update(buffer[0..len]);
         }
