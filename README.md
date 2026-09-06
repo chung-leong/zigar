@@ -22,7 +22,7 @@ and tutorials.
 ## Versioning
 
 The major and minor version numbers of Zigar correspond to the version of the Zig compiler
-it's designed for. The current version is 0.15.3. It works with Zig 0.15.x.
+it's designed for. The current version is 0.16.0. It works with Zig 0.16.0.
 
 ## Technical support
 
