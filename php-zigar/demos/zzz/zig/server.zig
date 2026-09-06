@@ -83,8 +83,8 @@ fn main(host: []const u8, port: u16, promise: zigar.function.Promise(anyerror!vo
     defer t.deinit();
 
     var router = try Router.init(allocator, &.{
-        Route.init("/").get({}, base_handler).layer(),
         Route.init("/cat").get({}, cat_handler).layer(),
+        Route.init("/%r").get({}, base_handler).layer(),
     }, .{});
     defer router.deinit(allocator);
 

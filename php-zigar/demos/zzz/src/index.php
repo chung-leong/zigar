@@ -10,8 +10,7 @@ EventLoop::defer(function() {
     $m = zigar_use(__DIR__ . '/../lib/server.zigar');
     $c = zigar_use(__DIR__ . '/../lib/cat.zigar');
     $m->setCatHandler($c->handleCat);
-    $m->setBaseHandler(function ($url) {
-        echo "$url\n";
+    $m->setBaseHandler(function ($url, $allocator) {
         return <<<HTML
             <!DOCTYPE html>    
             <html>

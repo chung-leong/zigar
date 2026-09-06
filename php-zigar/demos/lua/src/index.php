@@ -1,6 +1,6 @@
 <?php
 
-$m = zigar_use(__DIR__ . '/../zig/lua.zig');
+$m = zigar_use(__DIR__ . '/../lib/lua.zigar');
 
 $code = trim($_GET['lua'] ?? '');
 ob_start();
