@@ -1,4 +1,7 @@
 const std = @import("std");
+var threaded_io = std.Io.Threaded.init_single_threaded;
+
+const io = threaded_io.io();
 
 const zigar = @import("zigar");
 
@@ -26,7 +29,7 @@ const worker = struct {
         pub fn next(self: *@This(), allocator: std.mem.Allocator) !?File {
             if (!self.started) {
                 // create file reader
-                self.reader = self.file.reader(&self.read_buffer);
+                self.reader = self.file.reader(io, &self.read_buffer);
                 // create decompressor
                 self.decompressor = .init(&self.reader.interface, .gzip, &self.decompress_buffer);
                 // obtain the tar iterator
