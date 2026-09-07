@@ -3,8 +3,8 @@
     .version = "0.0.0",
     .dependencies = .{
         .myzql = .{
-            .url = "https://github.com/speed2exe/myzql/archive/refs/tags/0.15.1.zip",
-            .hash = "myzql-0.0.0-XU5aAP_0AgCPYPMy61wPn8RgtS_wlJK5kRrU38taGTrY",
+            .url = "https://github.com/speed2exe/myzql/archive/refs/tags/0.16.0.zip",
+            .hash = "myzql-0.0.0-XU5aAGYcAwD5F0BXNRyhhZlE2BOcozErUATya4Q_L9-q",
         },
     },
     .paths = .{

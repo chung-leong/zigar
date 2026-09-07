@@ -22,7 +22,6 @@ fastify.get('/', async (req, reply) => {
 });
 fastify.post('/', async (req, reply) => {
     const id = await insertPerson(req.body);
-    console.log({ id });
     reply.redirect('/', 302);
 })
 fastify.addHook('onClose', () => closeDatabase());
@@ -34,5 +33,5 @@ await openDatabase({
     database: 'testdb',
     threads: 4,
 });
-const address = await fastify.listen({ port: 3000 });
+const address = await fastify.listen({ port: 8080 });
 console.log(`Listening at ${address}`);

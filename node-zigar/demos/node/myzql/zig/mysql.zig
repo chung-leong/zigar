@@ -1,5 +1,6 @@
 const std = @import("std");
-
+var threaded_io = std.Io.Threaded.init_single_threaded;
+const io = threaded_io.io();
 const myzql = @import("myzql");
 const Conn = myzql.conn.Conn;
 const PrepareResult = myzql.result.PrepareResult;
@@ -61,14 +62,14 @@ const worker = struct {
 
             pub fn init(prep_res: PrepareResult, params: anytype) !@This() {
                 const stmt = try prep_res.expect(.stmt);
-                const query_res = try client.executeRows(allocator, &stmt, params);
+                const query_res = try client.executeRows(allocator, io, &stmt, params);
                 const rows = try query_res.expect(.rows);
                 return .{ .rows = rows };
             }
 
             pub fn next(self: *@This()) !?T {
                 const rows_iter = self.rows.iter();
-                if (try rows_iter.next()) |row| {
+                if (try rows_iter.next(io)) |row| {
                     var result: T = undefined;
                     try row.scan(&result);
                     return result;
@@ -91,22 +92,23 @@ const worker = struct {
     };
 
     pub fn onThreadStart(params: DatabaseParams) !void {
-        const address = try std.net.Address.parseIp(params.host, params.port);
+        const ip_address = try std.Io.net.IpAddress.parseIp4(params.host, params.port);
         client = try Conn.init(
             allocator,
+            io,
             &.{
                 .username = params.username,
                 .password = params.password,
                 .database = params.database,
-                .address = address,
+                .address = .{ .ip = ip_address },
             },
         );
-        errdefer client.deinit(allocator);
+        errdefer client.deinit(allocator, io);
         inline for (comptime std.meta.declarations(queries)) |qs_decl| {
             const query_set = @field(queries, qs_decl.name);
             inline for (comptime std.meta.declarations(query_set)) |q_decl| {
                 const query = &@field(query_set, q_decl.name);
-                query.prep_res = try client.prepare(allocator, query.sql);
+                query.prep_res = try client.prepare(allocator, io, query.sql);
                 errdefer query.prep_res.deinit(allocator);
                 _ = try query.prep_res.expect(.stmt);
             }
@@ -121,7 +123,7 @@ const worker = struct {
                 query.prep_res.deinit(allocator);
             }
         }
-        client.deinit(allocator);
+        client.deinit(allocator, io);
     }
 
     pub fn findPersons() !StructIterator(Person) {
@@ -130,7 +132,7 @@ const worker = struct {
 
     pub fn insertPerson(person: Person) !u32 {
         const stmt = try queries.person.insert.prep_res.expect(.stmt);
-        const exe_res = try client.execute(&stmt, .{ person.name, person.age });
+        const exe_res = try client.execute(io, &stmt, .{ person.name, person.age });
         const ok = try exe_res.expect(.ok);
         return @intCast(ok.last_insert_id);
     }
