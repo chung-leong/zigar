@@ -1113,8 +1113,9 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                         true => (name_offset - src_name_offset) * (len / 64),
                         false => 0,
                     };
-                    var stb = std.heap.stackFallback(1024 * 8, c_allocator);
-                    const allocator = stb.get();
+                    var stb_buffer: [1024 * 8]u8 = undefined;
+                    var stb: std.heap.BufferFirstAllocator = .init(&stb_buffer, c_allocator);
+                    const allocator = stb.allocator();
                     const src_buffer = allocator.alloc(u8, len - diff) catch {
                         result.* = intFromError(.NOMEM);
                         return true;
@@ -1357,8 +1358,9 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                 }
             } else true;
             if (all_private) {
-                var stb = std.heap.stackFallback(1024, c_allocator);
-                const allocator = stb.get();
+                var stb_buffer: [1024 * 8]u8 = undefined;
+                var stb: std.heap.BufferFirstAllocator = .init(&stb_buffer, c_allocator);
+                const allocator = stb.allocator();
                 const timer_count: usize = if (timeout >= 0) 1 else 0;
                 var actual_fd_count: usize = 0;
                 for (0..nfds) |i| {
@@ -2004,7 +2006,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         const PathResolver = struct {
-            sfa: std.heap.std.heap.BufferFirstAllocator,
+            sfa: std.heap.BufferFirstAllocator,
             sfa_buffer: [max_buffer_size]u8,
             allocator: std.mem.Allocator,
             dirfd: c_int,
@@ -2018,7 +2020,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                 const len = std.mem.len(path);
                 const path_s = path[0..len];
                 self.sfa = .init(&self.sfa_buffer, c_allocator);
-                self.allocator = self.sfa.get();
+                self.allocator = self.sfa.allocator();
                 try self._init(dirfd, @ptrCast(path_s));
                 return self;
             }
@@ -4516,8 +4518,9 @@ pub fn Win32Substitute(comptime redirector: type) type {
                     _ = redirector.lseek64(dirfd, 0, std.c.SEEK.SET, &seek_result);
                     if (seek_result != 0) return c.STATUS_INVALID_HANDLE;
                 }
-                var stb = std.heap.stackFallback(1024 * 8, c_allocator);
-                const allocator = stb.get();
+                var stb_buffer: [1024 * 8]u8 = undefined;
+                var stb: std.heap.BufferFirstAllocator = .init(&stb_buffer, c_allocator);
+                const allocator = stb.allocator();
                 const src_buffer = allocator.alloc(u8, length) catch return c.STATUS_NO_MEMORY;
                 defer allocator.free(src_buffer);
                 var result: c_int = undefined;
@@ -5650,7 +5653,7 @@ const Wtf8Converter = struct {
     pub inline fn init(options: Options) @This() {
         var self: @This() = undefined;
         self.sfa = .init(&self.sfa_buffer, c_allocator);
-        self.arena = .init(self.sfa.get());
+        self.arena = .init(self.sfa.allocator());
         self.allocator = self.arena.allocator();
         self.save_error = options.save_error;
         self.adjust_path = options.adjust_path;
@@ -5805,7 +5808,7 @@ pub fn getHookTable(comptime Host: type, comptime redirect_io: bool) std.StaticS
             const name = if (w_suffix) decl_name[0 .. decl_name.len - 5] else decl_name;
             const handler_name = if (w_suffix) name ++ "_hook" else name;
             const HandlerType = @TypeOf(@field(Sub, handler_name));
-            const handle_cc = @typeInfo(HandlerType).@"fn".calling_convention;
+            const handle_cc = @typeInfo(HandlerType).@"fn".attrs.@"callconv";
             if (!std.meta.eql(handle_cc, Sub.calling_convention)) {
                 @compileError("Handler with wrong calling convention: " ++ handler_name);
             }

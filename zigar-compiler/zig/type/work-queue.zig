@@ -41,27 +41,25 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
         pub const Error = std.mem.Allocator.Error || error{Unexpected};
         pub const Options = init: {
             // when thread_start_params or thread_end_params is void, we want it to have a default value
-            const fields = std.meta.fields(struct {
+            const Templ = struct {
                 allocator: std.mem.Allocator = def_allocator,
                 stack_size: usize = if (builtin.target.cpu.arch.isWasm()) 262144 else std.Thread.SpawnConfig.default_stack_size,
                 n_jobs: usize = 1,
                 thread_start_params: ThreadStartParams,
                 thread_end_params: ThreadEndParams,
-            });
-            var field_names: [fields.len][]const u8 = undefined;
-            var field_types: [fields.len]type = undefined;
-            var field_attrs: [fields.len]std.lang.Type.Struct.FieldAttributes = undefined;
-            for (fields, 0..) |field, i| {
-                field_names[i] = field.name;
-                field_types[i] = field.type;
+            };
+            const templ_info = @typeInfo(Templ).@"struct";
+            var field_attrs: [templ_info.field_names.len]std.lang.Type.Struct.FieldAttributes = undefined;
+            for (templ_info.fields_attrs, 0..) |fa, i| {
+                const FieldType = templ_info.field_types[i];
                 field_attrs[i] = .{
-                    .default_value_ptr = field.default_value_ptr orelse switch (@sizeOf(field.type)) {
-                        0 => @ptrCast(&@as(field.type, .{})),
+                    .default_value_ptr = fa.default_value_ptr orelse switch (@sizeOf(FieldType)) {
+                        0 => @ptrCast(&@as(FieldType, .{})),
                         else => null,
                     },
                 };
             }
-            break :init @Struct(.auto, null, &field_names, &field_types, &field_attrs);
+            break :init @Struct(.auto, null, templ_info.field_names, templ_info.field_types, &field_attrs);
         };
         pub const InitResult = @typeInfo(@TypeOf(init)).@"fn".return_type.?;
         pub const InitError = @typeInfo(InitResult).error_union.error_set;
@@ -144,8 +142,8 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
                 else => {
                     // see if we can do initialize automatically
                     const can_auto_init = check: {
-                        if (std.meta.fields(ThreadStartParams).len > 0) break :check false;
-                        if (std.meta.fields(ThreadEndParams).len > 0) break :check false;
+                        if (@typeInfo(ThreadStartParams).@"struct".field_names.len > 0) break :check false;
+                        if (@typeInfo(ThreadEndParams).@"struct".field_names.len > 0) break :check false;
                         if (self.status != .uninitialized) break :check false;
                         break :check true;
                     };
@@ -186,7 +184,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
             const AsyncArgs = std.meta.ArgsTuple(AFT);
             const async_fn_info = @typeInfo(AFT).@"fn";
             const AsyncRT = async_fn_info.return_type.?;
-            const cc = async_fn_info.calling_convention;
+            const cc = async_fn_info.attrs.@"callconv";
             const async_ns = struct {
                 fn push(async_args: AsyncArgs) AsyncRT {
                     var args: Args = undefined;
@@ -225,10 +223,10 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
                 .enum_literal => {
                     switch (func) {
                         .startup, .startup1 => {
-                            if (std.meta.fields(ThreadStartParams).len > 0) {
+                            if (@typeInfo(ThreadStartParams).@"struct".field_names.len > 0) {
                                 @compileError("Cannot generate function due to onThreadStart() requiring arguments");
                             }
-                            if (std.meta.fields(ThreadEndParams).len > 0) {
+                            if (@typeInfo(ThreadEndParams).@"struct".field_names.len > 0) {
                                 @compileError("Cannot generate function due to onThreadEnd() requiring arguments");
                             }
                             const f_ns = switch (func == .startup) {
@@ -265,18 +263,16 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
         pub fn Asyncified(comptime FT: type) type {
             const PorG = PromiseOrGenerator(FT);
             const fn_info = @typeInfo(FT).@"fn";
-            const param_count = fn_info.params.len + 1;
+            const param_count = fn_info.param_types.len + 1;
             var param_types: [param_count]type = undefined;
             var param_attrs: [param_count]std.lang.Type.Fn.ParamAttributes = undefined;
-            inline for (fn_info.params, 0..) |param, i| {
-                param_types[i] = param.type.?;
-                param_attrs[i] = .{ .@"noalias" = param.is_noalias };
+            inline for (fn_info.param_types, 0..) |param_type, i| {
+                param_types[i] = param_type.?;
+                param_attrs[i] = fn_info.param_attrs[i];
             }
             param_types[param_count - 1] = PorG;
             param_attrs[param_count - 1] = .{};
-            return @Fn(&param_types, &param_attrs, Error!void, .{
-                .@"callconv" = fn_info.calling_convention,
-            });
+            return @Fn(&param_types, &param_attrs, Error!void, fn_info.attrs);
         }
 
         test "Asyncified" {
@@ -329,7 +325,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
                                 promise: ?Promise(RT),
                             };
                             fields[count] = .{
-                                .name = decl.name,
+                                .name = decl_name,
                                 .type = Request,
                             };
                             count += 1;
@@ -428,11 +424,11 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
 
         fn invokeFunction(item: WorkItem) void {
             const un = @typeInfo(WorkItem).@"union";
-            inline for (un.fields) |field| {
-                const key = @field(WorkItemEnum, field.name);
+            inline for (un.field_names) |field_name| {
+                const key = @field(WorkItemEnum, field_name);
                 if (item == key) {
-                    const func = @field(ns, field.name);
-                    const call = @field(item, field.name);
+                    const func = @field(ns, field_name);
+                    const call = @field(item, field_name);
                     const result = @call(.auto, func, call.args);
                     switch (@hasField(@TypeOf(call), "generator")) {
                         true => if (call.generator) |g| g.pipe(result),

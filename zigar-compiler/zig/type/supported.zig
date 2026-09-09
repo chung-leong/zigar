@@ -31,9 +31,8 @@ fn check(comptime T: type, comptime checking: anytype) bool {
         } else check(pt.child, checking),
         inline .array, .vector, .optional => |ar| check(ar.child, checking),
         .@"struct" => T != std.Options,
-        .@"fn" => |f| inline for (f.params) |param| {
-            if (param.is_generic) break false;
-            if (param.type == null) break false;
+        .@"fn" => |f| inline for (f.param_types) |param_type| {
+            if (param_type == null) break false;
         } else inline for (.{1}) |_| {
             if (f.is_generic) break false;
             const RT = f.return_type orelse break false;

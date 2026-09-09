@@ -8,12 +8,12 @@ pub fn get(comptime T: type) comptime_int {
     return switch (@typeInfo(T)) {
         .@"union" => get: {
             const TT = selector.get(T).?;
-            const fields = @typeInfo(T).@"union".fields;
+            const un = @typeInfo(T).@"union";
             // selector comes first unless content needs larger align
             comptime var offset = 0;
-            inline for (fields) |field| {
-                if (@alignOf(field.type) > @alignOf(TT)) {
-                    const new_offset = @sizeOf(field.type) * 8;
+            inline for (un.field_types) |field_type| {
+                if (@alignOf(field_type) > @alignOf(TT)) {
+                    const new_offset = @sizeOf(field_type) * 8;
                     if (new_offset > offset) {
                         offset = new_offset;
                     }

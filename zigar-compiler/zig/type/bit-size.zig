@@ -18,7 +18,8 @@ pub fn get(comptime T: type) ?usize {
         .null, .undefined, .@"fn" => 0,
         .@"opaque", .type => null,
         .error_set => @bitSizeOf(anyerror),
-        else => return @bitSizeOf(T),
+        .int, .float => @bitSizeOf(T),
+        else => @sizeOf(T) * 8,
     };
 }
 

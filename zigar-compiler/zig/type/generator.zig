@@ -141,7 +141,7 @@ pub fn GeneratorOf(comptime arg: anytype) type {
 pub fn GeneratorArgOf(comptime arg: anytype) type {
     const FT = util.Function(arg);
     const f = @typeInfo(FT).@"fn";
-    return inline for (f.params) |param| {
-        if (util.getInternalType(param.type) == .generator) break param.type.?;
+    return inline for (f.param_types) |param_type| {
+        if (util.getInternalType(param_type) == .generator) break param_type.?;
     } else @compileError("No generator argument: " ++ @typeName(FT));
 }

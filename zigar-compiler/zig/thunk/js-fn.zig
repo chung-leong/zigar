@@ -92,7 +92,7 @@ pub fn createThunkController(comptime host: type, comptime BFT: type) ThunkContr
                             return @call(.never_inline, handler, ch_args);
                         }
                     };
-                    ptr.* = &fn_transform.spreadArgs(ns.call, ch.calling_convention);
+                    ptr.* = &fn_transform.spreadArgs(ns.call, ch.attrs.@"callconv");
                 }
                 break :init array;
             };
@@ -153,20 +153,18 @@ test "createThunkController" {
 
 fn CallHandler(comptime BFT: type) type {
     const f = @typeInfo(BFT).@"fn";
-    const param_count = f.params.len + 2;
+    const param_count = f.param_types.len + 2;
     var param_types: [param_count]type = undefined;
     var param_attrs: [param_count]std.lang.Type.Fn.ParamAttributes = undefined;
-    for (f.params, 0..) |param, i| {
-        param_types[i] = param.type.?;
-        param_attrs[i] = .{ .@"noalias" = param.is_noalias };
+    for (f.param_types, 0..) |param_type, i| {
+        param_types[i] = param_type.?;
+        param_attrs[i] = f.param_attrs[i];
     }
     param_types[param_count - 2] = ?*anyopaque;
     param_attrs[param_count - 2] = .{};
     param_types[param_count - 1] = usize;
     param_attrs[param_count - 1] = .{};
-    return @Fn(&param_types, &param_attrs, f.return_type.?, .{
-        .@"callconv" = f.calling_convention,
-    });
+    return @Fn(&param_types, &param_attrs, f.return_type.?, f.attrs);
 }
 
 fn getJscallHandler(comptime host: type, comptime BFT: type) CallHandler(BFT) {
@@ -178,12 +176,12 @@ fn getJscallHandler(comptime host: type, comptime BFT: type) CallHandler(BFT) {
             @setEvalBranchQuota(1000000);
             // fill the argument struct
             var arg_s: ArgStruct(BFT) = undefined;
-            inline for (0..ch.params.len - 2) |arg_index| {
+            inline for (0..ch.param_types.len - 2) |arg_index| {
                 const name = std.fmt.comptimePrint("{d}", .{arg_index});
                 @field(arg_s, name) = args[arg_index];
             }
             // the last two arguments are the context pointer and the function id
-            const fn_id = args[ch.params.len - 1];
+            const fn_id = args[ch.param_types.len - 1];
             const result = host.handleJscall(fn_id, &arg_s, @sizeOf(@TypeOf(arg_s)));
             switch (result) {
                 .SUCCESS => {},
@@ -210,7 +208,7 @@ fn getJscallHandler(comptime host: type, comptime BFT: type) CallHandler(BFT) {
             return arg_s.retval;
         }
     };
-    return fn_transform.spreadArgs(ns.call, ch.calling_convention);
+    return fn_transform.spreadArgs(ns.call, ch.attrs.@"callconv");
 }
 
 test "getJscallHandler" {

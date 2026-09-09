@@ -20,7 +20,7 @@ pub fn get(comptime T: type) ?type {
         .@"union" => |un| un.tag_type orelse debug_tag: {
             if (builtin.mode == .ReleaseSafe or builtin.mode == .debug) {
                 if (un.layout != .@"extern" and un.layout != .@"packed") {
-                    break :debug_tag util.IntFor(un.fields.len);
+                    break :debug_tag util.IntFor(un.field_names.len);
                 }
             }
             break :debug_tag null;

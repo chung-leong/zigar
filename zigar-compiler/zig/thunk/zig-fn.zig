@@ -28,8 +28,9 @@ pub fn createThunk(comptime FT: type) ThunkType(FT) {
             // extract arguments from argument struct
             const arg_s: *ArgStruct(FT) = @ptrCast(@alignCast(arg_ptr));
             var arg_t: std.meta.ArgsTuple(FT) = undefined;
-            inline for (comptime std.meta.fields(@TypeOf(arg_t))) |field| {
-                @field(arg_t, field.name) = @field(arg_s, field.name);
+            const arg_t_info = @typeInfo(@TypeOf(arg_t)).@"struct";
+            inline for (comptime arg_t_info.field_names) |field_name| {
+                @field(arg_t, field_name) = @field(arg_s, field_name);
             }
             const function: *const FT = @ptrCast(@alignCast(fn_ptr));
             const retval = @call(.auto, function, arg_t);
@@ -56,8 +57,8 @@ test "createThunk" {
         .pointer => |pt| {
             switch (@typeInfo(pt.child)) {
                 .@"fn" => |f| {
-                    try expectEqual(3, f.params.len);
-                    try expectEqual(std.builtin.CallingConvention.c, f.calling_convention);
+                    try expectEqual(3, f.param_types.len);
+                    try expectEqual(std.builtin.CallingConvention.c, f.attrs.@"callconv");
                 },
                 else => try expect(false),
             }
@@ -71,8 +72,8 @@ test "createThunk" {
         .pointer => |pt| {
             switch (@typeInfo(pt.child)) {
                 .@"fn" => |f| {
-                    try expectEqual(5, f.params.len);
-                    try expectEqual(std.builtin.CallingConvention.c, f.calling_convention);
+                    try expectEqual(5, f.param_types.len);
+                    try expectEqual(std.builtin.CallingConvention.c, f.attrs.@"callconv");
                 },
                 else => try expect(false),
             }

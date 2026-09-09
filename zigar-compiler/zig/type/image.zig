@@ -20,16 +20,16 @@ pub const Format = enum {
 };
 
 pub const formats = init: {
-    const fields = std.meta.fields(Format);
+    const format_info = @typeInfo(Format).@"enum";
     var count: usize = 0;
-    for (fields) |field| {
-        if (@field(Format, field.name).Type(.rw) != void) count += 1;
+    for (format_info.field_names) |field_name| {
+        if (@field(Format, field_name).Type(.rw) != void) count += 1;
     }
     var list: [count]Format = undefined;
     var index: usize = 0;
-    for (fields) |field| {
-        if (@field(Format, field.name).Type(.rw) != void) {
-            list[index] = @field(Format, field.name);
+    for (format_info.field_names) |field_name| {
+        if (@field(Format, field_name).Type(.rw) != void) {
+            list[index] = @field(Format, field_name);
             index += 1;
         }
     }

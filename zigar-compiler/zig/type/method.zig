@@ -4,8 +4,8 @@ const expectEqual = std.testing.expectEqual;
 pub fn is(comptime Self: type, comptime T: type, instance_only: bool) bool {
     switch (@typeInfo(T)) {
         .@"fn" => |f| {
-            if (f.params.len > 0) {
-                if (f.params[0].type) |PT| {
+            if (f.param_types.len > 0) {
+                if (f.param_types[0]) |PT| {
                     if (PT == Self) return true;
                     if (instance_only) return false;
                     return switch (@typeInfo(PT)) {

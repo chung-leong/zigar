@@ -11,12 +11,14 @@ pub fn ComptimeFree(comptime T: type) type {
         => void,
         .array => |ar| [ar.len]ComptimeFree(ar.child),
         .@"struct" => |st| derive: {
-            var field_names: [st.fields.len][]const u8 = undefined;
-            var field_types: [st.fields.len]type = undefined;
-            var field_attrs: [st.fields.len]std.lang.Type.Struct.FieldAttributes = undefined;
-            inline for (st.fields, 0..) |field, i| {
-                field_names[i] = field.name;
-                field_types[i] = if (field.is_comptime) void else ComptimeFree(field.type);
+            const len = st.field_names.len;
+            var field_names: [len][]const u8 = undefined;
+            var field_types: [len]type = undefined;
+            var field_attrs: [len]std.lang.Type.Struct.FieldAttributes = undefined;
+            inline for (st.field_names, 0..) |field_name, i| {
+                const FieldType = st.field_types[i];
+                field_names[i] = field_name;
+                field_types[i] = if (st.field_attrs[i].@"comptime") void else ComptimeFree(FieldType);
                 field_attrs[i] = .{
                     .default_value_ptr = null,
                     .@"comptime" = false,
@@ -26,12 +28,14 @@ pub fn ComptimeFree(comptime T: type) type {
             break :derive @Struct(st.layout, st.backing_integer, &field_names, &field_types, &field_attrs);
         },
         .@"union" => |un| derive: {
-            var field_names: [un.fields.len][]const u8 = undefined;
-            var field_types: [un.fields.len]type = undefined;
-            var field_attrs: [un.fields.len]std.lang.Type.Union.FieldAttributes = undefined;
-            inline for (un.fields, 0..) |field, i| {
-                field_names[i] = field.name;
-                field_types[i] = ComptimeFree(field.type);
+            const len = un.field_names.len;
+            var field_names: [len][]const u8 = undefined;
+            var field_types: [len]type = undefined;
+            var field_attrs: [len]std.lang.Type.Union.FieldAttributes = undefined;
+            inline for (un.field_names, 0..) |field_name, i| {
+                const FieldType = un.field_types[i];
+                field_names[i] = field_name;
+                field_types[i] = ComptimeFree(FieldType);
                 field_attrs[i] = .{};
             }
             break :derive @Union(un.layout, un.tag_type, &field_names, &field_types, &field_attrs);

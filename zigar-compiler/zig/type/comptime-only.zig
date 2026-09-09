@@ -19,13 +19,13 @@ fn check(comptime T: type, comptime checking: anytype) bool {
             if (pt.child == C) break false;
         } else check(pt.child, checking),
         inline .array, .vector, .optional => |ar| check(ar.child, checking),
-        .@"struct" => |st| inline for (st.fields) |field| {
-            if (!field.is_comptime) {
-                if (check(field.type, checking ++ .{T})) break true;
+        .@"struct" => |st| inline for (st.field_types, 0..) |FieldType, index| {
+            if (!st.field_attrs[index].@"comptime") {
+                if (check(FieldType, checking ++ .{T})) break true;
             }
         } else false,
-        .@"union" => |un| inline for (un.fields) |field| {
-            if (check(field.type, checking ++ .{T})) break true;
+        .@"union" => |un| inline for (un.field_types) |FieldType| {
+            if (check(FieldType, checking ++ .{T})) break true;
         } else false,
         else => false,
     };

@@ -58,8 +58,8 @@ test "IteratorPayload" {
 
 pub fn hasDefaultFields(comptime T: type) bool {
     return switch (@typeInfo(T)) {
-        .@"struct" => |st| inline for (st.fields) |field| {
-            if (field.default_value_ptr == null) break false;
+        .@"struct" => |st| inline for (st.field_attrs) |field_attrs| {
+            if (field_attrs.default_value_ptr == null) break false;
         } else true,
         else => false,
     };
@@ -90,8 +90,8 @@ fn NextMethodReturnValue(comptime FT: type, comptime T: type) ?type {
         var alloc_count = 0;
         var struct_count = 0;
         var other_count = 0;
-        for (f.params, 0..) |param, i| {
-            const PT = param.type orelse break :check false;
+        for (f.param_types, 0..) |param_type, i| {
+            const PT = param_type orelse break :check false;
             if (i == 0 and PT == *T) {
                 self_count += 1;
             } else if (PT == std.mem.Allocator) {
@@ -257,9 +257,9 @@ pub fn Function(comptime arg: anytype) type {
 pub fn isValidCallback(comptime FT: type, comptime AT: type, comptime RT: type) bool {
     switch (@typeInfo(FT)) {
         .@"fn" => |f| {
-            if (f.params.len == 2 and f.return_type == RT) {
-                if (f.params[0].type != null and f.params[1].type == AT) {
-                    comptime var T = f.params[0].type.?;
+            if (f.param_types.len == 2 and f.return_type == RT) {
+                if (f.param_types[0] != null and f.param_types[1] == AT) {
+                    comptime var T = f.param_types[0].?;
                     if (@typeInfo(T) == .optional) T = @typeInfo(T).optional.child;
                     if (@typeInfo(T) == .pointer and @typeInfo(T).pointer.size == .one) return true;
                 }
@@ -290,7 +290,7 @@ test "isValidCallback" {
 pub fn getCallback(comptime FT: type, cb: anytype) *const FT {
     const CBT = @TypeOf(cb);
     const f = @typeInfo(FT).@"fn";
-    if (comptime !isValidCallback(CBT, f.params[1].type.?, f.return_type.?)) {
+    if (comptime !isValidCallback(CBT, f.param_types[1].?, f.return_type.?)) {
         @compileError("Expecting " ++ @typeName(FT) ++ ", received: " ++ @typeName(CBT));
     }
     const fn_ptr = switch (@typeInfo(CBT)) {

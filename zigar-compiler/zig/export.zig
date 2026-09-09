@@ -106,27 +106,27 @@ fn Factory(comptime host: type, comptime module: type) type {
                     .has_slot = true,
                 },
                 .@"struct" => |st| init: {
-                    const has_object = inline for (st.fields) |field| {
-                        if (object.is(field.type)) break true;
+                    const has_object = inline for (st.field_types) |FieldType| {
+                        if (object.is(FieldType)) break true;
                     } else false;
-                    const has_slot = inline for (st.fields) |field| {
-                        if (object.is(field.type) or comptime_only.is(field.type) or field.is_comptime) break true;
+                    const has_slot = inline for (st.field_types, 0..) |FieldType, i| {
+                        if (object.is(FieldType) or comptime_only.is(FieldType) or st.field_attrs[i].@"comptime") break true;
                     } else false;
                     break :init if (comptime arg_struct.is(T, null)) .{
                         .has_object = has_object,
                         .has_slot = has_slot,
                         .has_pointer = pointer.has(T),
-                        .has_options = inline for (st.fields) |field| {
-                            if (getStructurePurpose(field.type).isOptional()) break true;
+                        .has_options = inline for (st.field_types) |FieldType| {
+                            if (getStructurePurpose(FieldType).isOptional()) break true;
                         } else false,
-                        .is_throwing = inline for (@typeInfo(T).@"struct".fields, 0..) |field, i| {
+                        .is_throwing = inline for (@typeInfo(T).@"struct".field_types, 0..) |FieldType, i| {
                             if (i == 0) {
                                 // retval
-                                if (@typeInfo(field.type) == .error_union) break true;
+                                if (@typeInfo(FieldType) == .error_union) break true;
                             } else {
-                                if (comptime util.getInternalType(field.type)) |it| {
+                                if (comptime util.getInternalType(FieldType)) |it| {
                                     if (it == .promise or it == .generator) {
-                                        switch (@typeInfo(field.type.payload)) {
+                                        switch (@typeInfo(FieldType.payload)) {
                                             .error_union => break true,
                                             .optional => |op| switch (@typeInfo(op.child)) {
                                                 .error_union => break true,
@@ -138,8 +138,8 @@ fn Factory(comptime host: type, comptime module: type) type {
                                 }
                             }
                         } else false,
-                        .is_async = inline for (st.fields) |field| {
-                            switch (getStructurePurpose(field.type)) {
+                        .is_async = inline for (st.field_types) |FieldType| {
+                            switch (getStructurePurpose(FieldType)) {
                                 .promise, .generator => break true,
                                 else => {},
                             }
@@ -164,11 +164,11 @@ fn Factory(comptime host: type, comptime module: type) type {
                     };
                 },
                 .@"union" => |un| init: {
-                    const has_object = inline for (un.fields) |field| {
-                        if (object.is(field.type)) break true;
+                    const has_object = inline for (un.field_types) |FieldType| {
+                        if (object.is(FieldType)) break true;
                     } else false;
-                    const has_slot = inline for (un.fields) |field| {
-                        if (object.is(field.type) or comptime_only.is(field.type)) break true;
+                    const has_slot = inline for (un.field_types) |FieldType| {
+                        if (object.is(FieldType) or comptime_only.is(FieldType)) break true;
                     } else false;
                     break :init .{
                         .has_object = has_object,
@@ -197,10 +197,10 @@ fn Factory(comptime host: type, comptime module: type) type {
                     };
                 },
                 .@"enum" => |en| .{
-                    .is_open_ended = !en.is_exhaustive,
+                    .is_open_ended = en.mode == .nonexhaustive,
                 },
                 .error_set => |es| .{
-                    .is_global = es == null,
+                    .is_global = es.error_names == null,
                 },
                 .array => |ar| init: {
                     break :init .{
@@ -232,7 +232,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     .is_const = pt.attrs.@"const",
                     .is_single = pt.size == .one or pt.size == .c,
                     .is_multiple = pt.size != .one,
-                    .is_nullable = pt.is_allowzero or pt.child == anyopaque,
+                    .is_nullable = pt.attrs.@"allowzero" or pt.child == anyopaque,
                 },
                 .@"opaque" => .{},
                 .@"fn" => .{},
@@ -247,17 +247,17 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .@"struct" => |st| switch (arg_struct.is(T, null)) {
                     true => comptime req_arg_count: {
                         var len = 0;
-                        for (st.fields, 0..) |field, index| {
+                        for (st.field_types, 0..) |FieldType, index| {
                             // first field is retval
                             if (index > 0) {
-                                const purpose = getStructurePurpose(field.type);
+                                const purpose = getStructurePurpose(FieldType);
                                 if (!purpose.isOptional()) len += 1;
                             }
                         }
                         break :req_arg_count len;
                     },
                     false => switch (st.is_tuple) {
-                        true => st.fields.len,
+                        true => st.field_types.len,
                         false => null,
                     },
                 },
@@ -509,15 +509,16 @@ fn Factory(comptime host: type, comptime module: type) type {
                 const template = try host.createTemplate(memory, null);
                 const AT = arg_struct.ArgStruct(FT);
                 const member_flags = try createObject(.{});
-                inline for (std.meta.fields(AT), 0..) |field, index| {
-                    const can_be_string = comptime (index > 0) and canBeString(field.type);
+                const arg_info = @typeInfo(AT).@"struct";
+                inline for (arg_info.field_types, 0..) |FieldType, index| {
+                    const can_be_string = comptime (index > 0) and canBeString(FieldType);
                     // first field is retval, hence the subtraction
                     const is_string = comptime can_be_string and meta.call("isArgumentString", .{ FT, index - 1 });
-                    const can_be_clamped_array = comptime (index > 0) and !is_string and canBeClampedArray(field.type);
+                    const can_be_clamped_array = comptime (index > 0) and !is_string and canBeClampedArray(FieldType);
                     const is_clamped_array = comptime can_be_clamped_array and meta.call("isArgumentClampedArray", .{ FT, index - 1 });
-                    const can_be_typed_array = comptime (index > 0) and !is_string and !is_clamped_array and canBeTypedArray(field.type);
+                    const can_be_typed_array = comptime (index > 0) and !is_string and !is_clamped_array and canBeTypedArray(FieldType);
                     const is_typed_array = comptime can_be_typed_array and meta.call("isArgumentTypedArray", .{ FT, index - 1 });
-                    const can_be_plain = comptime (index > 0) and !is_string and !is_typed_array and !is_clamped_array and canBePlain(field.type);
+                    const can_be_plain = comptime (index > 0) and !is_string and !is_typed_array and !is_clamped_array and canBePlain(FieldType);
                     const is_plain = comptime can_be_plain and meta.call("isArgumentPlain", .{ FT, index - 1 });
                     const flags = try host.createInteger(@bitCast(MemberFlags{
                         .is_required = true,
@@ -533,57 +534,63 @@ fn Factory(comptime host: type, comptime module: type) type {
         }
 
         fn addArgStructMembers(self: @This(), list: Value, comptime T: type) !void {
-            inline for (std.meta.fields(T), 0..) |field, index| {
+            const info = @typeInfo(T).@"struct";
+            inline for (info.field_names, 0..) |field_name, index| {
+                const FieldType = info.field_types[index];
+                const field_attrs = info.field_attrs[index];
                 try appendList(list, .{
-                    .name = field.name,
-                    .type = getMemberType(field.type, field.is_comptime),
+                    .name = field_name,
+                    .type = getMemberType(FieldType, field_attrs.@"comptime"),
                     .flags = MemberFlags{ .is_required = true },
-                    .bitOffset = @bitOffsetOf(T, field.name),
-                    .bitSize = bit_size.get(field.type),
-                    .byteSize = byte_size.get(field.type),
+                    .bitOffset = @bitOffsetOf(T, field_name),
+                    .bitSize = bit_size.get(FieldType),
+                    .byteSize = byte_size.get(FieldType),
                     .slot = index,
-                    .structure = try self.getStructure(field.type),
+                    .structure = try self.getStructure(FieldType),
                 });
             }
         }
 
         fn addStructMembers(self: @This(), list: Value, comptime T: type) !void {
             const FieldEnum = std.meta.FieldEnum(T);
-            inline for (std.meta.fields(T), 0..) |field, index| {
-                const field_enum = comptime std.meta.stringToEnum(FieldEnum, field.name).?;
+            const info = @typeInfo(T).@"struct";
+            inline for (info.field_names, 0..) |field_name, index| {
+                const FieldType = info.field_types[index];
+                const field_attrs = info.field_attrs[index];
+                const field_enum = comptime std.meta.stringToEnum(FieldEnum, field_name).?;
                 // comptime fields are not actually stored in the struct
                 // fields of comptime util in comptime structs are handled in the same manner
-                const is_actual = comptime !field.is_comptime and !comptime_only.is(field.type);
+                const is_actual = comptime !field_attrs.@"comptime" and !comptime_only.is(FieldType);
                 // check meta function to see if field should be handled in a special manner
-                const can_be_string = comptime canBeString(field.type);
+                const can_be_string = comptime canBeString(FieldType);
                 const is_string = comptime can_be_string and meta.call("isFieldString", .{ T, field_enum });
-                const can_be_clamped_array = comptime !is_string and canBeClampedArray(field.type);
+                const can_be_clamped_array = comptime !is_string and canBeClampedArray(FieldType);
                 const is_clamped_array = comptime can_be_clamped_array and meta.call("isFieldClampedArray", .{ T, field_enum });
-                const can_be_typed_array = comptime !is_string and !is_clamped_array and canBeTypedArray(field.type);
+                const can_be_typed_array = comptime !is_string and !is_clamped_array and canBeTypedArray(FieldType);
                 const is_typed_array = comptime can_be_typed_array and meta.call("isFieldTypedArray", .{ T, field_enum });
-                const can_be_plain = comptime !is_string and !is_typed_array and !is_clamped_array and canBePlain(field.type);
+                const can_be_plain = comptime !is_string and !is_typed_array and !is_clamped_array and canBePlain(FieldType);
                 const is_plain = comptime can_be_plain and meta.call("isFieldPlain", .{ T, field_enum });
                 const is_packed = @typeInfo(T).@"struct".layout == .@"packed";
-                const FT = if (comptime supported.is(field.type)) field.type else Unsupported;
+                const FT = if (comptime supported.is(FieldType)) FieldType else Unsupported;
                 try appendList(list, .{
-                    .name = field.name,
-                    .type = getMemberType(field.type, field.is_comptime),
+                    .name = field_name,
+                    .type = getMemberType(FieldType, field_attrs.@"comptime"),
                     .flags = MemberFlags{
                         .is_read_only = !is_actual,
-                        .is_required = is_actual and field.default_value_ptr == null,
+                        .is_required = is_actual and field_attrs.default_value_ptr == null,
                         .is_string = is_string,
                         .is_plain = is_plain,
                         .is_typed_array = is_typed_array,
                         .is_clamped_array = is_clamped_array,
                     },
-                    .bitOffset = if (is_actual) @bitOffsetOf(T, field.name) else null,
-                    .bitSize = if (is_actual) bit_size.get(field.type) else null,
-                    .byteSize = if (is_actual and !is_packed) byte_size.get(field.type) else null,
+                    .bitOffset = if (is_actual) @bitOffsetOf(T, field_name) else null,
+                    .bitSize = if (is_actual) bit_size.get(FieldType) else null,
+                    .byteSize = if (is_actual and !is_packed) byte_size.get(FieldType) else null,
                     .slot = index,
                     .structure = try self.getStructure(FT),
                 });
             }
-            if (@typeInfo(T).@"struct".backing_integer) |IT| {
+            if (info.backing_integer) |IT| {
                 // add member for backing int
                 try appendList(list, .{
                     .type = getMemberType(IT, false),
@@ -598,30 +605,32 @@ fn Factory(comptime host: type, comptime module: type) type {
 
         fn addUnionMembers(self: @This(), list: Value, comptime T: type) !void {
             const FieldEnum = std.meta.FieldEnum(T);
-            inline for (std.meta.fields(T), 0..) |field, index| {
-                const field_enum = comptime std.meta.stringToEnum(FieldEnum, field.name).?;
-                const can_be_string = comptime canBeString(field.type);
+            const info = @typeInfo(T).@"union";
+            inline for (info.field_names, 0..) |field_name, index| {
+                const FieldType = info.field_types[index];
+                const field_enum = comptime std.meta.stringToEnum(FieldEnum, field_name).?;
+                const can_be_string = comptime canBeString(FieldType);
                 const is_string = comptime can_be_string and meta.call("isFieldString", .{ T, field_enum });
-                const can_be_clamped_array = comptime !is_string and canBeClampedArray(field.type);
+                const can_be_clamped_array = comptime !is_string and canBeClampedArray(FieldType);
                 const is_clamped_array = comptime can_be_clamped_array and meta.call("isFieldClampedArray", .{ T, field_enum });
-                const can_be_typed_array = comptime !is_string and !is_clamped_array and canBeTypedArray(field.type);
+                const can_be_typed_array = comptime !is_string and !is_clamped_array and canBeTypedArray(FieldType);
                 const is_typed_array = comptime can_be_typed_array and meta.call("isFieldTypedArray", .{ T, field_enum });
-                const can_be_plain = comptime !is_string and !is_typed_array and !is_clamped_array and canBePlain(field.type);
+                const can_be_plain = comptime !is_string and !is_typed_array and !is_clamped_array and canBePlain(FieldType);
                 const is_plain = comptime can_be_plain and meta.call("isFieldPlain", .{ T, field_enum });
-                const FT = if (comptime supported.is(field.type)) field.type else Unsupported;
+                const FT = if (comptime supported.is(FieldType)) FieldType else Unsupported;
                 try appendList(list, .{
-                    .name = field.name,
-                    .type = getMemberType(field.type, false),
+                    .name = field_name,
+                    .type = getMemberType(FieldType, false),
                     .flags = MemberFlags{
-                        .is_read_only = comptime_only.is(field.type),
+                        .is_read_only = comptime_only.is(FieldType),
                         .is_string = is_string,
                         .is_plain = is_plain,
                         .is_typed_array = is_typed_array,
                         .is_clamped_array = is_clamped_array,
                     },
                     .bitOffset = content_offset.get(T),
-                    .bitSize = bit_size.get(field.type),
-                    .byteSize = byte_size.get(field.type),
+                    .bitSize = bit_size.get(FieldType),
+                    .byteSize = byte_size.get(FieldType),
                     .slot = index,
                     .structure = try self.getStructure(FT),
                 });
@@ -672,7 +681,7 @@ fn Factory(comptime host: type, comptime module: type) type {
             });
             // don't export inferred error sets that are essentially anyerror as separate sets
             comptime var ES = @typeInfo(T).error_union.error_set;
-            if (@typeInfo(ES).error_set == null) {
+            if (@typeInfo(ES).error_set.error_names == null) {
                 ES = anyerror;
             }
             try appendList(list, .{
@@ -714,11 +723,13 @@ fn Factory(comptime host: type, comptime module: type) type {
                     if (comptime !comptime_only.is(T) and @sizeOf(T) > 0) {
                         const default_values = comptime init: {
                             var values: T = undefined;
-                            for (st.fields) |field| {
-                                if (!field.is_comptime) {
-                                    if (field.default_value_ptr) |opaque_ptr| {
-                                        const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
-                                        @field(values, field.name) = default_value_ptr.*;
+                            for (st.field_names, 0..) |field_name, index| {
+                                const FieldType = st.field_types[index];
+                                const field_attrs = st.field_attrs[index];
+                                if (!field_attrs.@"comptime") {
+                                    if (field_attrs.default_value_ptr) |opaque_ptr| {
+                                        const default_value_ptr: *const FieldType = @ptrCast(@alignCast(opaque_ptr));
+                                        @field(values, field_name) = default_value_ptr.*;
                                     }
                                 }
                             }
@@ -726,12 +737,13 @@ fn Factory(comptime host: type, comptime module: type) type {
                         };
                         memory = try self.exportPointerTarget(&default_values, false);
                     }
-                    inline for (st.fields, 0..) |field, index| {
-                        if (field.default_value_ptr) |opaque_ptr| {
-                            if ((field.is_comptime or comptime_only.is(field.type)) and comptime supported.is(field.type)) {
+                    inline for (st.field_attrs, 0..) |field_attrs, index| {
+                        const FieldType = st.field_types[index];
+                        if (field_attrs.default_value_ptr) |opaque_ptr| {
+                            if ((field_attrs.@"comptime" or comptime_only.is(FieldType)) and comptime supported.is(FieldType)) {
                                 // comptime members aren't stored in the struct's memory
                                 // they're separate objects in the slots of the static template
-                                const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
+                                const default_value_ptr: *const FieldType = @ptrCast(@alignCast(opaque_ptr));
                                 const value_obj = try self.exportPointerTarget(default_value_ptr, true);
                                 if (slots == null) slots = try host.createObject();
                                 try host.setSlotValue(slots.?, index, value_obj);
@@ -768,10 +780,10 @@ fn Factory(comptime host: type, comptime module: type) type {
                 switch (@typeInfo(T)) {
                     .@"struct", .@"union", .@"enum", .@"opaque" => if (comptime !arg_struct.is(T, null) and !slice.is(T)) {
                         const DeclEnum = std.meta.DeclEnum(T);
-                        inline for (comptime std.meta.declarations(T), 0..) |decl, index| {
-                            if (comptime std.mem.startsWith(u8, decl.name, "meta(")) continue;
-                            const decl_enum = comptime std.meta.stringToEnum(DeclEnum, decl.name).?;
-                            const decl_ptr = &@field(T, decl.name);
+                        inline for (comptime std.meta.declarations(T), 0..) |decl_name, index| {
+                            if (comptime std.mem.startsWith(u8, decl_name, "meta(")) continue;
+                            const decl_enum = comptime std.meta.stringToEnum(DeclEnum, decl_name).?;
+                            const decl_ptr = &@field(T, decl_name);
                             const PT = @TypeOf(decl_ptr);
                             if (comptime supported.is(PT)) {
                                 const decl_value = decl_ptr.*;
@@ -796,7 +808,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                                     const can_be_plain = comptime !is_string and !is_typed_array and !is_clamped_array and canBePlain(DT);
                                     const is_plain = comptime can_be_plain and meta.call("isDeclPlain", .{ T, decl_enum });
                                     try appendList(list, .{
-                                        .name = decl.name,
+                                        .name = decl_name,
                                         .type = MemberType.object,
                                         .flags = MemberFlags{
                                             .is_read_only = @typeInfo(PT).pointer.attrs.@"const",
@@ -822,9 +834,9 @@ fn Factory(comptime host: type, comptime module: type) type {
             switch (@typeInfo(T)) {
                 .@"enum" => |en| {
                     // add fields as static members
-                    inline for (en.fields, 0..) |field, index| {
+                    inline for (en.field_names, 0..) |field_name, index| {
                         try appendList(list, .{
-                            .name = field.name,
+                            .name = field_name,
                             .type = MemberType.object,
                             .flags = MemberFlags{ .is_part_of_set = true },
                             .slot = offset + index,
@@ -832,10 +844,10 @@ fn Factory(comptime host: type, comptime module: type) type {
                         });
                     }
                 },
-                .error_set => |es| if (es) |errors| {
-                    inline for (errors, 0..) |err_rec, index| {
+                .error_set => |es| if (es.error_names) |error_names| {
+                    inline for (error_names, 0..) |error_name, index| {
                         try appendList(list, .{
-                            .name = err_rec.name,
+                            .name = error_name,
                             .type = MemberType.object,
                             .flags = MemberFlags{ .is_part_of_set = true },
                             .slot = index,
@@ -871,7 +883,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                                 } else false;
                                 if (should_export) {
                                     const target_ptr = comptime switch (@typeInfo(DT)) {
-                                        .@"fn" => |f| switch (f.calling_convention) {
+                                        .@"fn" => |f| switch (f.attrs.@"callconv") {
                                             .@"inline" => &fn_transform.uninline(decl_value),
                                             else => decl_ptr,
                                         },
@@ -890,16 +902,16 @@ fn Factory(comptime host: type, comptime module: type) type {
             }
             switch (@typeInfo(T)) {
                 .@"enum" => |en| {
-                    inline for (en.fields, 0..) |field, index| {
-                        const value = @field(T, field.name);
+                    inline for (en.field_names, 0..) |field_name, index| {
+                        const value = @field(T, field_name);
                         const value_obj = try self.exportPointerTarget(&value, true);
                         if (slots == null) slots = try host.createObject();
                         try host.setSlotValue(slots.?, offset + index, value_obj);
                     }
                 },
-                .error_set => |es| if (es) |errors| {
-                    inline for (errors, 0..) |err_rec, index| {
-                        const err = @field(anyerror, err_rec.name);
+                .error_set => |es| if (es.error_names) |error_names| {
+                    inline for (error_names, 0..) |error_name, index| {
+                        const err = @field(anyerror, error_name);
                         const value_obj = try self.exportError(err, T);
                         if (slots == null) slots = try host.createObject();
                         try host.setSlotValue(slots.?, offset + index, value_obj);
@@ -917,8 +929,8 @@ fn Factory(comptime host: type, comptime module: type) type {
                     .@"fn" => |f| {
                         var has_abort_signal = false;
                         var has_promise = false;
-                        for (f.params) |param| {
-                            switch (getStructurePurpose(param.type.?)) {
+                        for (f.param_types) |param_type| {
+                            switch (getStructurePurpose(param_type.?)) {
                                 .abort_signal => has_abort_signal = true,
                                 .promise => has_promise = true,
                                 else => {},
@@ -961,8 +973,8 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .array => |ar| ar.child == u8 or ar.child == u16 or canBeString(ar.child),
                 .optional => |op| canBeString(op.child),
                 .error_union => |eu| canBeString(eu.payload),
-                .@"fn" => |f| inline for (f.params) |param| {
-                    if (param.type) |PT| {
+                .@"fn" => |f| inline for (f.param_types) |param_type| {
+                    if (param_type) |PT| {
                         if (comptime util.getInternalType(PT)) |internal_type| {
                             if (internal_type == .promise or internal_type == .generator) {
                                 if (canBeString(PT.payload)) break true;
@@ -984,8 +996,8 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .@"struct", .@"union", .array, .vector, .@"enum" => true,
                 .optional => |op| canBePlain(op.child),
                 .error_union => |eu| canBePlain(eu.payload),
-                .@"fn" => |f| inline for (f.params) |param| {
-                    if (param.type) |PT| {
+                .@"fn" => |f| inline for (f.param_types) |param_type| {
+                    if (param_type) |PT| {
                         if (comptime util.getInternalType(PT)) |internal_type| {
                             if (internal_type == .promise or internal_type == .generator) {
                                 if (canBePlain(PT.payload)) break true;
@@ -1000,8 +1012,8 @@ fn Factory(comptime host: type, comptime module: type) type {
         fn canBeTypedArray(comptime T: type) bool {
             return switch (@typeInfo(T)) {
                 .pointer => canBeTypedArray(target.get(T)),
-                .@"fn" => |f| inline for (f.params) |param| {
-                    if (param.type) |PT| {
+                .@"fn" => |f| inline for (f.param_types) |param_type| {
+                    if (param_type) |PT| {
                         if (comptime util.getInternalType(PT)) |internal_type| {
                             if (internal_type == .promise or internal_type == .generator) {
                                 if (canBeTypedArray(PT.payload)) break true;
@@ -1017,8 +1029,8 @@ fn Factory(comptime host: type, comptime module: type) type {
         fn canBeClampedArray(comptime T: type) bool {
             return switch (@typeInfo(T)) {
                 .pointer => canBeClampedArray(target.get(T)),
-                .@"fn" => |f| inline for (f.params) |param| {
-                    if (param.type) |PT| {
+                .@"fn" => |f| inline for (f.param_types) |param_type| {
+                    if (param_type) |PT| {
                         if (comptime util.getInternalType(PT)) |internal_type| {
                             if (internal_type == .promise or internal_type == .generator) {
                                 if (canBeClampedArray(PT.payload)) break true;
@@ -1054,7 +1066,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 const obj = try createInstance(structure, value_ptr, is_comptime, pt.attrs.@"const", export_handle, comptime_values);
                 return obj;
             } else {
-                return createView(value_ptr, is_comptime, pt.is_const, export_handle);
+                return createView(value_ptr, is_comptime, pt.attrs.@"const", export_handle);
             }
         }
 
@@ -1097,19 +1109,21 @@ fn Factory(comptime host: type, comptime module: type) type {
                     const obj = try self.exportComptimeValue(element);
                     try host.setSlotValue(slots, index, obj);
                 },
-                .@"struct" => |st| inline for (st.fields, 0..) |field, index| {
-                    if (comptime_only.is(field.type)) {
-                        const field_value = @field(value, field.name);
+                .@"struct" => |st| inline for (st.field_names, 0..) |field_name, index| {
+                    const FieldType = st.field_types[index];
+                    if (comptime_only.is(FieldType)) {
+                        const field_value = @field(value, field_name);
                         const obj = try self.exportComptimeValue(field_value);
                         try host.setSlotValue(slots, index, obj);
                     }
                 },
                 .@"union" => |un| if (un.tag_type) |Tag| {
                     const tag: Tag = value;
-                    inline for (un.fields, 0..) |field, index| {
-                        if (@field(Tag, field.name) == tag) {
-                            if (comptime_only.is(field.type)) {
-                                const field_value = @field(value, field.name);
+                    inline for (un.field_names, 0..) |field_name, index| {
+                        if (@field(Tag, field_name) == tag) {
+                            const FieldType = un.field_types[index];
+                            if (comptime_only.is(FieldType)) {
+                                const field_value = @field(value, field_name);
                                 const obj = try self.exportComptimeValue(field_value);
                                 try host.setSlotValue(slots, index, obj);
                             }
@@ -1130,9 +1144,9 @@ fn Factory(comptime host: type, comptime module: type) type {
         }
 
         fn setProperties(obj: Value, initializers: anytype) !void {
-            inline for (std.meta.fields(@TypeOf(initializers))) |field| {
-                if (try createValue(@field(initializers, field.name))) |value| {
-                    try host.setProperty(obj, field.name, value);
+            inline for (comptime std.meta.fieldNames(@TypeOf(initializers))) |field_name| {
+                if (try createValue(@field(initializers, field_name))) |value| {
+                    try host.setProperty(obj, field_name, value);
                 }
             }
         }
@@ -1275,8 +1289,8 @@ fn removeComptimeValues(comptime value: anytype) ComptimeFree(@TypeOf(value)) {
             }
         },
         .@"struct" => |st| {
-            inline for (st.fields) |field| {
-                @field(result, field.name) = removeComptimeValues(@field(value, field.name));
+            inline for (st.field_names) |field_name| {
+                @field(result, field_name) = removeComptimeValues(@field(value, field_name));
             }
         },
         .@"union" => |un| {

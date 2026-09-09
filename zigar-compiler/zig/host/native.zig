@@ -366,11 +366,12 @@ pub fn redirectSyscall(call: *hooks.Syscall) std.c.E {
         false => .FAULT,
     };
     // translate from WASI enum to the current system's
-    return inline for (std.meta.fields(E)) |field| {
-        const wasi_enum = @field(E, field.name);
+    const info = @typeInfo(E).@"enum";
+    return inline for (info.field_names) |field_name| {
+        const wasi_enum = @field(E, field_name);
         if (wasi_enum == result) {
-            break switch (@hasField(std.c.E, field.name)) {
-                true => @field(std.c.E, field.name),
+            break switch (@hasField(std.c.E, field_name)) {
+                true => @field(std.c.E, field_name),
                 false => .FAULT,
             };
         }
@@ -389,8 +390,9 @@ pub fn isRedirecting(comptime literal: @TypeOf(.enum_literal)) bool {
     var mask: hooks.Syscall.Mask = undefined;
     if (imports.get_syscall_mask(instance, &mask) != .SUCCESS) return false;
     if (literal == .any) {
-        return inline for (std.meta.fields(hooks.Syscall.Mask)) |field| {
-            if (@field(mask, field.name)) break true;
+        const info = @typeInfo(hooks.Syscall.Mask).@"struct";
+        return inline for (info.field_names) |field_name| {
+            if (@field(mask, field_name)) break true;
         } else false;
     } else {
         const name = @tagName(literal);

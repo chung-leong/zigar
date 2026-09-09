@@ -106,7 +106,7 @@ pub fn PromiseOf(comptime arg: anytype) type {
 pub fn PromiseArgOf(comptime arg: anytype) type {
     const FT = util.Function(arg);
     const f = @typeInfo(FT).@"fn";
-    return inline for (f.params) |param| {
-        if (util.getInternalType(param.type) == .promise) break param.type.?;
+    return inline for (f.param_types) |param_type| {
+        if (util.getInternalType(param_type) == .promise) break param_type.?;
     } else @compileError("No promise argument: " ++ @typeName(FT));
 }

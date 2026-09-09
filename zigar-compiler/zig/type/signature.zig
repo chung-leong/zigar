@@ -20,13 +20,15 @@ fn calculate(comptime T: type, comptime checking: anytype) u64 {
                 xxhash.update(")");
             }
             xxhash.update(" {");
-            inline for (st.fields) |field| {
-                if (!field.is_comptime) {
-                    xxhash.update(field.name);
+            inline for (st.field_names, 0..) |field_name, i| {
+                const FieldType = st.field_types[i];
+                const field_attrs = st.field_attrs[i];
+                if (!field_attrs.@"comptime") {
+                    xxhash.update(field_name);
                     xxhash.update(": ");
-                    xxhash.update(std.mem.asBytes(&calculate(field.type, checking ++ .{T})));
-                    if (field.alignment) |al| {
-                        if (al != @alignOf(field.type)) {
+                    xxhash.update(std.mem.asBytes(&calculate(FieldType, checking ++ .{T})));
+                    if (field_attrs.@"align") |al| {
+                        if (al != @alignOf(FieldType)) {
                             xxhash.update(std.fmt.comptimePrint(" align({d})", .{al}));
                         }
                     }
@@ -46,12 +48,13 @@ fn calculate(comptime T: type, comptime checking: anytype) u64 {
                 xxhash.update(")");
             }
             xxhash.update(" {");
-            inline for (un.fields) |field| {
-                xxhash.update(field.name);
+            inline for (un.field_names, 0..) |field_name, i| {
+                const FieldType = un.field_types[i];
+                xxhash.update(field_name);
                 xxhash.update(": ");
-                xxhash.update(std.mem.asBytes(&calculate(field.type, checking ++ .{T})));
-                if (field.alignment) |al| {
-                    if (al != @alignOf(field.type)) {
+                xxhash.update(std.mem.asBytes(&calculate(FieldType, checking ++ .{T})));
+                if (un.field_attrs[i].@"align") |al| {
+                    if (al != @alignOf(FieldType)) {
                         xxhash.update(std.fmt.comptimePrint(" align({d})", .{al}));
                     }
                 }
@@ -82,9 +85,9 @@ fn calculate(comptime T: type, comptime checking: anytype) u64 {
                 xxhash.update("anyerror");
             } else {
                 xxhash.update("error{");
-                if (es) |errors| {
-                    inline for (errors) |err| {
-                        xxhash.update(err.name);
+                if (es.error_names) |error_names| {
+                    inline for (error_names) |error_name| {
+                        xxhash.update(error_name);
                         xxhash.update(",");
                     }
                 }
@@ -109,7 +112,7 @@ fn calculate(comptime T: type, comptime checking: anytype) u64 {
             if (pt.attrs.@"const") {
                 xxhash.update("const ");
             }
-            if (pt.is_allowzero) {
+            if (pt.attrs.@"allowzero") {
                 xxhash.update("allowzero ");
             }
             const child_sig: u64 = inline for (checking) |C| {
@@ -119,11 +122,11 @@ fn calculate(comptime T: type, comptime checking: anytype) u64 {
         },
         .@"fn" => |f| {
             xxhash.update("fn (");
-            inline for (f.params) |param| {
-                if (param.is_noalias) {
+            inline for (f.param_types, 0..) |param_type, i| {
+                if (f.param_attrs[i].@"noalias") {
                     xxhash.update("noalias ");
                 }
-                if (param.type) |PT| {
+                if (param_type) |PT| {
                     xxhash.update(std.mem.asBytes(&calculate(PT, checking)));
                 } else {
                     xxhash.update("anytype");
@@ -134,9 +137,9 @@ fn calculate(comptime T: type, comptime checking: anytype) u64 {
                 xxhash.update("...");
             }
             xxhash.update(") ");
-            if (f.calling_convention != .auto) {
+            if (f.attrs.@"callconv" != .auto) {
                 xxhash.update("callconv(.");
-                xxhash.update(@tagName(f.calling_convention));
+                xxhash.update(@tagName(f.attrs.@"callconv"));
                 xxhash.update(") ");
             }
             if (f.return_type) |RT| {
