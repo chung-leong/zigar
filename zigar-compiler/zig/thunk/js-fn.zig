@@ -270,9 +270,9 @@ fn findErrorIndex(comptime T: type, comptime errors: anytype) ?usize {
     return switch (@typeInfo(T)) {
         .error_union => |eu| inline for (errors, 0..) |err, i| {
             const name = @errorName(err);
-            if (@typeInfo(eu.error_set).error_set) |available_set| {
-                break inline for (available_set) |available| {
-                    if (std.mem.eql(u8, available.name, name)) break i;
+            if (@typeInfo(eu.error_set).error_set.error_names) |error_names| {
+                break inline for (error_names) |error_name| {
+                    if (std.mem.eql(u8, error_name, name)) break i;
                 } else null;
             } else break null;
         } else null,

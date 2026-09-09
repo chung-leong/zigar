@@ -18,7 +18,11 @@ pub fn get(comptime T: type) ?usize {
         .null, .undefined, .@"fn" => 0,
         .@"opaque", .type => null,
         .error_set => @bitSizeOf(anyerror),
-        .int, .float => @bitSizeOf(T),
+        .@"struct" => |st| switch (st.layout) {
+            .@"packed" => @bitSizeOf(T),
+            else => @sizeOf(T) * 8,
+        },
+        .int, .float, .bool, .vector => @bitSizeOf(T),
         else => @sizeOf(T) * 8,
     };
 }

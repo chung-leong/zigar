@@ -412,7 +412,7 @@ pub fn createModule(comptime module_ns: type) Module {
         .attributes = .{
             .little_endian = builtin.target.cpu.arch.endian() == .little,
             .runtime_safety = switch (builtin.mode) {
-                .debug, .ReleaseSafe => true,
+                .debug, .safe => true,
                 else => false,
             },
             .libc = builtin.link_libc,

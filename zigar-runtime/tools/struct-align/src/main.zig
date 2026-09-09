@@ -54,10 +54,9 @@ pub fn main() !void {
     const stdout_file = std.io.getStdOut().writer();
     var bw = std.io.bufferedWriter(stdout_file);
     const stdout = bw.writer();
-    const decls = @typeInfo(Structs).Struct.decls;
-    inline for (decls) |decl| {
-        const T = @field(Structs, decl.name);
-        try stdout.print("{s}: align = {d}, size = {d}\n", .{ decl.name, @alignOf(T), @sizeOf(T) });
+    inline for (@typeInfo(Structs).Struct.decl_names) |decl_name| {
+        const T = @field(Structs, decl_name);
+        try stdout.print("{s}: align = {d}, size = {d}\n", .{ decl_name, @alignOf(T), @sizeOf(T) });
     }
     try bw.flush();
 }

@@ -226,7 +226,7 @@ export fn getModuleAttributes() u32 {
     const attributes: packed struct(u32) {
         little_endian: bool = builtin.target.cpu.arch.endian() == .little,
         runtime_safety: bool = switch (builtin.mode) {
-            .debug, .ReleaseSafe => true,
+            .debug, .safe => true,
             else => false,
         },
         libc: bool = builtin.link_libc,
