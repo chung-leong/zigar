@@ -69,8 +69,8 @@ pub const VisitOptions = packed struct {
 };
 
 pub fn enumName(comptime S: type) []const u8 {
-    return inline for (comptime std.meta.fields(@TypeOf(by_enum))) |field| {
-        if (@field(by_enum, field.name) == S) break field.name;
+    return inline for (comptime std.meta.fieldNames(@TypeOf(by_enum))) |field_name| {
+        if (@field(by_enum, field_name) == S) break field_name;
     } else @compileError("Unrecognized structure type: " ++ @typeName(S));
 }
 
@@ -967,8 +967,8 @@ pub fn invokeMethod(obj: *Object, comptime name: []const u8, args: anytype) RT: 
     // merge the error sets of all implementations and verify that they have the same payload
     var error_set = error{};
     var payload: ?type = null;
-    for (std.meta.fields(@TypeOf(by_enum))) |field| {
-        const S = @field(by_enum, field.name);
+    for (std.meta.fieldNames(@TypeOf(by_enum))) |field_name| {
+        const S = @field(by_enum, field_name);
         if (@hasDecl(S, name)) {
             const RT = ReturnType(S, name);
             if (ErrorType(RT)) |ES| {

@@ -22,74 +22,68 @@ pub fn Controller(comptime Host: type) type {
 
     return struct {
         pub fn installHooks(host: *Host, lib: *DynLib) !LibExtent {
-            var sfb = std.heap.stackFallback(4096, c_allocator);
-            const allocator = sfb.get();
+            var sfb_buffer: [4096]u8 = undefined;
+            var sfb: std.heap.BufferFirstAllocator = .init(&sfb_buffer, c_allocator);
+            const allocator = sfb.allocator();
             if (os == .linux) {
-                const elf = std.elf;
-                const Elf_Ehdr = if (bits == 64) elf.Elf64_Ehdr else elf.Elf32_Ehdr;
-                const Elf_Phdr = if (bits == 64) elf.Elf64_Phdr else elf.Elf32_Phdr;
-                const Elf_Shdr = if (bits == 64) elf.Elf64_Shdr else elf.Elf32_Shdr;
-                const Elf_Sym = if (bits == 64) elf.Elf64_Sym else elf.Elf32_Sym;
-                const Elf_Rel = if (bits == 64) elf.Elf64_Rela else elf.Elf32_Rel;
+                const elf = if (bits == 64) std.elf.Elf64 else std.elf.Elf32;
                 const file = try std.Io.Dir.openFileAbsolute(io, lib.path, .{});
                 defer file.close(io);
                 // read ELF header
-                const header = try readStruct(Elf_Ehdr, file, 0);
-                const segments = try readStructs(Elf_Phdr, allocator, file, header.e_phnum, header.e_phoff);
+                const header = try readStruct(elf.Ehdr, file, 0);
+                const segments = try readStructs(elf.Phdr, allocator, file, header.phnum, header.phoff);
                 defer allocator.free(segments);
-                const sections = try readStructs(Elf_Shdr, allocator, file, header.e_shnum, header.e_shoff);
+                const sections = try readStructs(elf.Shdr, allocator, file, header.shnum, header.shoff);
                 defer allocator.free(sections);
                 // find symbol table
                 const dynsym = for (sections) |s| {
-                    if (s.sh_type == elf.SHT_DYNSYM) break s;
+                    if (s.type == .DYNSYM) break s;
                 } else return error.Unexpected;
-                const symbol_count = dynsym.sh_size / @sizeOf(Elf_Sym);
-                const symbols = try readStructs(Elf_Sym, allocator, file, symbol_count, dynsym.sh_offset);
+                const symbol_count = dynsym.size / @sizeOf(elf.Sym);
+                const symbols = try readStructs(elf.Sym, allocator, file, symbol_count, dynsym.offset);
                 defer allocator.free(symbols);
                 // get string table
-                const link = sections[dynsym.sh_link];
-                const symbol_strs = try readStructs(u8, allocator, file, link.sh_size, link.sh_offset);
+                const link = sections[dynsym.link];
+                const symbol_strs = try readStructs(u8, allocator, file, link.size, link.offset);
                 defer allocator.free(symbol_strs);
                 // find base address of library
                 const base_address = for (symbols) |s| {
-                    const binding = s.st_bind();
-                    if ((binding == elf.STB_GLOBAL or binding == elf.STB_WEAK) and s.st_value != 0) {
-                        const symbol_name_ptr: [*:0]u8 = @ptrCast(&symbol_strs[s.st_name]);
+                    if ((s.info.bind == .GLOBAL or s.info.bind == .WEAK) and s.value != 0) {
+                        const symbol_name_ptr: [*:0]u8 = @ptrCast(&symbol_strs[s.name]);
                         const symbol_name_len = std.mem.len(symbol_name_ptr);
                         const symbol_name: [:0]u8 = @ptrCast(symbol_name_ptr[0..symbol_name_len]);
                         if (lib.lookup(*anyopaque, symbol_name)) |symbol| {
-                            break @intFromPtr(symbol) - s.st_value;
+                            break @intFromPtr(symbol) - s.value;
                         }
                     }
                 } else return error.Unexpected;
                 // scan through relocations
                 for (sections) |s| {
-                    const sh_type = if (bits == 64) elf.SHT_RELA else elf.SHT_REL;
-                    if (s.sh_type != sh_type) continue;
-                    const rela_entry_ptr: [*]Elf_Rel = @ptrFromInt(base_address + s.sh_addr);
-                    const rela_entry_count = s.sh_size / @sizeOf(Elf_Rel);
+                    const sh_type = if (bits == 64) .RELA else .REL;
+                    if (s.type != sh_type) continue;
+                    const rela_entry_ptr: [*]elf.Rel = @ptrFromInt(base_address + s.addr);
+                    const rela_entry_count = s.size / @sizeOf(elf.Rel);
                     const rela_entries = rela_entry_ptr[0..rela_entry_count];
                     for (rela_entries) |r| {
-                        const symbol_index = r.r_sym();
-                        if (symbol_index == 0) continue;
-                        const symbol = symbols[symbol_index];
-                        const symbol_name: [*:0]u8 = @ptrCast(&symbol_strs[symbol.st_name]);
+                        if (r.info.sym == 0) continue;
+                        const symbol = symbols[r.info.sym];
+                        const symbol_name: [*:0]u8 = @ptrCast(&symbol_strs[symbol.name]);
                         const hook = host.getSyscallHook(symbol_name) orelse continue;
                         // get protection flags from segment load commands
                         var read_only = false;
                         for (segments) |seg| {
-                            if (seg.p_vaddr <= r.r_offset and r.r_offset < seg.p_vaddr + seg.p_memsz) {
-                                read_only = (seg.p_flags & elf.PF_W) == 0;
+                            if (seg.vaddr <= r.offset and r.offset < seg.vaddr + seg.memsz) {
+                                read_only = !seg.flags.W;
                             }
                         }
-                        const address = base_address + r.r_offset;
+                        const address = base_address + r.offset;
                         try installHook(hook, address, read_only);
                     }
                 }
                 // determine the library's extent
                 var max_vaddr: ?usize = null;
                 for (segments) |segment| {
-                    const end = segment.p_vaddr + segment.p_memsz;
+                    const end = segment.vaddr + segment.memsz;
                     if (max_vaddr == null or end > max_vaddr.?) max_vaddr = end;
                 }
                 return .{ .address = base_address, .len = max_vaddr.? };
@@ -508,10 +502,7 @@ pub fn Controller(comptime Host: type) type {
         fn getLibcExtent() !LibExtent {
             if (os != .linux) @compileError("Unsupported");
             return libc_extent orelse {
-                const elf = std.elf;
-                const Elf_Ehdr = if (bits == 64) elf.Elf64_Ehdr else elf.Elf32_Ehdr;
-                const Elf_Phdr = if (bits == 64) elf.Elf64_Phdr else elf.Elf32_Phdr;
-
+                const elf = if (bits == 64) std.elf.Elf64 else std.elf.Elf32;
                 // look for libc's path and base address
                 var dl_info: c.Dl_info = undefined;
                 const dladdr_res = c.dladdr(&std.c.sigaction, &dl_info);
@@ -521,16 +512,17 @@ pub fn Controller(comptime Host: type) type {
                 const libc_path = dl_info.dli_fname[0..std.mem.len(dl_info.dli_fname)];
                 const libc_address = @intFromPtr(dl_info.dli_fbase.?);
                 // scan the .so to determine its extent in memory
-                var sfb = std.heap.stackFallback(4096, c_allocator);
-                const allocator = sfb.get();
+                var sfb_buffer: [4096]u8 = undefined;
+                var sfb: std.heap.BufferFirstAllocator = .init(&sfb_buffer, c_allocator);
+                const allocator = sfb.allocator();
                 const file = try std.Io.Dir.openFileAbsolute(io, libc_path, .{});
                 defer file.close(io);
-                const header = try readStruct(Elf_Ehdr, file, 0);
-                const segments = try readStructs(Elf_Phdr, allocator, file, header.e_phnum, header.e_phoff);
+                const header = try readStruct(elf.Ehdr, file, 0);
+                const segments = try readStructs(elf.Phdr, allocator, file, header.phnum, header.phoff);
                 defer allocator.free(segments);
                 var max_vaddr: ?usize = null;
                 for (segments) |segment| {
-                    const end = segment.p_vaddr + segment.p_memsz;
+                    const end = segment.vaddr + segment.memsz;
                     if (max_vaddr == null or end > max_vaddr.?) max_vaddr = end;
                 }
                 libc_extent = .{ .address = libc_address, .len = max_vaddr.? };

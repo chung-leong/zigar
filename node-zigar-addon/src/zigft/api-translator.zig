@@ -119,27 +119,27 @@ pub fn BasicErrorScheme(
     if (es_info != .error_set) @compileError("Error set expected, found '" ++ @typeName(new_error_set) ++ "'");
     const en_info = @typeInfo(old_enum_type);
     const en_count = switch (en_info) {
-        .@"enum" => |en| en.fields.len,
+        .@"enum" => |en| en.field_names.len,
         .int, .bool, .void => 1,
         else => @compileError("Enum, int, bool, or void expected, found '" ++ @typeName(old_enum_type) ++ "'"),
     };
-    const error_set = es_info.error_set orelse &.{};
-    var error_enum_buffer: [error_set.len]struct {
+    const error_names = es_info.error_set.error_names orelse .{};
+    var error_enum_buffer: [error_names.len]struct {
         status: old_enum_type,
         err: new_error_set,
     } = undefined;
-    var signatures: [error_set.len]comptime_int = undefined;
-    for (error_set, 0..) |e, index| {
-        error_enum_buffer[index].err = @field(new_error_set, e.name);
-        signatures[index] = asComptimeInt(e.name);
+    var signatures: [error_names.len]comptime_int = undefined;
+    for (error_names, 0..) |error_name, index| {
+        error_enum_buffer[index].err = @field(new_error_set, error_name);
+        signatures[index] = asComptimeInt(error_name);
     }
     var non_error_status_buffer: [en_count]old_enum_type = undefined;
     var non_error_status_count = 0;
     switch (en_info) {
         .@"enum" => |en| {
-            for (en.fields) |field| {
-                const status = @field(old_enum_type, field.name);
-                const sig = asComptimeInt(field.name);
+            for (en.field_names) |field_name| {
+                const status = @field(old_enum_type, field_name);
+                const sig = asComptimeInt(field_name);
                 if (std.mem.indexOfScalar(comptime_int, &signatures, sig)) |i| {
                     error_enum_buffer[i].status = status;
                 } else {
@@ -267,30 +267,30 @@ pub fn Translator(comptime options: TranslatorOptions) type {
             };
             // look for non-const pointers, scanning backward
             const OutputTypes = init: {
-                var types: [old_fn.params.len + extra]type = undefined;
+                var types: [old_fn.param_types.len + extra]type = undefined;
                 if (extra == 1) {
-                    types[old_fn.params.len] = if (return_error_union)
+                    types[old_fn.param_types.len] = if (return_error_union)
                         options.error_scheme.OutputType(NewRT)
                     else
                         NewRT;
                 }
-                const start_index = inline for (0..old_fn.params.len) |j| {
-                    const i = old_fn.params.len - j - 1;
-                    const Target = WritableTarget(old_fn.params[i].type.?) orelse break i + 1;
+                const start_index = inline for (0..old_fn.param_types.len) |j| {
+                    const i = old_fn.param_types.len - j - 1;
+                    const Target = WritableTarget(old_fn.param_types[i].?) orelse break i + 1;
                     // see if the pointer is attributed as in/out
-                    if (getTypeWithAttributes(local_subs, i, old_fn.params.len)) |type_wa| {
+                    if (getTypeWithAttributes(local_subs, i, old_fn.param_types.len)) |type_wa| {
                         if (type_wa.is_inout) break i + 1;
                     }
-                    types[i] = Substitute(Target, local_subs, i, old_fn.params.len);
+                    types[i] = Substitute(Target, local_subs, i, old_fn.param_types.len);
                 } else 0;
                 break :init types[start_index..];
             };
-            const param_count = old_fn.params.len + extra - OutputTypes.len;
+            const param_count = old_fn.param_types.len + extra - OutputTypes.len;
             var param_types: [param_count]type = undefined;
-            var param_attrs: [param_count]std.builtin.Type.Fn.Param.Attributes = undefined;
-            inline for (old_fn.params, 0..) |param, i| {
+            var param_attrs: [param_count]std.lang.Type.Fn.ParamAttributes = undefined;
+            inline for (old_fn.param_types, 0..) |param_type, i| {
                 if (i < param_count) {
-                    param_types[i] = Substitute(param.type.?, local_subs, i, old_fn.params.len);
+                    param_types[i] = Substitute(param_type.?, local_subs, i, old_fn.param_types.len);
                     param_attrs[i] = .{ .@"noalias" = false };
                 }
             }
@@ -403,13 +403,7 @@ pub fn Translator(comptime options: TranslatorOptions) type {
                         .@"opaque" => u8,
                         else => pt.child,
                     };
-                    break :define @Pointer(.slice, .{
-                        .@"const" = pt.is_const,
-                        .@"volatile" = pt.is_volatile,
-                        .@"allowzero" = pt.is_allowzero,
-                        .@"addrspace" = pt.address_space,
-                        .@"align" = pt.alignment,
-                    }, ET, null);
+                    break :define @Pointer(.slice, pt.attrs, ET, null);
                 },
                 .optional => |op| ?SliceType(op.child),
                 else => @compileError("Argument is not a pointer"),
@@ -425,12 +419,12 @@ pub fn Translator(comptime options: TranslatorOptions) type {
                 .@"fn" => |f| f,
                 else => @compileError("Function type expected, received '" ++ @typeName(OldFn) ++ "'"),
             };
-            const param_count = old_fn.params.len - pairs.len;
+            const param_count = old_fn.param_types.len - pairs.len;
             var param_types: [param_count]type = undefined;
-            var param_attrs: [param_count]std.builtin.Type.Fn.Param.Attributes = undefined;
+            var param_attrs: [param_count]std.lang.Type.Fn.ParamAttributes = undefined;
             var j: usize = 0;
-            inline for (old_fn.params, 0..) |param, i| {
-                const PT = param.type orelse @compileError("Cannot merge generic argument");
+            inline for (old_fn.param_types, 0..) |param_type, i| {
+                const PT = param_type orelse @compileError("Cannot merge generic argument");
                 const is_index = inline for (pairs) |pair| {
                     if (pair.len_index == i) break true;
                 } else false;
@@ -442,7 +436,7 @@ pub fn Translator(comptime options: TranslatorOptions) type {
                         true => SliceType(PT),
                         false => PT,
                     };
-                    param_attrs[j] = .{ .@"noalias" = param.is_noalias };
+                    param_attrs[j] = .{ .@"noalias" = old_fn.param_attrs[i].@"noalias" };
                     j += 1;
                 } else {
                     switch (@typeInfo(PT)) {
@@ -451,7 +445,7 @@ pub fn Translator(comptime options: TranslatorOptions) type {
                     }
                 }
             }
-            return @Fn(&param_types, &param_attrs, old_fn.return_type.?, .{ .@"callconv" = old_fn.calling_convention });
+            return @Fn(&param_types, &param_attrs, old_fn.return_type.?, old_fn.attrs);
         }
 
         pub fn mergeSlice(
@@ -462,7 +456,7 @@ pub fn Translator(comptime options: TranslatorOptions) type {
             const OldFn = @TypeOf(func);
             const NewFn = SliceMerged(OldFn, pairs);
             const NewRT = @typeInfo(NewFn).@"fn".return_type.?;
-            const cc = @typeInfo(NewFn).@"fn".calling_convention;
+            const cc = @typeInfo(NewFn).@"fn".attrs.@"callconv";
             const ns = struct {
                 fn call(new_args: std.meta.ArgsTuple(NewFn)) NewRT {
                     var old_args: std.meta.ArgsTuple(OldFn) = undefined;
@@ -538,7 +532,7 @@ pub fn Translator(comptime options: TranslatorOptions) type {
                     .pointer => @ptrCast(arg),
                     .optional => if (arg) |a| convert(T, a) else switch (@typeInfo(T)) {
                         .optional => null,
-                        .pointer => |pt| if (pt.is_allowzero) null else @panic("Unexpected null pointer"),
+                        .pointer => |pt| if (pt.attrs.@"allowzero") null else @panic("Unexpected null pointer"),
                         else => @panic("Unexpected null pointer"),
                     },
                     // converting "pass-by-value" to "pass-by-pointer"
@@ -550,7 +544,7 @@ pub fn Translator(comptime options: TranslatorOptions) type {
                 },
                 .optional => |op| switch (@typeInfo(AT)) {
                     .optional => if (arg) |a| convert(op.child, a) else null,
-                    .pointer => |pt| switch (pt.is_allowzero and arg == null) {
+                    .pointer => |pt| switch (pt.attrs.@"allowzero" and arg == null) {
                         false => convert(op.child, arg),
                         true => null,
                     },
@@ -594,7 +588,7 @@ pub fn Translator(comptime options: TranslatorOptions) type {
 
         fn WritableTarget(comptime T: type) ?type {
             const info = @typeInfo(T);
-            if (info == .pointer and !info.pointer.is_const) {
+            if (info == .pointer and !info.pointer.attrs.@"const") {
                 const Target = info.pointer.child;
                 if (@typeInfo(Target) != .@"opaque" and @sizeOf(Target) != 0) return Target;
             }
@@ -634,7 +628,7 @@ pub const Expression = union(enum) {
             child_type: *const Expression,
             alignment: ?[]const u8,
             sentinel: ?[]const u8,
-            size: std.builtin.Type.Pointer.Size,
+            size: std.lang.Type.Pointer.Size,
             is_const: bool,
             is_volatile: bool,
             allows_zero: bool,
@@ -843,7 +837,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             for (options.header_paths) |path| {
                 const full_path = try self.findSourceFile(path);
                 const output = try self.translateHeaderFile(full_path);
-                const source = try self.allocator.dupeZ(u8, output);
+                const source = try self.allocator.dupeSentinel(u8, output, 0);
                 const tree = try Ast.parse(self.allocator, source, .zig);
                 for (tree.rootDecls()) |node| {
                     var buffer1: [1]Ast.Node.Index = undefined;
@@ -962,10 +956,12 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
                     .child_type = try self.obtainExpression(tree, ptr_type.ast.child_type),
                     .sentinel = if (ptr_type.ast.sentinel.unwrap()) |n| nodeSlice(tree, n) else null,
                     .size = ptr_type.size,
-                    .is_const = ptr_type.const_token != null,
-                    .is_volatile = ptr_type.volatile_token != null,
-                    .allows_zero = ptr_type.allowzero_token != null,
-                    .alignment = if (ptr_type.ast.align_node.unwrap()) |n| nodeSlice(tree, n) else null,
+                    .attrs = .{
+                        .@"const" = ptr_type.const_token != null,
+                        .@"volatile" = ptr_type.volatile_token != null,
+                        .allowszero = ptr_type.allowzero_token != null,
+                        .@"align" = if (ptr_type.ast.align_node.unwrap()) |n| nodeSlice(tree, n) else null,
+                    },
                 },
             };
         }
@@ -1358,7 +1354,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
                 var param_type: *const Expression = param.type;
                 if (self.getPointerInfo(param.type)) |p| {
                     // const pointer to struct and union can become by-value argument
-                    if (p.is_const and self.isTypeOf(p.child_type, .container)) {
+                    if (p.attrs.@"const" and self.isTypeOf(p.child_type, .container)) {
                         if (!self.isOpaque(p.child_type)) {
                             const type_name = try self.obtainTypeName(p.child_type, .old);
                             if (!param_opt.is_pointer_target and options.type_is_by_value_fn(type_name)) {
@@ -1477,7 +1473,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
                     .alignment = p.alignment,
                     .sentinel = if (is_null_terminated) "0" else null,
                     .size = if (is_many) .many else .one,
-                    .is_const = p.is_const,
+                    .is_const = p.attrs.@"const",
                     .is_volatile = p.is_volatile,
                     .allows_zero = p.allows_zero,
                 },
@@ -1991,7 +1987,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
 
         fn isWriteTarget(self: *@This(), expr: ?*const Expression) bool {
             if (self.getPointerInfo(expr)) |p| {
-                if (!p.is_const and !self.isOpaque(p.child_type)) {
+                if (!p.attrs.@"const" and !self.isOpaque(p.child_type)) {
                     return true;
                 }
             }
@@ -2120,7 +2116,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
                             if (!std.meta.eql(p1.alignment, p2.alignment)) return false;
                             if (!std.meta.eql(p1.sentinel, p2.sentinel)) return false;
                             if (p1.size != p2.size) return false;
-                            if (p1.is_const != p2.is_const) return false;
+                            if (p1.attrs.@"const" != p2.attrs.@"const") return false;
                             if (p1.is_volatile != p2.is_volatile) return false;
                             if (p1.allows_zero != p2.allows_zero) return false;
                             return true;
@@ -2677,7 +2673,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             if (p.sentinel) |s| try self.printFmt(":{s}", .{s});
             if (p.size != .one) try self.printTxt("]");
             if (p.allows_zero) try self.printTxt("allows_zero ");
-            if (p.is_const) try self.printTxt("const ");
+            if (p.attrs.@"const") try self.printTxt("const ");
             if (p.alignment) |a| try self.printFmt("align({s}) ", .{a});
             if (p.is_volatile) try self.printTxt("volatile ");
             try self.printRef(p.child_type, ns);
@@ -2804,8 +2800,8 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
 
         fn printSimpleTest(self: *@This()) !void {
             try self.printTxt("\ntest {{\n");
-            try self.printTxt("inline for (comptime std.meta.declarations(@This())) |decl| {{\n");
-            try self.printTxt("_ = @field(@This(), decl.name);\n");
+            try self.printTxt("inline for (comptime std.meta.declarations(@This())) |decl_name| {{\n");
+            try self.printTxt("_ = @field(@This(), decl_name);\n");
             try self.printTxt("}}\n");
             try self.printTxt("}}\n");
         }
@@ -2920,10 +2916,10 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
         fn GrandchildOf(comptime T: type) type {
             return switch (@typeInfo(T)) {
                 .pointer => |pt| check: {
-                    if (pt.is_const) @compileError("Cannot make modification through a const pointer");
+                    if (pt.attrs.@"const") @compileError("Cannot make modification through a const pointer");
                     break :check switch (@typeInfo(pt.child)) {
                         .pointer => |pt2| check2: {
-                            if (pt2.is_const) @compileError("Slice is const");
+                            if (pt2.attrs.@"const") @compileError("Slice is const");
                             break :check2 pt2.child;
                         },
                         else => @compileError("Not a pointer to a slice"),

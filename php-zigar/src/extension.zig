@@ -94,7 +94,7 @@ export fn php_zigar_info(module: *ModuleEntry) void {
     php.infoTableRow(&.{ "Extension optimization level", @tagName(builtin.mode) });
     if (builtin.target.zigTriple(php.allocator) catch null) |target| {
         defer php.allocator.free(target);
-        if (php.allocator.dupeZ(u8, target) catch null) |cstr| {
+        if (php.allocator.dupeSentinel(u8, target, 0) catch null) |cstr| {
             defer php.allocator.free(cstr);
             php.infoTableRow(&.{ "Extension compilation target", cstr });
         }
@@ -258,12 +258,12 @@ const functions = struct {
 
 // this section exports the function table as "php_zigar_functions"
 comptime {
-    const decls = std.meta.declarations(functions);
-    var entries: [decls.len + 1]FunctionEntry = undefined;
-    for (decls, 0..) |decl, i| {
-        const function = @field(functions, decl.name);
+    const decl_names = std.meta.declarations(functions);
+    var entries: [decl_names.len + 1]FunctionEntry = undefined;
+    for (decl_names, 0..) |decl_name, i| {
+        const function = @field(functions, decl_name);
         const handler = php.transform(function.run);
-        @export(&handler, .{ .name = decl.name });
+        @export(&handler, .{ .name = decl_name });
         const arg_info = init: {
             var len = function.required.len + function.optional.len;
             if (function.variadic) len += 1;
@@ -286,14 +286,14 @@ comptime {
         var flags = php.c.ZEND_ACC_PUBLIC;
         if (function.variadic) flags |= php.c.ZEND_ACC_VARIADIC;
         entries[i] = .{
-            .fname = decl.name,
+            .fname = decl_name,
             .handler = &handler,
             .arg_info = @ptrCast(&arg_info),
             .num_args = function.required.len + function.optional.len,
             .flags = flags,
         };
     }
-    entries[decls.len] = std.mem.zeroes(FunctionEntry);
+    entries[decl_names.len] = std.mem.zeroes(FunctionEntry);
     const const_entries = entries;
     @export(&const_entries, .{ .name = "php_zigar_functions" });
 }

@@ -37,7 +37,7 @@ pub const ModuleHost = struct {
     importer: *StructureImporter = undefined,
     dispatcher: *CallDispatcher = undefined,
     allocator_vtable: ?std.mem.Allocator.VTable = null,
-    allocator_controllers: [std.meta.fields(AllocatorMethodId).len]usize = undefined,
+    allocator_controllers: [4]usize = undefined,
     unclaimed_buffer_map: BufferMap = .{},
     object_map: ObjectMap = .{},
     gc_buffer: GarbageCollectionBuffer = .empty,
@@ -133,8 +133,8 @@ pub const ModuleHost = struct {
 
     fn exportFunctionsToModule(self: *@This()) !void {
         @setEvalBranchQuota(2000000);
-        inline for (std.meta.fields(Module.Imports)) |field| {
-            const name_c = comptime camelize(field.name);
+        inline for (comptime std.meta.fieldNames(Module.Imports)) |field_name| {
+            const name_c = comptime camelize(field_name);
             const Component = inline for (.{ StructureImporter, CallDispatcher }) |T| {
                 if (@hasDecl(T, name_c)) break T;
             } else @compileError("Not implemented by any component: " ++ name_c);
@@ -147,14 +147,14 @@ pub const ModuleHost = struct {
             };
             const extra = if (Payload == void or Payload == E) 0 else 1;
             const NewArgs = comptime define: {
-                const fields = std.meta.fields(Args);
-                var field_types: [fields.len + extra]type = undefined;
+                const arg_info = @typeInfo(Args).@"struct";
+                var field_types: [arg_info.field_types.len + extra]type = undefined;
                 for (0..field_types.len) |i| {
                     field_types[i] = switch (i) {
                         0 => *Module.Host,
                         else => switch (extra == 1 and i == field_types.len - 1) {
                             true => *Payload,
-                            false => fields[i].type,
+                            false => arg_info.field_types[i],
                         },
                     };
                 }
@@ -187,11 +187,11 @@ pub const ModuleHost = struct {
             };
             const transformed_func = fn_transform.spreadArgs(ns.call, .c);
             const T1 = @TypeOf(transformed_func);
-            const T2 = @typeInfo(@TypeOf(@field(self.module.imports, field.name))).pointer.child;
+            const T2 = @typeInfo(@TypeOf(@field(self.module.imports, field_name))).pointer.child;
             if (T1 != T2) {
-                @compileError("Function declaration mismatch: " ++ field.name ++ "\n\nExpected: " ++ @typeName(T2) ++ "\n  Actual: " ++ @typeName(T1) ++ "\n");
+                @compileError("Function declaration mismatch: " ++ field_name ++ "\n\nExpected: " ++ @typeName(T2) ++ "\n  Actual: " ++ @typeName(T1) ++ "\n");
             }
-            @field(self.module.imports, field.name) = transformed_func;
+            @field(self.module.imports, field_name) = transformed_func;
         }
     }
 
@@ -281,32 +281,32 @@ pub const ModuleHost = struct {
 
     pub fn getAllocator(self: *@This(), allocator_class: *ZigClassEntry) !std.mem.Allocator {
         if (self.allocator_vtable == null) {
-            const enum_fields = std.meta.fields(AllocatorMethodId);
             const vtable_ptr_class = if (allocator_class.getMember(.instance, N("vtable"))) |m| m.class else |_| return error.Unexpected;
             const vtable_class = if (vtable_ptr_class.getMember(.instance, 0)) |m| m.class else |_| return error.Unexpected;
             const exports = self.module.exports;
             var vtable: std.mem.Allocator.VTable = undefined;
             var failure_index: usize = undefined;
+            const enum_field_names = @typeInfo(AllocatorMethodId).@"enum".field_names;
             errdefer {
-                inline for (enum_fields, 0..) |field, i| {
+                inline for (enum_field_names, 0..) |field_name, i| {
                     if (i == failure_index) break;
-                    const thunk_address = @intFromPtr(@field(vtable, field.name));
+                    const thunk_address = @intFromPtr(@field(vtable, field_name));
                     var fn_id: usize = undefined;
                     const controller_address = self.allocator_controllers[i];
                     _ = exports.destroy_js_thunk(controller_address, thunk_address, &fn_id);
                 }
             }
-            inline for (enum_fields, 0..) |field, i| {
+            inline for (enum_field_names, 0..) |field_name, i| {
                 errdefer failure_index = i;
-                const ptr_class = if (vtable_class.getMember(.instance, N(field.name))) |m| m.class else |_| return error.Unexpected;
+                const ptr_class = if (vtable_class.getMember(.instance, N(field_name))) |m| m.class else |_| return error.Unexpected;
                 const fn_class = if (ptr_class.getMember(.instance, 0)) |m| m.class else |_| return error.Unexpected;
                 const fn_static = fn_class.getStaticData(structure.Function);
-                const fn_id = @intFromEnum(@field(AllocatorMethodId, field.name));
+                const fn_id = @intFromEnum(@field(AllocatorMethodId, field_name));
                 const controller_address = fn_static.controller_address;
                 var thunk_address: usize = 0;
                 const result = exports.create_js_thunk(controller_address, fn_id, &thunk_address);
                 if (result != .SUCCESS) return error.Failure;
-                @field(vtable, field.name) = @ptrFromInt(thunk_address);
+                @field(vtable, field_name) = @ptrFromInt(thunk_address);
                 self.allocator_controllers[i] = controller_address;
             }
             self.allocator_vtable = vtable;
@@ -316,11 +316,10 @@ pub const ModuleHost = struct {
 
     pub fn freeAllocatorVTable(self: *@This()) void {
         const vtable = self.allocator_vtable orelse return;
-        const enum_fields = std.meta.fields(AllocatorMethodId);
         const exports = self.module.exports;
-        inline for (enum_fields, 0..) |field, i| {
+        inline for (comptime std.meta.fieldNames(AllocatorMethodId), 0..) |field_name, i| {
             const controller_address = self.allocator_controllers[i];
-            const thunk_address = @intFromPtr(@field(vtable, field.name));
+            const thunk_address = @intFromPtr(@field(vtable, field_name));
             var fn_id: usize = undefined;
             _ = exports.destroy_js_thunk(controller_address, thunk_address, &fn_id);
         }

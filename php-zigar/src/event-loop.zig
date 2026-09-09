@@ -268,9 +268,9 @@ pub fn EventLoop(comptime cb: fn () void) type {
         }
 
         pub fn use(self: *@This(), type_name: []const u8) !void {
-            const loop_type = inline for (comptime std.meta.fields(LoopType)) |field| {
-                if (std.mem.eql(u8, field.name, type_name)) {
-                    break @field(LoopType, field.name);
+            const loop_type = inline for (comptime std.meta.fieldNames(LoopType)) |field_name| {
+                if (std.mem.eql(u8, field_name, type_name)) {
+                    break @field(LoopType, field_name);
                 }
             } else return error.InvalidLoopType;
             if (self.loop == loop_type) return;

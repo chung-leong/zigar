@@ -23,7 +23,7 @@ pub const Options = struct {
     build_dir: [:0]const u8,
     build_dir_size: Long = 4 * 1024 * 1024 * 1024,
     eval_branch_quota: Long = 2000000,
-    optimize: Optimize = .Debug,
+    optimize: Optimize = .debug,
     arch: Arch = .this,
     platform: Platform = .this,
     quiet: bool = false,
@@ -139,10 +139,10 @@ pub const Options = struct {
         }
     };
     pub const Optimize = enum {
-        Debug,
-        ReleaseSafe,
-        ReleaseSmall,
-        ReleaseFast,
+        debug,
+        release_safe,
+        release_small,
+        release_fast,
 
         pub fn name(self: @This()) []const u8 {
             return @tagName(self);
@@ -152,7 +152,7 @@ pub const Options = struct {
     };
 
     var default_build_dir: [:0]const u8 = undefined;
-    var ini_entries: [std.meta.fields(Options).len]php.IniEntryDef = undefined;
+    var ini_entries: [std.meta.fieldNames(Options).len]php.IniEntryDef = undefined;
 
     pub fn init() @This() {
         return .{ .build_dir = default_build_dir };
@@ -165,30 +165,32 @@ pub const Options = struct {
         defer al.free(tmp);
         const path = try std.fs.path.resolve(al, &.{ tmp, "zigar-build" });
         defer al.free(path);
-        default_build_dir = try al.dupeZ(u8, path);
+        default_build_dir = try al.dupeSentinel(u8, path, 0);
         // register init entries
         const template: @This() = .{ .build_dir = undefined };
-        inline for (std.meta.fields(@This()), 0..) |field, index| {
-            const field_enum = @field(std.meta.FieldEnum(@This()), field.name);
+        const struct_info = @typeInfo(@This()).@"struct";
+        inline for (struct_info.field_names, 0..) |field_name, index| {
+            const field_enum = @field(std.meta.FieldEnum(@This()), field_name);
+            const FT = struct_info.field_types[index];
             if (field_enum == .is_wasm) break;
-            const name = "zigar." ++ field.name;
+            const name = "zigar." ++ field_name;
             const default_value: [*:0]const u8 = switch (field_enum) {
                 .build_dir => default_build_dir,
-                else => switch (field.type) {
-                    bool => if (@field(template, field.name)) "On" else "Off",
-                    ?bool => if (@field(template, field.name)) |value|
+                else => switch (FT) {
+                    bool => if (@field(template, field_name)) "On" else "Off",
+                    ?bool => if (@field(template, field_name)) |value|
                         if (value) "On" else "Off"
                     else
                         "",
-                    Long => std.fmt.comptimePrint("{d}", .{@field(template, field.name)}),
-                    ?Long => if (@field(template, field.name)) |value|
+                    Long => std.fmt.comptimePrint("{d}", .{@field(template, field_name)}),
+                    ?Long => if (@field(template, field_name)) |value|
                         std.fmt.comptimePrint("{d}", .{value})
                     else
                         "",
-                    [:0]const u8 => @field(template, field.name),
-                    else => switch (@typeInfo(field.type)) {
-                        .@"enum" => @tagName(@field(template, field.name)),
-                        else => @compileError("Unrecognized type: " ++ @typeName(field.type)),
+                    [:0]const u8 => @field(template, field_name),
+                    else => switch (@typeInfo(FT)) {
+                        .@"enum" => @tagName(@field(template, field_name)),
+                        else => @compileError("Unrecognized type: " ++ @typeName(FT)),
                     },
                 },
             };
@@ -201,7 +203,7 @@ pub const Options = struct {
                     .recompile => php.INI_SYSTEM,
                     else => php.INI_ALL,
                 },
-                .on_modify = switch (field.type) {
+                .on_modify = switch (FT) {
                     bool => onUpdateBool,
                     ?bool => onUpdateOptionalBool,
                     Long => onUpdateLong,
@@ -214,7 +216,7 @@ pub const Options = struct {
                     else => unreachable,
                 },
                 .displayer = null,
-                .mh_arg1 = @ptrFromInt(@offsetOf(@This(), field.name)),
+                .mh_arg1 = @ptrFromInt(@offsetOf(@This(), field_name)),
                 .mh_arg2 = null,
                 .mh_arg3 = null,
             };
@@ -255,25 +257,25 @@ pub const Options = struct {
         @setEvalBranchQuota(2_000_000);
         var iter: HashTableIterator = .init(ht, .{});
         while (iter.next()) |value| {
-            inline for (comptime std.meta.fields(@This())) |field| {
-                const field_enum = @field(std.meta.FieldEnum(@This()), field.name);
+            inline for (comptime std.meta.fieldNames(@This())) |field_name| {
+                const field_enum = @field(std.meta.FieldEnum(@This()), field_name);
                 const name = iter.currentName() orelse return error.UnexpectedIntegerKey;
-                if (php.matchString(name, field.name) and field_enum != .recompile) {
-                    const T = @FieldType(@This(), field.name);
+                if (php.matchString(name, field_name) and field_enum != .recompile) {
+                    const T = @FieldType(@This(), field_name);
                     const vt = php.getValueType(value);
-                    @field(self, field.name) = extractValue(T, value) catch |err| {
+                    @field(self, field_name) = extractValue(T, value) catch |err| {
                         const Error = @TypeOf(err);
-                        inline for (comptime std.meta.fields(Error)) |err_field| {
-                            if (std.mem.eql(u8, err_field.name, "NotBoolean") and err == error.NotBoolean) {
-                                return failure.report("option '{s}' is a boolean, received {}", .{ field.name, vt });
+                        inline for (comptime std.meta.fieldNames(Error)) |err_name| {
+                            if (std.mem.eql(u8, err_name, "NotBoolean") and err == error.NotBoolean) {
+                                return failure.report("option '{s}' is a boolean, received {}", .{ field_name, vt });
                             }
-                            if (std.mem.eql(u8, err_field.name, "NotInteger") and err == error.NotInteger) {
-                                return failure.report("option '{s}' is an integer, received {}", .{ field.name, vt });
+                            if (std.mem.eql(u8, err_name, "NotInteger") and err == error.NotInteger) {
+                                return failure.report("option '{s}' is an integer, received {}", .{ field_name, vt });
                             }
-                            if (std.mem.eql(u8, err_field.name, "NotString") and err == error.NotString) {
-                                return failure.report("option '{s}' is a string, received {}", .{ field.name, vt });
+                            if (std.mem.eql(u8, err_name, "NotString") and err == error.NotString) {
+                                return failure.report("option '{s}' is a string, received {}", .{ field_name, vt });
                             }
-                            if (std.mem.eql(u8, err_field.name, "NoMatching") and err == error.NoMatching and @typeInfo(T) == .@"enum") {
+                            if (std.mem.eql(u8, err_name, "NoMatching") and err == error.NoMatching and @typeInfo(T) == .@"enum") {
                                 var copy = value.*;
                                 php.addRef(&copy);
                                 defer php.release(&copy);
@@ -281,7 +283,7 @@ pub const Options = struct {
                                     php.convertValue(&copy, .string) catch break :get N("(object)");
                                     break :get try php.getValueString(&copy);
                                 };
-                                return reportBadEnum(T, N(field.name), string);
+                                return reportBadEnum(T, N(field_name), string);
                             }
                         }
                         return err;
@@ -316,9 +318,9 @@ pub const Options = struct {
     }
 
     fn extractEnum(comptime T: type, string: *String) !T {
-        return inline for (comptime std.meta.fields(T)) |field| {
-            if (php.matchString(string, field.name)) {
-                break @field(T, field.name);
+        return inline for (comptime std.meta.fieldNames(T)) |field_name| {
+            if (php.matchString(string, field_name)) {
+                break @field(T, field_name);
             }
         } else return error.NoMatching;
     }
@@ -326,8 +328,8 @@ pub const Options = struct {
     fn reportBadEnum(comptime T: type, name: *String, string: *String) error{FailureReported} {
         const list = comptime join: {
             var text: []const u8 = "";
-            for (std.meta.fields(T)) |field| {
-                const quoted = "'" ++ field.name ++ "'";
+            for (std.meta.fieldNames(T)) |field_name| {
+                const quoted = "'" ++ field_name ++ "'";
                 text = if (text.len == 0) quoted else text ++ ", " ++ quoted;
             }
             break :join text;

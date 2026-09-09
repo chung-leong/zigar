@@ -410,16 +410,16 @@ pub fn createModule(comptime module_ns: type) Module {
         .attributes = .{
             .little_endian = builtin.target.cpu.arch.endian() == .little,
             .runtime_safety = switch (builtin.mode) {
-                .Debug, .ReleaseSafe => true,
+                .debug, .ReleaseSafe => true,
                 else => false,
             },
             .libc = builtin.link_libc,
             .io_redirection = exporter.options.use_redirection,
-            .debug = builtin.mode == .Debug,
+            .debug = builtin.mode == .debug,
             .persistent = exporter.options.persistent,
         },
         .module_path = switch (builtin.mode) {
-            .Debug => exporter.options.module_path.ptr,
+            .debug => exporter.options.module_path.ptr,
             else => @ptrCast(std.fs.path.basename(exporter.options.module_path).ptr),
         },
         .imports = &imports,

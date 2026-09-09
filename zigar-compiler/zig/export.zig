@@ -229,7 +229,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                         .@"fn" => false,
                         else => true,
                     },
-                    .is_const = pt.is_const,
+                    .is_const = pt.attrs.@"const",
                     .is_single = pt.size == .one or pt.size == .c,
                     .is_multiple = pt.size != .one,
                     .is_nullable = pt.is_allowzero or pt.child == anyopaque,
@@ -501,7 +501,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     .structure = usize_structure,
                 });
             }
-            if (@typeInfo(TT) == .@"fn" and !@typeInfo(TT).@"fn".is_var_args) {
+            if (@typeInfo(TT) == .@"fn" and !@typeInfo(TT).@"fn".attrs.varargs) {
                 // add thunk controller to enable callback
                 const FT = TT;
                 const controller = comptime js_fn.createThunkController(host, FT);
@@ -783,7 +783,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                                 };
                                 const should_export = if (is_value_supported) switch (@typeInfo(DT)) {
                                     .@"fn" => !options.omit_functions,
-                                    else => !options.omit_variables or @typeInfo(PT).pointer.is_const,
+                                    else => !options.omit_variables or @typeInfo(PT).pointer.attrs.@"const",
                                 } else false;
                                 if (should_export) {
                                     checkStaticMember(DT);
@@ -799,7 +799,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                                         .name = decl.name,
                                         .type = MemberType.object,
                                         .flags = MemberFlags{
-                                            .is_read_only = @typeInfo(PT).pointer.is_const,
+                                            .is_read_only = @typeInfo(PT).pointer.attrs.@"const",
                                             .is_method = method.is(T, DT, false),
                                             .is_expecting_instance = method.is(T, DT, true),
                                             .is_string = is_string,
@@ -854,9 +854,9 @@ fn Factory(comptime host: type, comptime module: type) type {
             if (!ignore_decl) {
                 switch (@typeInfo(T)) {
                     .@"struct", .@"union", .@"enum", .@"opaque" => if (comptime !arg_struct.is(T, null)) {
-                        inline for (comptime std.meta.declarations(T), 0..) |decl, index| {
-                            if (comptime std.mem.startsWith(u8, decl.name, "meta(")) continue;
-                            const decl_ptr = &@field(T, decl.name);
+                        inline for (comptime std.meta.declarations(T), 0..) |decl_name, index| {
+                            if (comptime std.mem.startsWith(u8, decl_name, "meta(")) continue;
+                            const decl_ptr = &@field(T, decl_name);
                             const PT = @TypeOf(decl_ptr);
                             if (comptime supported.is(PT)) {
                                 const decl_value = decl_ptr.*;
@@ -867,7 +867,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                                 };
                                 const should_export = if (is_value_supported) switch (@typeInfo(DT)) {
                                     .@"fn" => !options.omit_functions,
-                                    else => !options.omit_variables or @typeInfo(PT).pointer.is_const,
+                                    else => !options.omit_variables or @typeInfo(PT).pointer.attrs.@"const",
                                 } else false;
                                 if (should_export) {
                                     const target_ptr = comptime switch (@typeInfo(DT)) {
@@ -933,7 +933,7 @@ fn Factory(comptime host: type, comptime module: type) type {
             }
         }
 
-        fn getTypedArrayType(comptime T: type) ?std.builtin.Type.Int {
+        fn getTypedArrayType(comptime T: type) ?std.lang.Type.Int {
             return switch (@typeInfo(T)) {
                 .int => |int| inline for (.{ 8, 16, 32, 64 }) |bits| {
                     if (int.bits == bits) break .{ .bits = bits, .signedness = int.signedness };
@@ -1043,7 +1043,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     break :ptr ptr;
                 }
             };
-            const is_comptime = comptime pt.is_const and @typeInfo(pt.child) != .@"fn" and !pointer.has(pt.child);
+            const is_comptime = comptime pt.attrs.@"const" and @typeInfo(pt.child) != .@"fn" and !pointer.has(pt.child);
             const export_handle = if (!is_comptime) host.getExportHandle(ptr) else null;
             if (casting) {
                 const structure = try self.getStructure(pt.child);
@@ -1051,7 +1051,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     true => try self.getComptimeValues(ptr.*),
                     false => null,
                 };
-                const obj = try createInstance(structure, value_ptr, is_comptime, pt.is_const, export_handle, comptime_values);
+                const obj = try createInstance(structure, value_ptr, is_comptime, pt.attrs.@"const", export_handle, comptime_values);
                 return obj;
             } else {
                 return createView(value_ptr, is_comptime, pt.is_const, export_handle);

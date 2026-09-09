@@ -1273,8 +1273,8 @@ const c_to_zig = api_translator.Translator(.{
 });
 
 test {
-    inline for (comptime std.meta.declarations(@This())) |decl| {
-        _ = @field(@This(), decl.name);
+    inline for (comptime std.meta.declarations(@This())) |decl_name| {
+        _ = @field(@This(), decl_name);
     }
 }
 
@@ -1332,8 +1332,8 @@ pub fn createCallback(
     comptime var need_env = false;
     comptime var arg_count: usize = 0;
     comptime {
-        for (f.params, 0..) |param, i| {
-            const PT = param.type orelse @compileError("Missing parameter type");
+        for (f.param_types, 0..) |param_type, i| {
+            const PT = param_type orelse @compileError("Missing parameter type");
             if (!need_env and PT == Env) {
                 if (!need_data and i != 0) @compileError("Env is expected to be the first argument");
                 if (need_data and i != 1) @compileError("Env is expected to be the second argument");

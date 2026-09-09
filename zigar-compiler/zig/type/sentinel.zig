@@ -39,7 +39,7 @@ pub fn remove(comptime ptr: anytype) retval_type: {
     const ar = @typeInfo(pt.child).array;
     const CT = [ar.len]ar.child;
     break :retval_type @Pointer(pt.size, .{
-        .@"const" = pt.is_const,
+        .@"const" = pt.attrs.@"const",
         .@"volatile" = pt.is_volatile,
         .@"allowzero" = pt.is_allowzero,
         .@"addrspace" = pt.address_space,

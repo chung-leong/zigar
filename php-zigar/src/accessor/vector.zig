@@ -9,7 +9,7 @@ const Value = php.Value;
 fn Arg(comptime func: anytype) type {
     const T = @TypeOf(func);
     const info = @typeInfo(T).@"fn";
-    return info.params[0].type.?;
+    return info.param_types[0].?;
 }
 
 const Attributes = union(enum) {

@@ -96,7 +96,7 @@ inline fn deref(arg: anytype) switch (builtin.target.os.tag) {
 fn argCount(comptime Func: type) usize {
     return switch (@typeInfo(Func)) {
         .pointer => |pt| argCount(pt.child),
-        .@"fn" => @typeInfo(Func).@"fn".params.len,
+        .@"fn" => @typeInfo(Func).@"fn".param_types.len,
         else => @compileError("Not a function or function pointer"),
     };
 }
@@ -262,8 +262,8 @@ pub const ArgumentIterator = struct {
 fn TransformPointer(comptime T: type) type {
     return switch (@typeInfo(T)) {
         .pointer => |pt| switch (pt.child) {
-            anyopaque => if (pt.is_const) ?*const anyopaque else ?*anyopaque,
-            else => if (pt.is_const) [*c]const pt.child else [*c]pt.child,
+            anyopaque => if (pt.attrs.@"const") ?*const anyopaque else ?*anyopaque,
+            else => if (pt.attrs.@"const") [*c]const pt.child else [*c]pt.child,
         },
         else => T,
     };
@@ -271,11 +271,11 @@ fn TransformPointer(comptime T: type) type {
 
 fn Transformed(comptime func: anytype) type {
     const func_info = @typeInfo(@TypeOf(func)).@"fn";
-    const len = func_info.params.len;
+    const len = func_info.param_types.len;
     var param_types: [len]type = undefined;
-    var param_attrs: [len]std.builtin.Type.Fn.Param.Attributes = undefined;
-    inline for (func_info.params, 0..) |param, i| {
-        param_types[i] = TransformPointer(param.type.?);
+    var param_attrs: [len]std.lang.Type.Fn.ParamAttributes = undefined;
+    inline for (func_info.param_types, 0..) |param_type, i| {
+        param_types[i] = TransformPointer(param_type.?);
         param_attrs[i] = .{};
     }
     const RT = func_info.return_type.?;
@@ -285,7 +285,7 @@ fn Transformed(comptime func: anytype) type {
         else => RT,
     };
     const RTT = TransformPointer(RTNE);
-    const attrs: std.builtin.Type.Fn.Attributes = .{ .@"callconv" = .c };
+    const attrs: std.lang.Type.Fn.Attributes = .{ .@"callconv" = .c };
     return @Fn(&param_types, &param_attrs, RTT, attrs);
 }
 
@@ -322,7 +322,7 @@ fn removeError(retval: anytype) switch (@typeInfo(@TypeOf(retval))) {
                 c_int => FAILURE,
                 else => |T| switch (@typeInfo(T)) {
                     .optional => null,
-                    .pointer => |pt| switch (pt.is_allowzero) {
+                    .pointer => |pt| switch (pt.attrs.@"allowzero") {
                         true => null,
                         false => undefined,
                     },
@@ -606,7 +606,7 @@ pub fn createValueStream(strm: *Stream) Value {
 pub fn createValueClosure(func: *Function, scope: ?*ClassEntry, called_scope: ?*ClassEntry, this_ptr: ?*const Value) Value {
     var result: Value = undefined;
     const Fn = @TypeOf(c.zend_create_closure);
-    const Arg4 = @typeInfo(Fn).@"fn".params[4].type.?;
+    const Arg4 = @typeInfo(Fn).@"fn".param_types[4].?;
     if (Arg4 == [*c]Object) {
         // 8.6
         const obj = if (this_ptr) |ptr|
@@ -1011,8 +1011,8 @@ pub fn getHashEntryWithType(comptime T: type, ht: *const HashTable, key: anytype
             } else break :s;
         },
         .@"union" => {
-            const int_type_maybe: ?type = inline for (comptime std.meta.fields(T)) |field| {
-                const FT = @FieldType(T, field.name);
+            const int_type_maybe: ?type = inline for (comptime std.meta.fieldNames(T)) |field_name| {
+                const FT = @FieldType(T, field_name);
                 const field_int_type_maybe = switch (@typeInfo(FT)) {
                     .@"enum" => |en| en.tag_type,
                     .int => FT,
@@ -1365,7 +1365,7 @@ pub fn MethodCallCaches(comptime names: anytype) type {
     const Entries = init: {
         var field_names: [names.len][]const u8 = undefined;
         var field_types: [names.len]type = undefined;
-        var field_attrs: [names.len]std.builtin.Type.StructField.Attributes = undefined;
+        var field_attrs: [names.len]std.lang.Type.Struct.FieldAttributes = undefined;
         inline for (names, 0..) |name, i| {
             field_names[i] = @tagName(name);
             field_types[i] = FunctionCallCache;
@@ -1378,30 +1378,30 @@ pub fn MethodCallCaches(comptime names: anytype) type {
 
         pub fn init(context: *const Value) !@This() {
             var entries: Entries = undefined;
-            const fields = std.meta.fields(Entries);
+            const field_names = comptime std.meta.fieldNames(Entries);
             var init_count: usize = 0;
             errdefer {
-                inline for (0..fields.len) |i| {
+                inline for (0..field_names.len) |i| {
                     if (i == init_count) break;
-                    @field(entries, fields[i].name).deinit();
+                    @field(entries, field_names[i]).deinit();
                 }
             }
             var ht = createHashTable(null);
             defer destroyHashTable(&ht);
             setHashEntry(&ht, 0, context);
             const callable = createValueArray(&ht);
-            inline for (fields) |field| {
-                const name = createValueString(getStaticString(field.name));
+            inline for (field_names) |field_name| {
+                const name = createValueString(getStaticString(field_name));
                 setHashEntry(&ht, 1, &name);
-                @field(entries, field.name) = try .init(&callable);
+                @field(entries, field_name) = try .init(&callable);
                 init_count += 1;
             }
             return .{ .method = entries };
         }
 
         pub fn deinit(self: *@This()) void {
-            const fields = std.meta.fields(Entries);
-            inline for (fields) |field| @field(self.method, field.name).deinit();
+            const field_names = comptime std.meta.fieldNames(Entries);
+            inline for (field_names) |field_name| @field(self.method, field_name).deinit();
         }
     };
 }
@@ -2233,12 +2233,12 @@ pub fn createHandlerTable(comptime T: type, comptime offset: comptime_int) Objec
     var handlers: ObjectHandlers = undefined;
     handlers.offset = offset;
     const std_object_handlers = getStandardHandlers();
-    inline for (comptime std.meta.fields(@TypeOf(object_handler_mapping))) |field| {
-        const func_name = @field(object_handler_mapping, field.name);
-        @field(handlers, field.name) = if (@hasDecl(T, func_name))
+    inline for (comptime std.meta.fieldNames(@TypeOf(object_handler_mapping))) |field_name| {
+        const func_name = @field(object_handler_mapping, field_name);
+        @field(handlers, field_name) = if (@hasDecl(T, func_name))
             transform(@field(T, func_name))
-        else if (@hasField(@TypeOf(std_object_handlers.*), field.name))
-            @field(std_object_handlers, field.name)
+        else if (@hasField(@TypeOf(std_object_handlers.*), field_name))
+            @field(std_object_handlers, field_name)
         else
             null;
     }

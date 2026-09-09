@@ -25,8 +25,8 @@ pub const ByteBuffer = struct {
 
         fn assign(self: @This(), flags: anytype) @This() {
             var new = self;
-            inline for (std.meta.fields(@TypeOf(flags))) |field| {
-                @field(new, field.name) = @field(flags, field.name);
+            inline for (comptime std.meta.fieldNames(@TypeOf(flags))) |field_name| {
+                @field(new, field_name) = @field(flags, field_name);
             }
             return new;
         }
@@ -55,7 +55,7 @@ pub const ByteBuffer = struct {
         false => []const u8,
         true => []u8,
     } {
-        if (builtin.mode == .Debug) {
+        if (builtin.mode == .debug) {
             if (self.ref_count == 0) {
                 var buffer: [128]u8 = undefined;
                 @panic(std.fmt.bufPrint(&buffer, "Accessing buffer that has already been freed: 0x{x}", .{

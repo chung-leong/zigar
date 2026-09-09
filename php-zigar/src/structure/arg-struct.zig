@@ -249,9 +249,9 @@ pub const ArgStruct = struct {
         } = .{};
         var has_named: bool = false;
         for (arg_info) |info| {
-            inline for (std.meta.fields(@TypeOf(accepts))) |field| {
-                if (php.matchString(info.name, field.name)) {
-                    @field(accepts, field.name) = true;
+            inline for (comptime std.meta.fieldNames(@TypeOf(accepts))) |field_name| {
+                if (php.matchString(info.name, field_name)) {
+                    @field(accepts, field_name) = true;
                     has_named = true;
                 }
             }

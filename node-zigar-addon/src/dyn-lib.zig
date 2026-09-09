@@ -19,7 +19,7 @@ pub const DynLib = struct {
             .windows => if (std.mem.eql(u8, path[0..4], "\\??\\")) 4 else 0,
             else => 0,
         };
-        const path_copy = try std.heap.c_allocator.dupeZ(u8, path[offset..]);
+        const path_copy = try std.heap.c_allocator.dupeSentinel(u8, path[offset..], 0);
         const handle = switch (builtin.target.os.tag) {
             .windows => load: {
                 break :load c.LoadLibraryA(path_copy.ptr) orelse return error.FileNotFound;

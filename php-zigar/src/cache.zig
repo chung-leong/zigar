@@ -46,9 +46,9 @@ pub fn IdCache(comptime tags: anytype, comptime prefix: []const u8, comptime ali
                     self.set(cache_slot, tag);
                     return tag;
                 }
-            } else inline for (comptime std.meta.fields(@TypeOf(aliases))) |field| {
-                if (php.matchString(name, field.name)) {
-                    const tag = @field(aliases, field.name);
+            } else inline for (comptime std.meta.fieldNames(@TypeOf(aliases))) |field_name| {
+                if (php.matchString(name, field_name)) {
+                    const tag = @field(aliases, field_name);
                     self.set(cache_slot, tag);
                     return tag;
                 }
@@ -90,9 +90,9 @@ pub const TransformCache = struct {
             .__clamped_array = .clamped_array,
             .@"$" = .plain,
         };
-        return inline for (std.meta.fields(@TypeOf(transforms))) |field| {
-            if (php.matchString(name, field.name)) {
-                const transform = @field(transforms, field.name);
+        return inline for (comptime std.meta.fieldNames(@TypeOf(transforms))) |field_name| {
+            if (php.matchString(name, field_name)) {
+                const transform = @field(transforms, field_name);
                 self.set(cache_slot, transform);
                 break transform;
             }

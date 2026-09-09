@@ -226,7 +226,7 @@ export fn getModuleAttributes() u32 {
     const attributes: packed struct(u32) {
         little_endian: bool = builtin.target.cpu.arch.endian() == .little,
         runtime_safety: bool = switch (builtin.mode) {
-            .Debug, .ReleaseSafe => true,
+            .debug, .ReleaseSafe => true,
             else => false,
         },
         libc: bool = builtin.link_libc,
@@ -382,9 +382,9 @@ extern "env" fn _displayPanic(bytes: [*]const u8, len: usize) void;
 comptime {
     if (exporter.options.use_pthread_emulation) {
         const pthread = @import("wasm/pthread.zig");
-        for (std.meta.declarations(pthread)) |decl| {
-            @export(&@field(pthread, decl.name), .{
-                .name = decl.name,
+        for (std.meta.declarations(pthread)) |decl_name| {
+            @export(&@field(pthread, decl_name), .{
+                .name = decl_name,
                 .visibility = .default,
                 .linkage = .strong,
             });

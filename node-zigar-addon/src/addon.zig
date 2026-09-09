@@ -272,8 +272,8 @@ const ModuleHost = struct {
         if (self.ref_count == 0) {
             self.unregister();
             const env = self.env;
-            inline for (comptime std.meta.fields(@FieldType(ModuleHost, "js"))) |field| {
-                if (@field(self.js, field.name)) |ref| {
+            inline for (comptime std.meta.fieldNames(@FieldType(ModuleHost, "js"))) |field_name| {
+                if (@field(self.js, field_name)) |ref| {
                     env.deleteReference(ref) catch {};
                 }
             }
@@ -298,10 +298,10 @@ const ModuleHost = struct {
         const env = self.env;
         const export_fn = try env.getNamedProperty(js_env, "exportFunctions");
         const exports = try env.callFunction(js_env, export_fn, &.{});
-        inline for (comptime std.meta.fields(@FieldType(@This(), "js"))) |field| {
-            const name = camelize(field.name);
+        inline for (comptime std.meta.fieldNames(@FieldType(@This(), "js"))) |field_name| {
+            const name = camelize(field_name);
             const func = try env.getNamedProperty(exports, name);
-            @field(self.js, field.name) = try env.createReference(func, 1);
+            @field(self.js, field_name) = try env.createReference(func, 1);
         }
     }
 
@@ -497,7 +497,7 @@ const ModuleHost = struct {
             fn dummy(_: Env, _: *anyopaque, _: ?*anyopaque) callconv(.c) void {}
         };
         return ns.supported orelse check: {
-            var bytes = [1]u8{0} ** 4;
+            var bytes: [4]u8 = @splat(0);
             const created = if (env.createExternalArraybuffer(&bytes, ns.dummy, null)) |_| true else |_| false;
             ns.supported = created;
             break :check created;
@@ -773,9 +773,9 @@ const ModuleHost = struct {
         const set = try env.getValueBool(listening);
         const empty_mask = hooks.Syscall.Mask{};
         const empty_before = self.redirection_mask == empty_mask;
-        return inline for (std.meta.fields(hooks.Syscall.Mask)) |field| {
-            if (std.mem.eql(u8, field.name, event_name)) {
-                @field(self.redirection_mask, field.name) = set;
+        return inline for (comptime std.meta.fieldNames(hooks.Syscall.Mask)) |field_name| {
+            if (std.mem.eql(u8, field_name, event_name)) {
+                @field(self.redirection_mask, field_name) = set;
                 const empty_after = self.redirection_mask == empty_mask;
                 if (empty_before and !empty_after) {
                     self.enableSyscallTrap();
@@ -826,8 +826,8 @@ const ModuleHost = struct {
     fn exportFunctionsToModule(self: *@This()) !void {
         @setEvalBranchQuota(2000000);
         const module = self.module orelse return error.NoLoadedModule;
-        inline for (std.meta.fields(Module.Imports)) |field| {
-            const name_c = comptime camelize(field.name);
+        inline for (comptime std.meta.fieldNames(Module.Imports)) |field_name| {
+            const name_c = comptime camelize(field_name);
             const func = @field(@This(), name_c);
             const Args = std.meta.ArgsTuple(@TypeOf(func));
             const RT = @typeInfo(@TypeOf(func)).@"fn".return_type.?;
@@ -838,13 +838,15 @@ const ModuleHost = struct {
             const extra = if (Payload == void or Payload == E) 0 else 1;
             const NewArgs = comptime define: {
                 const args_info = @typeInfo(Args).@"struct";
-                const fields = args_info.fields;
-                const arg_count = fields.len + extra;
+                const arg_count = args_info.field_names.len + extra;
                 var field_types: [arg_count]type = undefined;
                 for (0..arg_count) |i| {
                     field_types[i] = switch (i) {
                         0 => *Module.Host,
-                        else => if (extra == 1 and i == arg_count - 1) *Payload else fields[i].type,
+                        else => switch (extra == 1 and i == arg_count - 1) {
+                            true => *Payload,
+                            false => args_info.field_types[i],
+                        },
                     };
                 }
                 break :define @Tuple(&field_types);
@@ -868,12 +870,12 @@ const ModuleHost = struct {
             };
             const transformed_func = fn_transform.spreadArgs(ns.call, .c);
             const T1 = @TypeOf(transformed_func);
-            const T2 = @typeInfo(@TypeOf(@field(module.imports, field.name))).pointer.child;
+            const T2 = @typeInfo(@TypeOf(@field(module.imports, field_name))).pointer.child;
             if (T1 != T2) {
                 @compileLog(extra);
-                @compileError("Function declaration mismatch: " ++ field.name ++ "\n\nExpected: " ++ @typeName(T2) ++ "\n  Actual: " ++ @typeName(T1) ++ "\n");
+                @compileError("Function declaration mismatch: " ++ field_name ++ "\n\nExpected: " ++ @typeName(T2) ++ "\n  Actual: " ++ @typeName(T1) ++ "\n");
             }
-            @field(module.imports, field.name) = transformed_func;
+            @field(module.imports, field_name) = transformed_func;
         }
     }
 
@@ -1648,11 +1650,11 @@ const ModuleHost = struct {
             errdefer _ = self.multithread_count.fetchSub(1, .monotonic);
             if (prev_count == 0) {
                 const env = self.env;
-                const fields = @typeInfo(@FieldType(ModuleHost, "ts")).@"struct".fields;
+                const field_names = @typeInfo(@FieldType(ModuleHost, "ts")).@"struct".field_names;
                 const resource_name = try env.createStringUtf8("zigar");
-                inline for (fields) |field| {
-                    const cb = @field(threadsafe_callback, field.name);
-                    @field(self.ts, field.name) = try env.createThreadsafeFunction(null, null, resource_name, 0, 1, null, null, @ptrCast(self), @ptrCast(&cb));
+                inline for (field_names) |field_name| {
+                    const cb = @field(threadsafe_callback, field_name);
+                    @field(self.ts, field_name) = try env.createThreadsafeFunction(null, null, resource_name, 0, 1, null, null, @ptrCast(self), @ptrCast(&cb));
                 }
             }
         } else {
@@ -1665,11 +1667,11 @@ const ModuleHost = struct {
             const prev_count = self.multithread_count.fetchSub(1, .monotonic);
             errdefer _ = self.multithread_count.fetchAdd(1, .monotonic);
             if (prev_count == 1) {
-                const fields = @typeInfo(@FieldType(ModuleHost, "ts")).@"struct".fields;
-                inline for (fields) |field| {
-                    if (@field(self.ts, field.name)) |ref|
+                const field_names = @typeInfo(@FieldType(ModuleHost, "ts")).@"struct".field_names;
+                inline for (field_names) |field_name| {
+                    if (@field(self.ts, field_name)) |ref|
                         try napi.releaseThreadsafeFunction(ref, .abort);
-                    @field(self.ts, field.name) = null;
+                    @field(self.ts, field_name) = null;
                 }
             }
         } else {

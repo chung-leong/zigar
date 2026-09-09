@@ -18,7 +18,7 @@ pub fn has(comptime T: type) bool {
 pub fn get(comptime T: type) ?type {
     return switch (@typeInfo(T)) {
         .@"union" => |un| un.tag_type orelse debug_tag: {
-            if (builtin.mode == .ReleaseSafe or builtin.mode == .Debug) {
+            if (builtin.mode == .ReleaseSafe or builtin.mode == .debug) {
                 if (un.layout != .@"extern" and un.layout != .@"packed") {
                     break :debug_tag util.IntFor(un.fields.len);
                 }
@@ -41,7 +41,7 @@ test "get" {
         dog: u32,
     };
     try expectEqual(Tag, get(Union));
-    if (builtin.mode == .ReleaseSafe or builtin.mode == .Debug) {
+    if (builtin.mode == .ReleaseSafe or builtin.mode == .debug) {
         const BareUnion = union {
             cat: u32,
             dog: u32,

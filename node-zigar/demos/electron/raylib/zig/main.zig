@@ -40,7 +40,7 @@ pub fn getSettings() Settings {
 
 pub fn setText(arg: []const u8) !void {
     if (text.ptr != default_text.ptr) allocator.free(text);
-    text = try allocator.dupeZ(u8, arg);
+    text = try allocator.dupeSentinel(u8, arg, 0);
 }
 
 pub fn setSettings(arg: Settings) void {

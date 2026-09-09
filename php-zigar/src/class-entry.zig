@@ -142,13 +142,14 @@ pub const ZigClassEntry = struct {
     };
     const SlotUsage = enum(u2) { none, single, multiple };
     const StaticData = define: {
-        const fields = std.meta.fields(@TypeOf(structure.by_enum));
-        var field_names: [fields.len][]const u8 = undefined;
-        var field_types: [fields.len]type = undefined;
-        var field_attrs: [fields.len]std.builtin.Type.UnionField.Attributes = undefined;
-        for (fields, 0..) |field, i| {
-            const S = @field(structure.by_enum, field.name);
-            field_names[i] = field.name;
+        const type_names = std.meta.fieldNames(@TypeOf(structure.by_enum));
+        const len = type_names.len;
+        var field_names: [len][]const u8 = undefined;
+        var field_types: [len]type = undefined;
+        var field_attrs: [len]std.lang.Type.Union.FieldAttributes = undefined;
+        for (type_names, 0..) |type_name, i| {
+            const S = @field(structure.by_enum, type_name);
+            field_names[i] = type_name;
             field_types[i] = if (@hasDecl(S, "Static")) S.Static else void;
             field_attrs[i] = .{};
         }
@@ -180,8 +181,9 @@ pub const ZigClassEntry = struct {
 
     pub inline fn fromStatic(s: anytype) *@This() {
         const S = @TypeOf(s.*);
-        const field_name = inline for (std.meta.fields(StaticData)) |field| {
-            if (field.type == S) break field.name;
+        const info = @typeInfo(StaticData).@"union";
+        const field_name = inline for (info.field_types, 0..) |FT, i| {
+            if (FT == S) break info.field_names[i];
         } else @compileError("Not part of static data union " ++ @typeName(S));
         const sd_ptr: *StaticData = @fieldParentPtr(field_name, s);
         return @fieldParentPtr("static_data", sd_ptr);
@@ -199,7 +201,6 @@ pub const ZigClassEntry = struct {
     }
 
     pub fn create(host: *Host, info: *Value) !*Object {
-        errdefer |err| std.debug.print("create => {}\n", .{err});
         const structure_type = try php.getPropertyWithType(StructureType, info, "type");
         const alignment = init: {
             const byte_unit = php.getPropertyWithType(usize, info, "align") catch 1;
@@ -300,7 +301,6 @@ pub const ZigClassEntry = struct {
 
     pub fn define(self: *@This(), info: *Value) !void {
         // when this function is called, the only info related to the structure's "shape" is available
-        errdefer |err| failure.showErrorTrace(@src(), err);
         try self.extractScope(info, .instance);
         errdefer self.instance.deinit(self);
         self.status.defined = true;
@@ -308,7 +308,6 @@ pub const ZigClassEntry = struct {
 
     pub fn finalize(self: *@This(), info: *Value) !void {
         // when this function is called, the static info has become available
-        errdefer |err| failure.showErrorTrace(@src(), err);
         try self.extractScope(info, .static);
         errdefer self.static.deinit(self, .static);
         switch (self.type) {
@@ -1051,12 +1050,13 @@ pub const ZigClassEntry = struct {
         const use_bit_offset = member.byte_size == null and member.bit_offset != null;
         const bit_offset: u3 = if (use_bit_offset) @intCast(member.bit_offset.? % 8) else undefined;
         const prebaked = scope == .static or member.class.type == .@"comptime";
-        var accessors: accessor.Any = inline for (comptime std.meta.fields(accessor.Any)) |field| {
-            const Acc = field.type;
+        const acc_info = @typeInfo(accessor.Any).@"union";
+        var accessors: accessor.Any = inline for (acc_info.field_names, 0..) |field_name, i| {
+            const Acc = acc_info.field_types[i];
             var acc: Acc = undefined;
             switch (acc.type) {
                 .void => if (member.type == .void) {
-                    break @unionInit(accessor.Any, field.name, acc);
+                    break @unionInit(accessor.Any, field_name, acc);
                 },
                 .bool, .int, .float, .gmp => {
                     const primitive_type: MemberType = comptime switch (acc.type) {
@@ -1094,7 +1094,7 @@ pub const ZigClassEntry = struct {
                                 if (@hasField(Acc, "runtime_check")) {
                                     acc.runtime_check = self.host.useRuntimeSafety();
                                 }
-                                break @unionInit(accessor.Any, field.name, acc);
+                                break @unionInit(accessor.Any, field_name, acc);
                             }
                         }
                     }
@@ -1141,7 +1141,7 @@ pub const ZigClassEntry = struct {
                             if (@hasField(Acc, "class")) {
                                 acc.class = member.class;
                             }
-                            break @unionInit(accessor.Any, field.name, acc);
+                            break @unionInit(accessor.Any, field_name, acc);
                         }
                     }
                 },
@@ -1174,14 +1174,14 @@ pub const ZigClassEntry = struct {
                                     if (@hasField(Acc, "bit_size")) {
                                         acc.bit_size = member.bit_size;
                                     }
-                                    break @unionInit(accessor.Any, field.name, acc);
+                                    break @unionInit(accessor.Any, field_name, acc);
                                 }
                             },
                         }
                     }
                 },
                 .null => if (member.type == .null or member.type == .undefined) {
-                    break @unionInit(accessor.Any, field.name, acc);
+                    break @unionInit(accessor.Any, field_name, acc);
                 },
                 .constant, .property, .inaccessible => {},
             }
@@ -1214,9 +1214,9 @@ pub const ZigClassEntry = struct {
     }
 
     fn inferName(self: *@This()) !*String {
-        errdefer |err| std.debug.print("inferName => {}\n", .{err});
-        var sfb = std.heap.stackFallback(10240, php.allocator);
-        const allocator = sfb.get();
+        var sfb_buffer: [10240]u8 = undefined;
+        var sfb: std.heap.BufferFirstAllocator = .init(&sfb_buffer, php.allocator);
+        const allocator = sfb.allocator();
         const counters = &self.host.importer.counters;
         const type_name: []const u8 = switch (self.type) {
             .primitive, .@"comptime" => get: {

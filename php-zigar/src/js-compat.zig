@@ -171,10 +171,10 @@ pub const ArrayBuffer = struct {
                 // turn it back on
                 self.flags.bytes_debug_output = true;
             }
-            inline for (comptime std.meta.fields(PropCache.Id)) |field| {
-                const id = @field(PropCache.Id, field.name);
+            inline for (comptime std.meta.fieldNames(PropCache.Id)) |field_name| {
+                const id = @field(PropCache.Id, field_name);
                 const value = try self.getProperty(id);
-                php.setHashEntry(ht, field.name, &value);
+                php.setHashEntry(ht, field_name, &value);
             }
         }
         return ht;
@@ -491,10 +491,10 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
                 }
                 const items_value = php.createValueArray(items_ht);
                 php.setHashEntry(ht, "[ITEMS]", &items_value);
-                inline for (comptime std.meta.fields(PropCache.Id)) |field| {
-                    const id = @field(PropCache.Id, field.name);
+                inline for (comptime std.meta.fieldNames(PropCache.Id)) |field_name| {
+                    const id = @field(PropCache.Id, field_name);
                     const value = try self.getProperty(id);
-                    php.setHashEntry(ht, field.name, &value);
+                    php.setHashEntry(ht, field_name, &value);
                 }
                 // at this point, array_buffer will have been created by getProperty()
                 // if it was empty before

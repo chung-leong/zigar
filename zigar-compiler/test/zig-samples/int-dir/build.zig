@@ -106,7 +106,7 @@ pub fn build(b: *std.Build) !void {
     lib.root_module.addOptions("options.zig", options);
     const wf = b.addUpdateSourceFiles();
     wf.addCopyFileToSource(lib.getEmittedBin(), cfg.output_path);
-    if (@TypeOf(cfg.pdb_path) != @TypeOf(null) and optimize == .Debug) {
+    if (@TypeOf(cfg.pdb_path) != @TypeOf(null) and optimize == .debug) {
         wf.addCopyFileToSource(lib.getEmittedPdb(), cfg.pdb_path);
     }
     wf.step.dependOn(&lib.step);

@@ -12,7 +12,7 @@ const Queue = @import("queue.zig").Queue;
 const util = @import("util.zig");
 
 pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
-    const decls = std.meta.declarations(ns);
+    const decl_names = std.meta.declarations(ns);
     return struct {
         queue: Queue(WorkItem) = undefined,
         thread_count: usize = 0,
@@ -50,7 +50,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
             });
             var field_names: [fields.len][]const u8 = undefined;
             var field_types: [fields.len]type = undefined;
-            var field_attrs: [fields.len]std.builtin.Type.StructField.Attributes = undefined;
+            var field_attrs: [fields.len]std.lang.Type.Struct.FieldAttributes = undefined;
             for (fields, 0..) |field, i| {
                 field_names[i] = field.name;
                 field_types[i] = field.type;
@@ -267,7 +267,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
             const fn_info = @typeInfo(FT).@"fn";
             const param_count = fn_info.params.len + 1;
             var param_types: [param_count]type = undefined;
-            var param_attrs: [param_count]std.builtin.Type.Fn.Param.Attributes = undefined;
+            var param_attrs: [param_count]std.lang.Type.Fn.ParamAttributes = undefined;
             inline for (fn_info.params, 0..) |param, i| {
                 param_types[i] = param.type.?;
                 param_attrs[i] = .{ .@"noalias" = param.is_noalias };
@@ -309,13 +309,13 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
             else => ThreadStartError!void,
         };
         const WorkItem = init: {
-            var fields: [decls.len]struct {
+            var fields: [decl_names.len]struct {
                 name: [:0]const u8,
                 type: type,
             } = undefined;
             var count = 0;
-            for (decls) |decl| {
-                const DT = @TypeOf(@field(ns, decl.name));
+            for (decl_names) |decl_name| {
+                const DT = @TypeOf(@field(ns, decl_name));
                 switch (@typeInfo(DT)) {
                     .@"fn" => |f| {
                         if (f.return_type) |RT| {
@@ -341,7 +341,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
             const TagInt = if (count <= 256) u8 else u16;
             var field_names: [count][]const u8 = undefined;
             var field_types: [count]type = undefined;
-            var field_attrs: [count]std.builtin.Type.UnionField.Attributes = undefined;
+            var field_attrs: [count]std.lang.Type.Union.FieldAttributes = undefined;
             var tag_values: [count]TagInt = undefined;
             for (fields[0..count], 0..) |field, i| {
                 field_names[i] = field.name;
@@ -355,10 +355,10 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
         const WorkItemEnum = @typeInfo(WorkItem).@"union".tag_type.?;
 
         fn enumOf(comptime func: anytype) WorkItemEnum {
-            return for (decls) |decl| {
-                const dv = @field(ns, decl.name);
+            return for (decl_names) |decl_name| {
+                const dv = @field(ns, decl_name);
                 if (@TypeOf(dv) == @TypeOf(func)) {
-                    if (dv == func) break @field(WorkItemEnum, decl.name);
+                    if (dv == func) break @field(WorkItemEnum, decl_name);
                 }
             } else @compileError("Function not found in " ++ @typeName(ns));
         }

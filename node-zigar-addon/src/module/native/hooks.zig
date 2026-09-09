@@ -2004,7 +2004,8 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         const PathResolver = struct {
-            sfa: std.heap.StackFallbackAllocator(max_buffer_size),
+            sfa: std.heap.std.heap.BufferFirstAllocator,
+            sfa_buffer: [max_buffer_size]u8,
             allocator: std.mem.Allocator,
             dirfd: c_int,
             buffer: ?[]u8,
@@ -2016,7 +2017,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                 var self: @This() = undefined;
                 const len = std.mem.len(path);
                 const path_s = path[0..len];
-                self.sfa = std.heap.stackFallback(max_buffer_size, c_allocator);
+                self.sfa = .init(&self.sfa_buffer, c_allocator);
                 self.allocator = self.sfa.get();
                 try self._init(dirfd, @ptrCast(path_s));
                 return self;
@@ -2043,7 +2044,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                 } else {
                     self.dirfd = if (dirfd == fd_cwd) fd_root else dirfd;
                     if (backslashes) {
-                        const buf = try self.allocator.dupeZ(u8, path);
+                        const buf = try self.allocator.dupeSentinel(u8, path, 0);
                         self.buffer = buf;
                         self.path = buf.ptr;
                     } else {
@@ -2513,17 +2514,17 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         }
 
         fn StdHook(comptime Func: type) type {
-            const params = @typeInfo(Func).@"fn".params;
-            const param_count = params.len - 1;
-            var param_types: [param_count]type = undefined;
-            var param_attrs: [param_count]std.builtin.Type.Fn.Param.Attributes = undefined;
-            inline for (params, 0..) |param, i| {
-                if (i < param_count) {
-                    param_types[i] = param.type.?;
-                    param_attrs[i] = .{ .@"noalias" = param.is_noalias };
+            const fn_info = @typeInfo(Func).@"fn";
+            const fn_param_count = fn_info.param_types.len - 1;
+            var param_types: [fn_param_count]type = undefined;
+            var param_attrs: [fn_param_count]std.lang.Type.Fn.ParamAttributes = undefined;
+            inline for (fn_info.param_types, 0..) |param_type, i| {
+                if (i < fn_param_count) {
+                    param_types[i] = param_type.?;
+                    param_attrs[i] = .{ .@"noalias" = fn_info.param_attrs[i].@"noalias" };
                 }
             }
-            const RPtrT = params[param_count].type.?;
+            const RPtrT = fn_info.param_types[fn_param_count].?;
             const RT = @typeInfo(RPtrT).pointer.child;
             return @Fn(&param_types, &param_attrs, RT, .{ .@"callconv" = .c });
         }
@@ -3761,7 +3762,7 @@ pub fn LibcSubstituteWindows(comptime redirector: type) type {
         fn getPath(filespec: [*:0]const u8) !?[:0]const u8 {
             const len = std.mem.len(filespec);
             if (std.mem.endsWith(u8, filespec[0..len], "\\*")) {
-                return try c_allocator.dupeZ(u8, filespec[0 .. len - 2]);
+                return try c_allocator.dupeSentinel(u8, filespec[0 .. len - 2], 0);
             }
             return null;
         }
@@ -5281,7 +5282,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
                 .dirfd = dirfd,
                 .is_dir = is_dir,
                 .buffer = buffer,
-                .path = try c_allocator.dupeZ(u8, path[0..std.mem.len(path)]),
+                .path = try c_allocator.dupeSentinel(u8, path[0..std.mem.len(path)], 0),
             });
             return fromDescriptor(fd);
         }
@@ -5632,7 +5633,8 @@ pub fn Win32SubstituteNonIO(comptime redirector: type) type {
 }
 
 const Wtf8Converter = struct {
-    sfa: std.heap.StackFallbackAllocator(buffer_size),
+    sfa: std.heap.BufferFirstAllocator,
+    sfa_buffer: [buffer_size]u8,
     arena: std.heap.ArenaAllocator,
     allocator: std.mem.Allocator,
     save_error: bool,
@@ -5647,7 +5649,7 @@ const Wtf8Converter = struct {
 
     pub inline fn init(options: Options) @This() {
         var self: @This() = undefined;
-        self.sfa = std.heap.stackFallback(buffer_size, c_allocator);
+        self.sfa = .init(&self.sfa_buffer, c_allocator);
         self.arena = .init(self.sfa.get());
         self.allocator = self.arena.allocator();
         self.save_error = options.save_error;
@@ -5680,7 +5682,7 @@ const Wtf8Converter = struct {
                 slice = slice[4..];
                 if (std.mem.startsWith(u8, slice, "UNC\\")) {
                     slice = slice[2..];
-                    if (T == u8) slice = try self.allocator.dupeZ(u8, slice[2..]);
+                    if (T == u8) slice = try self.allocator.dupeSentinel(u8, slice[2..], 0);
                     slice[0] = '\\';
                 }
             }
@@ -5703,20 +5705,20 @@ pub const HandlerVTable: type = init: {
     const redirector = SyscallRedirector(void);
     const len = count: {
         var count: usize = 0;
-        for (std.meta.declarations(redirector)) |decl| {
-            const T = @TypeOf(@field(redirector, decl.name));
+        for (std.meta.declarations(redirector)) |decl_name| {
+            const T = @TypeOf(@field(redirector, decl_name));
             if (@typeInfo(T) == .@"fn") count += 1;
         }
         break :count count;
     };
     var field_names: [len][]const u8 = undefined;
     var field_types: [len]type = undefined;
-    var field_attrs: [len]std.builtin.Type.StructField.Attributes = undefined;
+    var field_attrs: [len]std.lang.Type.Struct.FieldAttributes = undefined;
     var index: usize = 0;
-    for (std.meta.declarations(redirector)) |decl| {
-        const T = @TypeOf(@field(redirector, decl.name));
+    for (std.meta.declarations(redirector)) |decl_name| {
+        const T = @TypeOf(@field(redirector, decl_name));
         if (@typeInfo(T) == .@"fn") {
-            field_names[index] = decl.name;
+            field_names[index] = decl_name;
             field_types[index] = *const T;
             field_attrs[index] = .{};
             index += 1;
@@ -5728,10 +5730,10 @@ pub const HandlerVTable: type = init: {
 pub fn getHandlerVtable(comptime Host: type) HandlerVTable {
     var vtable: HandlerVTable = undefined;
     const redirector = SyscallRedirector(Host);
-    inline for (std.meta.declarations(redirector)) |decl| {
-        const T = @TypeOf(@field(redirector, decl.name));
+    inline for (std.meta.declarations(redirector)) |decl_name| {
+        const T = @TypeOf(@field(redirector, decl_name));
         if (@typeInfo(T) == .@"fn") {
-            @field(vtable, decl.name) = &@field(redirector, decl.name);
+            @field(vtable, decl_name) = &@field(redirector, decl_name);
         }
     }
     return vtable;
@@ -5782,8 +5784,8 @@ pub fn getHookTable(comptime Host: type, comptime redirect_io: bool) std.StaticS
     const len = init: {
         var total: usize = extra;
         inline for (list) |Sub| {
-            const decls = std.meta.declarations(Sub.Original);
-            total += decls.len;
+            const decl_names = std.meta.declarations(Sub.Original);
+            total += decl_names.len;
         }
         break :init total;
     };
@@ -5797,10 +5799,10 @@ pub fn getHookTable(comptime Host: type, comptime redirect_io: bool) std.StaticS
     }
     var index: usize = extra;
     inline for (list) |Sub| {
-        const decls = std.meta.declarations(Sub.Original);
-        inline for (decls) |decl| {
-            const w_suffix = std.mem.endsWith(u8, decl.name, "_orig");
-            const name = if (w_suffix) decl.name[0 .. decl.name.len - 5] else decl.name;
+        const decl_names = std.meta.declarations(Sub.Original);
+        inline for (decl_names) |decl_name| {
+            const w_suffix = std.mem.endsWith(u8, decl_name, "_orig");
+            const name = if (w_suffix) decl_name[0 .. decl_name.len - 5] else decl_name;
             const handler_name = if (w_suffix) name ++ "_hook" else name;
             const HandlerType = @TypeOf(@field(Sub, handler_name));
             const handle_cc = @typeInfo(HandlerType).@"fn".calling_convention;
@@ -5812,7 +5814,7 @@ pub fn getHookTable(comptime Host: type, comptime redirect_io: bool) std.StaticS
             }
             table[index] = .{ name, .{
                 .handler = &@field(Sub, handler_name),
-                .original = @ptrCast(&@field(Sub.Original, decl.name)),
+                .original = @ptrCast(&@field(Sub.Original, decl_name)),
             } };
             index += 1;
         }

@@ -113,10 +113,10 @@ pub const ZigCompiler = struct {
         // use custom build file if it exists; otherwise use Zigar's own build file
         self.build_file_path = find: {
             if (findFile(al, self.module_dir_wo_sep, "build.zig") catch null) |path| {
-                const path_z = try php.allocator.dupeZ(u8, path);
+                const path_z = try php.allocator.dupeSentinel(u8, path, 0);
                 defer php.allocator.free(path_z);
                 // make sure it's not empty
-                var tree = std.zig.Ast.parse(php.allocator, path_z, .zig) catch {
+                var tree = std.zig.Ast.parse(php.allocator, path_z, .{ .mode = .zig }) catch {
                     // use the path if there's a syntax error so that the user would know
                     break :find path;
                 };

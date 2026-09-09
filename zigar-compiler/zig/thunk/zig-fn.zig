@@ -10,7 +10,7 @@ pub const Thunk = *const fn (*const anyopaque, *anyopaque) anyerror!void;
 pub const VariadicThunk = *const fn (*const anyopaque, *anyopaque, *const anyopaque, usize) anyerror!void;
 
 pub fn ThunkType(comptime FT: type) type {
-    return switch (@typeInfo(FT).@"fn".is_var_args) {
+    return switch (@typeInfo(FT).@"fn".attrs.varargs) {
         false => Thunk,
         true => VariadicThunk,
     };
@@ -43,7 +43,7 @@ pub fn createThunk(comptime FT: type) ThunkType(FT) {
             return variadic.call(FT, fn_ptr, arg_ptr, attr_ptr, arg_count);
         }
     };
-    const ns = switch (f.is_var_args) {
+    const ns = switch (f.attrs.varargs) {
         false => ns_regular,
         true => ns_variadic,
     };

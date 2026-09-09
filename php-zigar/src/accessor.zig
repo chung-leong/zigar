@@ -79,7 +79,7 @@ pub const Transform = enum {
 pub fn WithBitOffset(comptime T: type, comptime bit_offset: u3) type {
     const field_names: [2][]const u8 = .{ "padding", "value" };
     const field_types: [2]type = .{ @Int(.unsigned, bit_offset), T };
-    const field_attrs: [2]std.builtin.Type.StructField.Attributes = .{ .{}, .{} };
+    const field_attrs: [2]std.lang.Type.Struct.FieldAttributes = .{ .{}, .{} };
     return @Struct(.@"packed", null, &field_names, &field_types, &field_attrs);
 }
 
@@ -348,8 +348,8 @@ pub const Any = union(enum) {
     fn hasArg(comptime A: type, comptime method: []const u8, comptime T: type) bool {
         const func = @field(A, method);
         const F = @TypeOf(func);
-        return inline for (@typeInfo(F).@"fn".params) |param| {
-            if (param.type == T) break true;
+        return inline for (@typeInfo(F).@"fn".param_types) |param_type| {
+            if (param_type == T) break true;
         } else false;
     }
 
@@ -486,7 +486,6 @@ pub const Any = union(enum) {
     u61: Int(.{ .bit_size = 61, .signedness = .unsigned }),
     u62: Int(.{ .bit_size = 62, .signedness = .unsigned }),
     u63: Int(.{ .bit_size = 63, .signedness = .unsigned }),
-    i0: Int(.{ .bit_size = 0, .signedness = .signed }),
     i1: Int(.{ .bit_size = 1, .signedness = .signed }),
     i2: Int(.{ .bit_size = 2, .signedness = .signed }),
     i3: Int(.{ .bit_size = 3, .signedness = .signed }),
@@ -610,7 +609,6 @@ pub const Any = union(enum) {
     u61_vec: Vector(.{ .int = .{ .bit_size = 61, .signedness = .unsigned } }),
     u62_vec: Vector(.{ .int = .{ .bit_size = 62, .signedness = .unsigned } }),
     u63_vec: Vector(.{ .int = .{ .bit_size = 63, .signedness = .unsigned } }),
-    i0_vec: Vector(.{ .int = .{ .bit_size = 0, .signedness = .signed } }),
     i1_vec: Vector(.{ .int = .{ .bit_size = 1, .signedness = .signed } }),
     i2_vec: Vector(.{ .int = .{ .bit_size = 2, .signedness = .signed } }),
     i3_vec: Vector(.{ .int = .{ .bit_size = 3, .signedness = .signed } }),
@@ -740,7 +738,6 @@ pub const Any = union(enum) {
     u62_bo: Int(.{ .bit_size = 62, .signedness = .unsigned, .use_bit_offset = true }),
     u63_bo: Int(.{ .bit_size = 63, .signedness = .unsigned, .use_bit_offset = true }),
     u64_bo: Int(.{ .bit_size = 64, .signedness = .unsigned, .use_bit_offset = true }),
-    i0_bo: Int(.{ .bit_size = 0, .signedness = .signed, .use_bit_offset = true }),
     i1_bo: Int(.{ .bit_size = 1, .signedness = .signed, .use_bit_offset = true }),
     i2_bo: Int(.{ .bit_size = 2, .signedness = .signed, .use_bit_offset = true }),
     i3_bo: Int(.{ .bit_size = 3, .signedness = .signed, .use_bit_offset = true }),

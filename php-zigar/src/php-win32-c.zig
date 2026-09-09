@@ -9,19 +9,19 @@ pub fn link() !void {
         true => "php8ts",
     };
     const module = c.GetModuleHandleA(dll_name) orelse return error.LibraryNotFound;
-    inline for (comptime std.meta.declarations(@This())) |decl| {
-        const decl_ptr = &@field(@This(), decl.name);
+    inline for (comptime std.meta.declarations(@This())) |decl_name| {
+        const decl_ptr = &@field(@This(), decl_name);
         const decl_ptr_info = @typeInfo(@TypeOf(decl_ptr)).pointer;
-        if (decl_ptr_info.child != void and !decl_ptr_info.is_const) {
+        if (decl_ptr_info.child != void and !decl_ptr_info.attrs.@"const") {
             @setEvalBranchQuota(2000000);
             const ptr_info = @typeInfo(decl_ptr_info.child).pointer;
             const import_name = switch (@typeInfo(ptr_info.child)) {
                 .@"fn" => |fn_info| switch (fn_info.calling_convention) {
-                    .x86_64_vectorcall => std.fmt.comptimePrint("{s}@@{d}", .{ decl.name, fn_info.params.len * @sizeOf(usize) }),
-                    .x86_vectorcall => std.fmt.comptimePrint("@{s}@{d}", .{ decl.name, fn_info.params.len * @sizeOf(usize) }),
-                    else => decl.name,
+                    .x86_64_vectorcall => std.fmt.comptimePrint("{s}@@{d}", .{ decl_name, fn_info.params.len * @sizeOf(usize) }),
+                    .x86_vectorcall => std.fmt.comptimePrint("@{s}@{d}", .{ decl_name, fn_info.params.len * @sizeOf(usize) }),
+                    else => decl_name,
                 },
-                else => decl.name,
+                else => decl_name,
             };
             const ptr = c.GetProcAddress(module, import_name) orelse {
                 return error.MissingFunction;
@@ -81,12 +81,12 @@ fn Ptr(comptime name: []const u8) type {
             if (f.calling_convention == .@"inline") return void;
             if (@hasField(ZendFastCall, name)) {
                 var param_types: [f.params.len]type = undefined;
-                var param_attrs: [f.params.len]std.builtin.Type.Fn.Param.Attributes = undefined;
+                var param_attrs: [f.params.len]std.lang.Type.Fn.ParamAttributes = undefined;
                 for (f.params, 0..) |param, i| {
                     param_types[i] = param.type.?;
                     param_attrs[i] = .{};
                 }
-                const attrs: std.builtin.Type.Fn.Attributes = .{
+                const attrs: std.lang.Type.Fn.Attributes = .{
                     .@"callconv" = switch (builtin.target.cpu.arch) {
                         .x86_64 => .{ .x86_64_vectorcall = .{} },
                         .x86 => .{ .x86_vectorcall = .{} },

@@ -106,7 +106,7 @@ fn calculate(comptime T: type, comptime checking: anytype) u64 {
                 .one => "",
                 else => "]",
             });
-            if (pt.is_const) {
+            if (pt.attrs.@"const") {
                 xxhash.update("const ");
             }
             if (pt.is_allowzero) {
@@ -130,7 +130,7 @@ fn calculate(comptime T: type, comptime checking: anytype) u64 {
                 }
                 xxhash.update(", ");
             }
-            if (f.is_var_args) {
+            if (f.attrs.varargs) {
                 xxhash.update("...");
             }
             xxhash.update(") ");

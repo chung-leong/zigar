@@ -252,8 +252,8 @@ pub const GeneratorStatic = struct {
     }
 
     pub fn findMethod(self: *@This(), name: *String) ?*php.Function {
-        return inline for (std.meta.fields(Methods)) |field| {
-            if (php.matchString(name, field.name)) break &@field(self.methods, field.name);
+        return inline for (comptime std.meta.fieldNames(Methods)) |field_name| {
+            if (php.matchString(name, field_name)) break &@field(self.methods, field_name);
         } else return null;
     }
 

@@ -4,7 +4,7 @@ const builtin = @import("builtin");
 const util = @import("util.zig");
 
 const is_wasm = builtin.target.cpu.arch.isWasm();
-const runtime_safety = builtin.mode == .Debug or builtin.mode == .ReleaseSafe;
+const runtime_safety = builtin.mode == .debug or builtin.mode == .ReleaseSafe;
 
 pub const Access = enum { ro, rw };
 pub const Format = enum {

@@ -155,7 +155,7 @@ fn CallHandler(comptime BFT: type) type {
     const f = @typeInfo(BFT).@"fn";
     const param_count = f.params.len + 2;
     var param_types: [param_count]type = undefined;
-    var param_attrs: [param_count]std.builtin.Type.Fn.Param.Attributes = undefined;
+    var param_attrs: [param_count]std.lang.Type.Fn.ParamAttributes = undefined;
     for (f.params, 0..) |param, i| {
         param_types[i] = param.type.?;
         param_attrs[i] = .{ .@"noalias" = param.is_noalias };

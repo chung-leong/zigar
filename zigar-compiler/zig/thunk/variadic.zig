@@ -30,7 +30,7 @@ pub fn call(
         const NotVarargFn = comptime init: {
             const param_count = f.params.len + 1;
             var param_types: [param_count]type = undefined;
-            var param_attrs: [param_count]std.builtin.Type.Fn.Param.Attributes = undefined;
+            var param_attrs: [param_count]std.lang.Type.Fn.ParamAttributes = undefined;
             for (f.params, 0..) |param, i| {
                 param_types[i] = param.type.?;
                 param_attrs[i] = .{ .@"noalias" = param.is_noalias };
@@ -1426,7 +1426,7 @@ fn callWithArgs(
     const fixed_arg_count = fixed_floats.len + fixed_ints.len;
     const VarargFn = comptime define: {
         var param_types: [fixed_arg_count]type = undefined;
-        var param_attrs: [fixed_arg_count]std.builtin.Type.Fn.Param.Attributes = undefined;
+        var param_attrs: [fixed_arg_count]std.lang.Type.Fn.ParamAttributes = undefined;
         for (0..fixed_arg_count) |i| {
             param_types[i] = if (i < fixed_floats.len) Float else Int;
             param_attrs[i] = .{};

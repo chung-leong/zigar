@@ -38,8 +38,8 @@ pub const AllocatorStatic = struct {
     };
 
     pub fn findMethod(self: *@This(), name: *String) ?*php.Function {
-        return inline for (std.meta.fields(Methods)) |field| {
-            if (php.matchString(name, field.name)) break &@field(self.methods, field.name);
+        return inline for (comptime std.meta.fieldNames(Methods)) |field_name| {
+            if (php.matchString(name, field_name)) break &@field(self.methods, field_name);
         } else return null;
     }
 
@@ -171,7 +171,7 @@ pub const ExternalAllocator = struct {
         const allocator_class = ZigClassEntry.fromStructure(allocator_struct);
         // call convention is different between debug and release; when there's a mismatch
         // route call to function in the vtable through their thunks
-        const debug = builtin.mode == .Debug;
+        const debug = builtin.mode == .debug;
         if (allocator_class.host.module.attributes.debug != debug) {
             return .{
                 .ptr = allocator_struct,
@@ -283,8 +283,8 @@ pub fn Arg(comptime _: @TypeOf(.enum_literal), comptime T: type) type {
     const f = @typeInfo(T).@"fn";
     const count = get: {
         var count = 1;
-        for (f.params) |param| {
-            if (param.type != null) {
+        for (f.param_types) |param_type| {
+            if (param_type != null) {
                 count += 1;
             }
         }
@@ -292,7 +292,7 @@ pub fn Arg(comptime _: @TypeOf(.enum_literal), comptime T: type) type {
     };
     var field_names: [count][]const u8 = undefined;
     var field_types: [count]type = undefined;
-    var field_attrs: [count]std.builtin.Type.StructField.Attributes = undefined;
+    var field_attrs: [count]std.lang.Type.Struct.FieldAttributes = undefined;
     field_names[0] = "retval";
     field_types[0] = if (f.return_type) |RT| switch (RT) {
         noreturn => void,
@@ -300,10 +300,10 @@ pub fn Arg(comptime _: @TypeOf(.enum_literal), comptime T: type) type {
     } else void;
     field_attrs[0] = .{};
     var arg_index = 0;
-    for (f.params) |param| {
-        if (param.type != null) {
+    for (f.param_types) |param_type| {
+        if (param_type != null) {
             field_names[arg_index + 1] = std.fmt.comptimePrint("{d}", .{arg_index});
-            field_types[arg_index + 1] = param.type.?;
+            field_types[arg_index + 1] = param_type.?;
             field_attrs[arg_index + 1] = .{};
             arg_index += 1;
         }

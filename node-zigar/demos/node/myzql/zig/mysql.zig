@@ -104,10 +104,10 @@ const worker = struct {
             },
         );
         errdefer client.deinit(allocator, io);
-        inline for (comptime std.meta.declarations(queries)) |qs_decl| {
-            const query_set = @field(queries, qs_decl.name);
-            inline for (comptime std.meta.declarations(query_set)) |q_decl| {
-                const query = &@field(query_set, q_decl.name);
+        inline for (comptime std.meta.declarations(queries)) |qs_decl_name| {
+            const query_set = @field(queries, qs_decl_name);
+            inline for (comptime std.meta.declarations(query_set)) |q_decl_name| {
+                const query = &@field(query_set, q_decl_name);
                 query.prep_res = try client.prepare(allocator, io, query.sql);
                 errdefer query.prep_res.deinit(allocator);
                 _ = try query.prep_res.expect(.stmt);
@@ -116,10 +116,10 @@ const worker = struct {
     }
 
     pub fn onThreadEnd() void {
-        inline for (comptime std.meta.declarations(queries)) |qs_decl| {
-            const query_set = @field(queries, qs_decl.name);
-            inline for (comptime std.meta.declarations(query_set)) |q_decl| {
-                const query = @field(query_set, q_decl.name);
+        inline for (comptime std.meta.declarations(queries)) |qs_decl_name| {
+            const query_set = @field(queries, qs_decl_name);
+            inline for (comptime std.meta.declarations(query_set)) |q_decl_name| {
+                const query = @field(query_set, q_decl_name);
                 query.prep_res.deinit(allocator);
             }
         }

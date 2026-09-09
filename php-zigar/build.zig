@@ -79,7 +79,7 @@ pub fn build(b: *std.Build) !void {
     else
         unreachable;
     wf.addCopyFileToSource(lib.getEmittedBin(), try std.fs.path.join(b.allocator, &.{ php_extension, filename }));
-    if (target.result.os.tag == .windows and optimize == .Debug) {
+    if (target.result.os.tag == .windows and optimize == .debug) {
         wf.addCopyFileToSource(lib.getEmittedPdb(), try std.fs.path.join(b.allocator, &.{ php_extension, "php_zigar.pdb" }));
     }
     wf.step.dependOn(&lib.step);
