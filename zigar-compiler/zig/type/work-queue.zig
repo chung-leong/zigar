@@ -50,7 +50,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
             };
             const templ_info = @typeInfo(Templ).@"struct";
             var field_attrs: [templ_info.field_names.len]std.lang.Type.Struct.FieldAttributes = undefined;
-            for (templ_info.fields_attrs, 0..) |fa, i| {
+            for (templ_info.field_attrs, 0..) |fa, i| {
                 const FieldType = templ_info.field_types[i];
                 field_attrs[i] = .{
                     .default_value_ptr = fa.default_value_ptr orelse switch (@sizeOf(FieldType)) {

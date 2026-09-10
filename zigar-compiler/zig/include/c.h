@@ -16,6 +16,10 @@
     #include <dlfcn.h>
 #endif
 
+#ifdef __linux__
+    #include <sched.h>
+#endif
+
 #ifdef __APPLE__
     #include <pthread.h>
     #include <libkern/OSCacheControl.h>

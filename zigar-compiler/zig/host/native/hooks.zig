@@ -629,6 +629,44 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return faccessat(fd_cwd, path, mode, result);
         }
 
+        pub fn clone(
+            func: *const fn (arg: usize) callconv(.c) u8,
+            stack: usize,
+            flags: u32,
+            arg: usize,
+            ptid: ?*c.pid_t,
+            tp: usize, // aka tls
+            ctid: ?*c.pid_t,
+            result: *usize,
+        ) callconv(.c) bool {
+            if (flags & c.CLONE_THREAD != 0) {
+                const instance = Host.getInstance();
+                const info = c_allocator.create(ThreadInfo) catch {
+                    result.* = @intFromEnum(std.c.E.NOMEM);
+                    return true;
+                };
+                info.* = .{
+                    .proc = func,
+                    .arg = @ptrFromInt(arg),
+                    .instance = instance,
+                };
+                result.* = std.os.linux.clone(setThreadContext, stack, flags, @intFromPtr(info), ptid, tp, ctid);
+                return true;
+            }
+            return false;
+        }
+
+        fn setThreadContext(arg: usize) callconv(.c) u8 {
+            const info: *ThreadInfo = @ptrFromInt(arg);
+            const proc: *const fn (usize) callconv(.c) u8 = @ptrCast(@alignCast(info.proc));
+            const orig_arg = @intFromPtr(info.arg);
+            const instance = info.instance;
+            c_allocator.destroy(info);
+            Host.initializeThread(instance) catch unreachable;
+            defer Host.deinitializeThread(instance) catch {};
+            return proc(orig_arg);
+        }
+
         pub fn close(fd: c_int, result: *c_int) callconv(.c) bool {
             if (isPrivateDescriptor(fd)) {
                 var call: Syscall = .{ .cmd = .close, .u = .{
@@ -2664,6 +2702,7 @@ pub fn PosixSubstituteLinux(comptime redirector: type) type {
     return struct {
         const posix = PosixSubstitute(redirector);
 
+        pub const clone = makeStdHook("clone");
         pub const copy_file_range = makeStdHook("copy_file_range");
         pub const sendfile = makeStdHook("sendfile");
         pub const sendfile64 = makeStdHook("sendfile64");
@@ -2675,6 +2714,7 @@ pub fn PosixSubstituteLinux(comptime redirector: type) type {
 
         const Self = @This();
         pub const Original = struct {
+            pub var clone: *const @TypeOf(Self.clone) = undefined;
             pub var copy_file_range: *const @TypeOf(Self.copy_file_range) = undefined;
             pub var sendfile: *const @TypeOf(Self.sendfile) = undefined;
             pub var sendfile64: *const @TypeOf(Self.sendfile64) = undefined;

@@ -118,7 +118,7 @@ pub const Any = union(enum) {
                 //     .table => 2,
                 //     .none => 1,
                 // };
-                // if (@typeInfo(@TypeOf(A.get)).@"fn".params.len != arg_count) {
+                // if (@typeInfo(@TypeOf(A.get)).@"fn".param_types.len != arg_count) {
                 //     @compileError(std.fmt.comptimePrint("Incorrect argument count for {}.get(): passing {d} to {}", .{
                 //         A,
                 //         arg_count,
@@ -203,7 +203,7 @@ pub const Any = union(enum) {
                 //     .table => 3,
                 //     .none => 2,
                 // };
-                // if (@typeInfo(@TypeOf(A.set)).@"fn".params.len != arg_count) {
+                // if (@typeInfo(@TypeOf(A.set)).@"fn".param_types.len != arg_count) {
                 //     @compileError(std.fmt.comptimePrint("Incorrect argument count for {}.set(): passing {d} to {}", .{
                 //         A,
                 //         arg_count,
@@ -235,7 +235,7 @@ pub const Any = union(enum) {
                 //     .table => 3,
                 //     .none => 2,
                 // };
-                // if (@typeInfo(@TypeOf(A.getElement)).@"fn".params.len != arg_count) {
+                // if (@typeInfo(@TypeOf(A.getElement)).@"fn".param_types.len != arg_count) {
                 //     @compileError(std.fmt.comptimePrint("Incorrect argument count for {}.getElement(): passing {d} to {}", .{
                 //         A,
                 //         arg_count,
@@ -320,7 +320,7 @@ pub const Any = union(enum) {
                 //     .table => 4,
                 //     .none => 3,
                 // };
-                // if (@typeInfo(@TypeOf(A.setElement)).@"fn".params.len != arg_count) {
+                // if (@typeInfo(@TypeOf(A.setElement)).@"fn".param_types.len != arg_count) {
                 //     @compileError(std.fmt.comptimePrint("Incorrect argument count for {}.setElement(): passing {d} to {}", .{
                 //         A,
                 //         arg_count,

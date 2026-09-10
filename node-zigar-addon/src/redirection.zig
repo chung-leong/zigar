@@ -48,10 +48,10 @@ pub fn Controller(comptime Host: type) type {
                 defer allocator.free(symbol_strs);
                 // find base address of library
                 const base_address = for (symbols) |s| {
+                    const symbol_name_ptr: [*:0]u8 = @ptrCast(&symbol_strs[s.name]);
+                    const symbol_name_len = std.mem.len(symbol_name_ptr);
+                    const symbol_name: [:0]u8 = @ptrCast(symbol_name_ptr[0..symbol_name_len]);
                     if ((s.info.bind == .GLOBAL or s.info.bind == .WEAK) and s.value != 0) {
-                        const symbol_name_ptr: [*:0]u8 = @ptrCast(&symbol_strs[s.name]);
-                        const symbol_name_len = std.mem.len(symbol_name_ptr);
-                        const symbol_name: [:0]u8 = @ptrCast(symbol_name_ptr[0..symbol_name_len]);
                         if (lib.lookup(*anyopaque, symbol_name)) |symbol| {
                             break @intFromPtr(symbol) - s.value;
                         }
@@ -60,9 +60,10 @@ pub fn Controller(comptime Host: type) type {
                 // scan through relocations
                 for (sections) |s| {
                     const sh_type = if (bits == 64) .RELA else .REL;
+                    const Rel = if (bits == 64) elf.Rela else elf.Rel;
                     if (s.type != sh_type) continue;
-                    const rela_entry_ptr: [*]elf.Rel = @ptrFromInt(base_address + s.addr);
-                    const rela_entry_count = s.size / @sizeOf(elf.Rel);
+                    const rela_entry_ptr: [*]Rel = @ptrFromInt(base_address + s.addr);
+                    const rela_entry_count = s.size / @sizeOf(Rel);
                     const rela_entries = rela_entry_ptr[0..rela_entry_count];
                     for (rela_entries) |r| {
                         if (r.info.sym == 0) continue;

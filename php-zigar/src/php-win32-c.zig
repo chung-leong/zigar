@@ -292,7 +292,7 @@ pub fn zend_object_release(arg_obj: [*c]c.zend_object) callconv(.c) void {
 }
 
 fn efree(ptr: ?*anyopaque, comptime src: std.builtin.SourceLocation) void {
-    switch (@typeInfo(@TypeOf(c._efree)).@"fn".params.len) {
+    switch (@typeInfo(@TypeOf(c._efree)).@"fn".param_types.len) {
         5 => _efree(ptr, src.file, src.line, null, 0),
         1 => _efree(ptr),
         else => @compileError("Unexpected ptr argument count"),

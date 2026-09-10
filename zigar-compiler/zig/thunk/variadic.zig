@@ -76,7 +76,7 @@ pub fn call(
                 const variadic_ints = alloc.getVariadicInts(max_variadic_int_count + stack_count);
                 break callWithArgs(
                     f.return_type.?,
-                    f.f.attrs.@"callconv",
+                    f.attrs.@"callconv",
                     function,
                     fixed_floats.*,
                     fixed_ints.*,
@@ -1517,7 +1517,7 @@ test "callWithArgs (i64...i64, f64)" {
     };
     const result2 = callWithArgs(
         f.return_type.?,
-        f.f.attrs.@"callconv",
+        f.attrs.@"callconv",
         @ptrCast(&ns.function),
         fixed_floats,
         fixed_ints,
@@ -1533,7 +1533,7 @@ test "callWithArgs (i64...i64, f64)" {
     // call with extra args
     const result3 = callWithArgs(
         f.return_type.?,
-        f.f.attrs.@"callconv",
+        f.attrs.@"callconv",
         @ptrCast(&ns.function),
         fixed_floats,
         fixed_ints,
@@ -1567,7 +1567,7 @@ test "callWithArgs (i64...i64, i32, i32)" {
     const variadic_ints = abi.toWords(Int, @as(i64, 7)) ++ abi.toWords(Int, @as(i32, -5)) ++ abi.toWords(Int, @as(i32, -2));
     const result2 = callWithArgs(
         f.return_type.?,
-        f.f.attrs.@"callconv",
+        f.attrs.@"callconv",
         @ptrCast(&ns.function),
         fixed_floats,
         fixed_ints,
@@ -1601,7 +1601,7 @@ test "callWithArgs (i64...i32, i32, i32)" {
     const variadic_ints = abi.toWords(Int, @as(i32, 7)) ++ abi.toWords(Int, @as(i32, -5)) ++ abi.toWords(Int, @as(i32, -2));
     const result2 = callWithArgs(
         f.return_type.?,
-        f.f.attrs.@"callconv",
+        f.attrs.@"callconv",
         @ptrCast(&ns.function),
         fixed_floats,
         fixed_ints,
@@ -1644,7 +1644,7 @@ test "callWithArgs (i64...i32, f32, f32)" {
     };
     const result2 = callWithArgs(
         f.return_type.?,
-        f.f.attrs.@"callconv",
+        f.attrs.@"callconv",
         @ptrCast(&ns.function),
         fixed_floats,
         fixed_ints,
@@ -1682,7 +1682,7 @@ test "callWithArgs (i64...i16, i16)" {
     };
     const result2 = callWithArgs(
         f.return_type.?,
-        f.f.attrs.@"callconv",
+        f.attrs.@"callconv",
         @ptrCast(&ns.function),
         fixed_floats,
         fixed_ints,
@@ -1720,7 +1720,7 @@ test "callWithArgs (i64...i8, i8)" {
     };
     const result2 = callWithArgs(
         f.return_type.?,
-        f.f.attrs.@"callconv",
+        f.attrs.@"callconv",
         @ptrCast(&ns.function),
         fixed_floats,
         fixed_ints,
@@ -1758,7 +1758,7 @@ test "callWithArgs (i64...i128)" {
     const variadic_ints = alignment_ints ++ abi.toWords(Int, @as(i128, -2));
     const result2 = callWithArgs(
         f.return_type.?,
-        f.f.attrs.@"callconv",
+        f.attrs.@"callconv",
         @ptrCast(&ns.function),
         fixed_floats,
         fixed_ints,

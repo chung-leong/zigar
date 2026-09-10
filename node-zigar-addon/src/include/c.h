@@ -16,7 +16,7 @@
     #include <sys/stat.h>
 #endif
 
-#ifdef linux
+#ifdef __linux__
     #include <ucontext.h>
     #include <sys/prctl.h>
 #endif
