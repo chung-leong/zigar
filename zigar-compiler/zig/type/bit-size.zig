@@ -22,7 +22,7 @@ pub fn get(comptime T: type) ?usize {
             .@"packed" => @bitSizeOf(T),
             else => @sizeOf(T) * 8,
         },
-        .int, .float, .bool, .vector => @bitSizeOf(T),
+        .int, .float, .bool, .vector, .@"enum" => @bitSizeOf(T),
         else => @sizeOf(T) * 8,
     };
 }

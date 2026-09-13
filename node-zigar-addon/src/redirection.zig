@@ -559,7 +559,7 @@ pub fn Controller(comptime Host: type) type {
                                         const arg_trunc: @Int(.unsigned, int.bits) = @truncate(args[arg_index]);
                                         break :cast @bitCast(arg_trunc);
                                     },
-                                    else => @compileError("Unrecognized type"),
+                                    else => @compileError("Unrecognized type: " ++ @typeName(ArgT)),
                                 };
                             }
                             if (@call(.auto, handler, handler_args)) {

@@ -1,16 +1,19 @@
 const std = @import("std");
 
-const zigar = @import("zigar");
-
-var work_queue: zigar.thread.WorkQueue(worker) = .{};
-
-pub const startup = work_queue.promisify(.startup);
-pub const shutdown = work_queue.promisify(.shutdown);
-pub const print = work_queue.promisify(worker.print);
-
-const worker = struct {
-    pub fn print(path: []const u8) !usize {
-        std.debug.print("{s}\n", .{path});
-        return 1234;
-    }
+pub const Pet = enum(u4) {
+    dog,
+    cat,
+    monkey,
 };
+pub const StructA = packed struct {
+    pet1: Pet = Pet.monkey,
+    pet2: Pet = Pet.dog,
+    number: u10 = 100,
+    pet3: Pet = Pet.cat,
+};
+
+pub var struct_a: StructA = .{ .pet1 = Pet.dog, .pet2 = Pet.cat, .number = 200, .pet3 = Pet.monkey };
+
+pub fn print() void {
+    std.debug.print("{any}\n", .{struct_a});
+}
