@@ -629,44 +629,6 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return faccessat(fd_cwd, path, mode, result);
         }
 
-        pub fn clone(
-            func: *const fn (arg: usize) callconv(.c) u8,
-            stack: usize,
-            flags: u32,
-            arg: usize,
-            ptid: ?*c.pid_t,
-            tp: usize, // aka tls
-            ctid: ?*c.pid_t,
-            result: *usize,
-        ) callconv(.c) bool {
-            if (flags & c.CLONE_THREAD != 0) {
-                const instance = Host.getInstance();
-                const info = c_allocator.create(ThreadInfo) catch {
-                    result.* = @intFromEnum(std.c.E.NOMEM);
-                    return true;
-                };
-                info.* = .{
-                    .proc = func,
-                    .arg = @ptrFromInt(arg),
-                    .instance = instance,
-                };
-                result.* = std.os.linux.clone(setThreadContext, stack, flags, @intFromPtr(info), ptid, tp, ctid);
-                return true;
-            }
-            return false;
-        }
-
-        fn setThreadContext(arg: usize) callconv(.c) u8 {
-            const info: *ThreadInfo = @ptrFromInt(arg);
-            const proc: *const fn (usize) callconv(.c) u8 = @ptrCast(@alignCast(info.proc));
-            const orig_arg = @intFromPtr(info.arg);
-            const instance = info.instance;
-            c_allocator.destroy(info);
-            Host.initializeThread(instance) catch unreachable;
-            defer Host.deinitializeThread(instance) catch {};
-            return proc(orig_arg);
-        }
-
         pub fn close(fd: c_int, result: *c_int) callconv(.c) bool {
             if (isPrivateDescriptor(fd)) {
                 var call: Syscall = .{ .cmd = .close, .u = .{
@@ -2702,7 +2664,40 @@ pub fn PosixSubstituteLinux(comptime redirector: type) type {
     return struct {
         const posix = PosixSubstitute(redirector);
 
-        pub const clone = makeStdHook("clone");
+        pub fn clone(
+            func: *const fn (*anyopaque) callconv(.c) c_int,
+            stack: *anyopaque,
+            flags: u32,
+            arg: *anyopaque,
+            ptid: [*c]c.pid_t,
+            tp: usize, // aka tls
+            ctid: [*c]c.pid_t,
+        ) callconv(.c) c_int {
+            if (flags & c.CLONE_THREAD != 0) {
+                const instance = redirector.Host.getInstance();
+                const info = c_allocator.create(ThreadInfo) catch return @intFromEnum(std.c.E.NOMEM);
+                info.* = .{
+                    .proc = func,
+                    .arg = arg,
+                    .instance = instance,
+                };
+                return Original.clone(setThreadContext, stack, flags, info, ptid, tp, ctid);
+            } else {
+                return Original.clone(func, stack, flags, arg, ptid, tp, ctid);
+            }
+        }
+
+        fn setThreadContext(arg: ?*anyopaque) callconv(.c) c_int {
+            const info: *ThreadInfo = @ptrCast(@alignCast(arg.?));
+            const proc: *const fn (?*anyopaque) callconv(.c) c_int = @ptrCast(@alignCast(info.proc));
+            const orig_arg = info.arg;
+            const instance = info.instance;
+            c_allocator.destroy(info);
+            redirector.Host.initializeThread(instance) catch unreachable;
+            defer redirector.Host.deinitializeThread(instance) catch {};
+            return proc(orig_arg);
+        }
+
         pub const copy_file_range = makeStdHook("copy_file_range");
         pub const sendfile = makeStdHook("sendfile");
         pub const sendfile64 = makeStdHook("sendfile64");
