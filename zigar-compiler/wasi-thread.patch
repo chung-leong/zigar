@@ -1,109 +1,26 @@
-diff -ruN libc/wasi/libc-top-half/musl/src/internal/pthread_impl.h libc/wasi/libc-top-half/musl/src/internal/pthread_impl.h
---- libc/wasi/libc-top-half/musl/src/internal/pthread_impl.h	2026-04-13 20:50:15.000000000 +0200
-+++ libc/wasi/libc-top-half/musl/src/internal/pthread_impl.h	2026-08-16 01:09:08.234769000 +0200
-@@ -230,4 +230,99 @@
+diff -ruN c/pthread.zig c/pthread.zig
+--- c/pthread.zig	2026-09-08 03:57:16.000000000 +0200
++++ c/pthread.zig	2026-09-14 13:56:38.901941121 +0200
+@@ -7,11 +7,11 @@
  
- #define __ATTRP_C11_THREAD ((void*)(uintptr_t)-1)
+ comptime {
+     if (builtin.target.isMuslLibC() or builtin.target.isWasiLibC() or builtin.target.isMinGW()) {
+-        symbol(&pthread_spin_init, "pthread_spin_init");
+-        symbol(&pthread_spin_destroy, "pthread_spin_destroy");
+-        symbol(&pthread_spin_trylock, "pthread_spin_trylock");
+-        symbol(&pthread_spin_lock, "pthread_spin_lock");
+-        symbol(&pthread_spin_unlock, "pthread_spin_unlock");
++        // symbol(&pthread_spin_init, "pthread_spin_init");
++        // symbol(&pthread_spin_destroy, "pthread_spin_destroy");
++        // symbol(&pthread_spin_trylock, "pthread_spin_trylock");
++        // symbol(&pthread_spin_lock, "pthread_spin_lock");
++        // symbol(&pthread_spin_unlock, "pthread_spin_unlock");
+     }
+ }
  
-+#pragma weak _pthread_cleanup_pop
-+#pragma weak _pthread_cleanup_push
-+#pragma weak pthread_attr_destroy
-+#pragma weak pthread_attr_getdetachstate
-+#pragma weak pthread_attr_getguardsize
-+#pragma weak pthread_attr_getinheritsched
-+#pragma weak pthread_attr_getschedparam
-+#pragma weak pthread_attr_getschedpolicy
-+#pragma weak pthread_attr_getscope
-+#pragma weak pthread_attr_getstack
-+#pragma weak pthread_attr_getstackaddr
-+#pragma weak pthread_attr_getstacksize
-+#pragma weak pthread_attr_init
-+#pragma weak pthread_attr_setdetachstate
-+#pragma weak pthread_attr_setguardsize
-+#pragma weak pthread_attr_setinheritsched
-+#pragma weak pthread_attr_setschedparam
-+#pragma weak pthread_attr_setschedpolicy
-+#pragma weak pthread_attr_setscope
-+#pragma weak pthread_attr_setstack
-+#pragma weak pthread_attr_setstackaddr
-+#pragma weak pthread_attr_setstacksize
-+#pragma weak pthread_cancel
-+#pragma weak pthread_cond_broadcast
-+#pragma weak pthread_cond_destroy
-+#pragma weak pthread_cond_init
-+#pragma weak pthread_cond_signal
-+#pragma weak pthread_cond_timedwait
-+#pragma weak pthread_cond_wait
-+#pragma weak pthread_condattr_destroy
-+#pragma weak pthread_condattr_getclock
-+#pragma weak pthread_condattr_getpshared
-+#pragma weak pthread_condattr_init
-+#pragma weak pthread_condattr_setclock
-+#pragma weak pthread_condattr_setpshared
-+#pragma weak pthread_create
-+#pragma weak pthread_detach
-+#pragma weak pthread_equal
-+#pragma weak pthread_exit
-+#pragma weak pthread_getcpuclockid
-+#pragma weak pthread_getschedparam
-+#pragma weak pthread_getspecific
-+#pragma weak pthread_join
-+#pragma weak pthread_key_create
-+#pragma weak pthread_key_delete
-+#pragma weak pthread_mutex_consistent
-+#pragma weak pthread_mutex_destroy
-+#pragma weak pthread_mutex_getprioceiling
-+#pragma weak pthread_mutex_init
-+#pragma weak pthread_mutex_lock
-+#pragma weak pthread_mutex_setprioceiling
-+#pragma weak pthread_mutex_timedlock
-+#pragma weak pthread_mutex_trylock
-+#pragma weak pthread_mutex_unlock
-+#pragma weak pthread_mutexattr_destroy
-+#pragma weak pthread_mutexattr_getprioceiling
-+#pragma weak pthread_mutexattr_getprotocol
-+#pragma weak pthread_mutexattr_getpshared
-+#pragma weak pthread_mutexattr_getrobust
-+#pragma weak pthread_mutexattr_gettype
-+#pragma weak pthread_mutexattr_init
-+#pragma weak pthread_mutexattr_setprioceiling
-+#pragma weak pthread_mutexattr_setprotocol
-+#pragma weak pthread_mutexattr_setpshared
-+#pragma weak pthread_mutexattr_setrobust
-+#pragma weak pthread_mutexattr_settype
-+#pragma weak pthread_once
-+#pragma weak pthread_rwlock_destroy
-+#pragma weak pthread_rwlock_init
-+#pragma weak pthread_rwlock_rdlock
-+#pragma weak pthread_rwlock_timedrdlock
-+#pragma weak pthread_rwlock_timedwrlock
-+#pragma weak pthread_rwlock_tryrdlock
-+#pragma weak pthread_rwlock_trywrlock
-+#pragma weak pthread_rwlock_unlock
-+#pragma weak pthread_rwlock_wrlock
-+#pragma weak pthread_rwlockattr_destroy
-+#pragma weak pthread_rwlockattr_getkind_np
-+#pragma weak pthread_rwlockattr_getpshared
-+#pragma weak pthread_rwlockattr_init
-+#pragma weak pthread_rwlockattr_setkind_np
-+#pragma weak pthread_rwlockattr_setpshared
-+#pragma weak pthread_self
-+#pragma weak pthread_setcancelstate
-+#pragma weak pthread_setcanceltype
-+#pragma weak pthread_setschedparam
-+#pragma weak pthread_setschedprio
-+#pragma weak pthread_setspecific
-+#pragma weak pthread_spin_destroy
-+#pragma weak pthread_spin_init
-+#pragma weak pthread_spin_lock
-+#pragma weak pthread_spin_trylock
-+#pragma weak pthread_spin_unlock
-+#pragma weak pthread_testcancel
-+
- #endif
 diff -ruN std/heap/BrkAllocator.zig std/heap/BrkAllocator.zig
---- std/heap/BrkAllocator.zig	2026-04-13 20:50:15.000000000 +0200
-+++ std/heap/BrkAllocator.zig	2026-08-13 22:56:24.884845000 +0200
+--- std/heap/BrkAllocator.zig	2026-09-08 03:57:21.000000000 +0200
++++ std/heap/BrkAllocator.zig	2026-09-14 13:18:11.349880552 +0200
 @@ -11,10 +11,6 @@
  const assert = std.debug.assert;
  const math = std.math;
@@ -116,20 +33,15 @@ diff -ruN std/heap/BrkAllocator.zig std/heap/BrkAllocator.zig
  /// For each size class, points to the freed pointer.
  frees: [size_class_count]usize = @splat(0),
 diff -ruN std/heap.zig std/heap.zig
---- std/heap.zig	2026-04-13 20:50:15.000000000 +0200
-+++ std/heap.zig	2026-08-14 16:01:25.039531000 +0200
-@@ -13,7 +13,7 @@
- pub const SmpAllocator = @import("heap/SmpAllocator.zig");
+--- std/heap.zig	2026-09-08 03:57:21.000000000 +0200
++++ std/heap.zig	2026-09-14 12:59:19.981000286 +0200
+@@ -15,9 +15,79 @@
  pub const FixedBufferAllocator = @import("heap/FixedBufferAllocator.zig");
+ pub const BufferFirstAllocator = @import("heap/BufferFirstAllocator.zig");
  pub const PageAllocator = @import("heap/PageAllocator.zig");
 -pub const WasmAllocator = if (builtin.single_threaded) BrkAllocator else @compileError("unimplemented");
 +pub const WasmAllocator = if (builtin.single_threaded) BrkAllocator else ThreadSafe(BrkAllocator);
  pub const BrkAllocator = @import("heap/BrkAllocator.zig");
- 
- pub const DebugAllocatorConfig = @import("heap/debug_allocator.zig").Config;
-@@ -474,6 +474,76 @@
-     };
- }
  
 +/// Wraps a non-thread-safe allocator and makes it thread-safe.
 +fn ThreadSafe(comptime T: type) type {
@@ -201,13 +113,13 @@ diff -ruN std/heap.zig std/heap.zig
 +    };
 +}
 +
- test c_allocator {
-     if (builtin.link_libc) {
-         try testAllocator(c_allocator);
+ /// Deprecated; use `SafeAllocator.Options`.
+ pub const DebugAllocatorConfig = @import("heap/debug_allocator.zig").Config;
+ /// Deprecated; use `SafeAllocator`.
 diff -ruN std/Io/Threaded.zig std/Io/Threaded.zig
---- std/Io/Threaded.zig	2026-04-13 20:50:15.000000000 +0200
-+++ std/Io/Threaded.zig	2026-08-16 20:03:55.041791510 +0200
-@@ -937,6 +937,8 @@
+--- std/Io/Threaded.zig	2026-09-08 03:57:21.000000000 +0200
++++ std/Io/Threaded.zig	2026-09-14 13:03:41.515873104 +0200
+@@ -939,6 +939,8 @@
          return Thread.futexWaitInner(ptr, expect, false, timeout_ns);
      }
  
@@ -216,11 +128,10 @@ diff -ruN std/Io/Threaded.zig std/Io/Threaded.zig
      fn futexWaitInner(ptr: *const u32, expect: u32, uncancelable: bool, timeout_ns: ?u64) Io.Cancelable!void {
          @branchHint(.cold);
  
-@@ -956,7 +958,38 @@
+@@ -958,6 +960,37 @@
              comptime assert(builtin.cpu.has(.wasm, .atomics));
              // TODO implement cancelation for WASM futex waits by signaling the futex
              if (!uncancelable) try Thread.checkCancel();
--            const to: i64 = if (timeout_ns) |ns| ns else -1;
 +            if (std.options.wasm_main_thread_no_wait) {
 +                // see if the current thread is the main thread
 +                if (currentId() == 0) {
@@ -252,11 +163,10 @@ diff -ruN std/Io/Threaded.zig std/Io/Threaded.zig
 +                    return;
 +                }
 +            }
-+            const to: i64 = if (timeout_ns) |ns| @bitCast(ns) else -1;
+             const to: i64 = if (timeout_ns) |ns| std.math.cast(i64, ns) orelse std.math.maxInt(i64) else -1;
              const signed_expect: i32 = @bitCast(expect);
              const result = asm volatile (
-                 \\local.get %[ptr]
-@@ -1112,6 +1145,14 @@
+@@ -1114,6 +1147,14 @@
              return parking_futex.wake(ptr, max_waiters);
          } else if (builtin.cpu.arch.isWasm()) {
              comptime assert(builtin.cpu.has(.wasm, .atomics));
@@ -271,7 +181,7 @@ diff -ruN std/Io/Threaded.zig std/Io/Threaded.zig
              const woken_count = asm volatile (
                  \\local.get %[ptr]
                  \\local.get %[waiters]
-@@ -1119,7 +1160,7 @@
+@@ -1121,7 +1162,7 @@
                  \\local.set %[ret]
                  : [ret] "=r" (-> u32),
                  : [ptr] "r" (ptr),
@@ -281,9 +191,9 @@ diff -ruN std/Io/Threaded.zig std/Io/Threaded.zig
              _ = woken_count; // can be 0 when linker flag 'shared-memory' is not enabled
          } else switch (native_os) {
 diff -ruN std/std.zig std/std.zig
---- std/std.zig	2026-04-13 20:50:15.000000000 +0200
-+++ std/std.zig	2026-08-16 19:19:22.672879572 +0200
-@@ -190,6 +190,11 @@
+--- std/std.zig	2026-09-08 03:57:21.000000000 +0200
++++ std/std.zig	2026-09-14 13:22:33.949163825 +0200
+@@ -197,6 +197,11 @@
          else => false,
      },
  
@@ -296,9 +206,9 @@ diff -ruN std/std.zig std/std.zig
      /// compilation errors due to zig not being lazy enough.
      pub const logTerminalMode: fn () Io.Terminal.Mode = log.defaultTerminalMode;
 diff -ruN std/Thread.zig std/Thread.zig
---- std/Thread.zig	2026-04-13 20:50:15.000000000 +0200
-+++ std/Thread.zig	2026-08-16 18:38:01.534610000 +0200
-@@ -826,17 +826,25 @@
+--- std/Thread.zig	2026-09-08 03:57:21.000000000 +0200
++++ std/Thread.zig	2026-09-14 13:11:47.824695851 +0200
+@@ -827,17 +827,25 @@
          allocator: std.mem.Allocator,
          /// The current state of the thread.
          state: State = State.init(.running),
@@ -330,7 +240,7 @@ diff -ruN std/Thread.zig std/Thread.zig
          /// Contains the raw pointer value to the wrapper which holds all arguments
          /// for the callback.
          raw_ptr: usize,
-@@ -844,11 +852,6 @@
+@@ -845,11 +853,6 @@
          /// function upon thread spawn. The above mentioned pointer will be passed
          /// to this function pointer as its argument.
          call_back: *const fn (usize) void,
@@ -342,7 +252,7 @@ diff -ruN std/Thread.zig std/Thread.zig
      };
  
      const State = std.atomic.Value(enum(u8) { running, completed, detached });
-@@ -874,12 +877,7 @@
+@@ -875,12 +878,7 @@
      }
  
      fn join(self: Impl) void {
@@ -356,7 +266,7 @@ diff -ruN std/Thread.zig std/Thread.zig
  
          while (true) {
              const tid = self.thread.tid.load(.seq_cst);
-@@ -986,13 +984,13 @@
+@@ -987,13 +985,13 @@
          wrapper.* = .{ .args = args };
  
          const instance: *Instance = @ptrCast(@alignCast(&allocated_memory[instance_offset]));
@@ -373,13 +283,12 @@ diff -ruN std/Thread.zig std/Thread.zig
          };
  
          const tid = spawnWasiThread(instance);
-@@ -1013,46 +1011,96 @@
+@@ -1014,46 +1012,95 @@
      }
  
      /// Called by the host environment after thread creation.
 -    fn wasi_thread_start(tid: i32, arg: *Instance) callconv(.c) void {
-+    fn wasi_thread_start(_: i32, _: *Instance) callconv(.naked) void {
-         comptime assert(!builtin.single_threaded);
+-        comptime assert(!builtin.single_threaded);
 -        __set_stack_pointer(arg.thread.memory.ptr + arg.stack_offset);
 -        __wasm_init_tls(arg.thread.memory.ptr + arg.tls_offset);
 -        @atomicStore(u32, &WasiThreadImpl.tls_thread_id, @intCast(tid), .seq_cst);
@@ -418,6 +327,7 @@ diff -ruN std/Thread.zig std/Thread.zig
 -                allocator.free(arg.thread.memory);
 -            },
 -        }
++    fn wasi_thread_start(_: i32, _: *Instance) callconv(.naked) void {
 +        const clothed = struct {
 +            fn run(tid: i32, arg: *Instance) callconv(.c) void {
 +                if (arg.thread.cleanup_stack_memory == null) {
@@ -509,7 +419,7 @@ diff -ruN std/Thread.zig std/Thread.zig
      }
  
      /// Asks the host to create a new thread for us.
-@@ -1075,6 +1123,17 @@
+@@ -1076,6 +1123,17 @@
          );
      }
  
@@ -527,7 +437,7 @@ diff -ruN std/Thread.zig std/Thread.zig
      /// Returns the size of the TLS segment
      inline fn __tls_size() u32 {
          return asm volatile (
-@@ -1094,25 +1153,6 @@
+@@ -1095,25 +1153,6 @@
              : [ret] "=r" (-> u32),
          );
      }

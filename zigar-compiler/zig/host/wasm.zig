@@ -385,7 +385,7 @@ comptime {
         for (std.meta.declarations(pthread)) |decl_name| {
             @export(&@field(pthread, decl_name), .{
                 .name = decl_name,
-                .visibility = .default,
+                .visibility = .hidden,
                 .linkage = .strong,
             });
         }
