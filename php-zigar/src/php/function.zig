@@ -1,0 +1,362 @@
+pub const std = @import("std");
+
+const c = @import("c.zig");
+const failure = @import("failure.zig");
+const pd = c.declarations;
+const pi = c.imports;
+const castTo = c.castTo;
+
+const Array = @import("array.zig").Array;
+const Object = @import("object.zig").Object;
+const Resource = @import("resource.zig").Resource;
+const String = @import("string.zig").String;
+const Value = @import("value.zig").Value;
+
+pub const Function = struct {
+    pub fn getName(self: *const @This()) ?*String {
+        const zstr = self.impl.common.function_name orelse return null;
+        return castTo(String, zstr);
+    }
+
+    pub const Arguments = struct {
+        pub fn this(self: *const @This()) *const Value {
+            return castTo(Value, &self.impl.This);
+        }
+
+        pub fn getExtraNamed(self: *const @This()) ?*Array {
+            const zarr = self.impl.extra_named_params orelse return null;
+            return castTo(Array, zarr);
+        }
+
+        pub fn callee(self: *const @This()) *Function {
+            return castTo(Function, self.impl.func);
+        }
+
+        pub fn iterate(self: *const @This()) Iterator {
+            return .init(self);
+        }
+
+        fn getInfo(self: *const @This()) c.ArgPtrCountExtra {
+            var info: c.ArgPtrCountExtra = undefined;
+            c.get_argument_info(&self.impl, &info);
+            return info;
+        }
+
+        pub const Iterator = struct {
+            pub fn init(args: *const Arguments) @This() {
+                const info = args.getInfo();
+                var len = info.len;
+                var total = len;
+                const named = get: {
+                    if (info.extra) {
+                        // extra_named_params contains bogus values when it's not used
+                        if (args.getExtraNamed()) |arr| {
+                            len += 1;
+                            total += arr.length();
+                            break :get arr.toValue();
+                        }
+                    }
+                    break :get null;
+                };
+                return .{
+                    .arg_ptr = @ptrCast(info.ptr),
+                    .len = len,
+                    .total = total,
+                    .this = args.this(),
+                    .named_params = named,
+                    .callee = args.callee(),
+                };
+            }
+
+            pub fn length(self: *const @This()) usize {
+                return self.len;
+            }
+
+            pub fn hasNamed(self: *const @This()) bool {
+                return self.named_params != null;
+            }
+
+            pub fn next(self: *@This()) ?*const Value {
+                return if (self.peek()) |v| get: {
+                    self.index += 1;
+                    break :get v;
+                } else null;
+            }
+
+            pub fn peek(self: *@This()) ?*const Value {
+                if (self.index < self.len) {
+                    var index = self.index;
+                    // return named parameters as last argument
+                    if (index == self.len - 1) {
+                        if (self.named_params) |*p| return p;
+                    }
+                    // return this pointer as first argument
+                    if (self.use_this_first) {
+                        if (index > 0) index -= 1 else return self.this;
+                    }
+                    // return regular argument
+                    return &self.arg_ptr[index];
+                } else {
+                    return null;
+                }
+            }
+
+            pub fn reset(self: *@This()) void {
+                self.index = 0;
+            }
+
+            pub fn createArrayOf(self: *@This()) *Array {
+                self.reset();
+                const arr = Array.create();
+                while (self.next()) |value| arr.append(value);
+                return arr;
+            }
+
+            pub fn makeThisFirst(self: *@This()) !void {
+                if (!self.use_this_first) {
+                    self.use_this_first = true;
+                    self.len += 1;
+                }
+            }
+
+            pub fn extract(self: *@This(), comptime T: type) !T {
+                std.debug.assert(self.index == 0);
+                // make sure T is a struct/tuple
+                if (@typeInfo(T) != .@"struct") @compileError("Struct type expected, received: " ++ @typeName(T));
+                // check argument count
+                const min, const max = init: {
+                    const field_types = @typeInfo(T).@"struct".field_types;
+                    var required: usize = 0;
+                    inline for (field_types) |FT| {
+                        if (@typeInfo(FT) != .optional) required += 1;
+                    }
+                    break :init .{ required, field_types.len };
+                };
+                try self.verifyCount(min, max);
+                var required_remaining = min;
+                var set: T = undefined;
+                inline for (@typeInfo(T).@"struct".field_names, 0..) |arg_name, i| {
+                    const FT = @TypeOf(@field(set, arg_name));
+                    const VT, const optional = switch (@typeInfo(FT)) {
+                        .optional => |opt| .{ opt.child, true },
+                        else => .{ FT, false },
+                    };
+                    if (!optional or i + required_remaining < self.len) {
+                        const arg = self.next().?;
+                        const value = convertValue(VT, arg) catch |err| {
+                            const fn_name = if (self.callee.getName()) |s| s.slice() else "(unknown)";
+                            if (error{NegativeValue} || @TypeOf(err) == @TypeOf(err)) {
+                                if (err == error.NegativeValue) {
+                                    return failure.report("{s}(): Argument #{d} ${s} must be a positive integer, received {d}", .{
+                                        fn_name,
+                                        i + 1,
+                                        arg_name,
+                                        arg.getInteger() catch unreachable,
+                                    });
+                                }
+                            }
+                            return failure.report("{s}(): Argument #{d} (${s}) must be of type {s}, {s} given", .{
+                                fn_name,
+                                i + 1,
+                                arg_name,
+                                valueTypeName(FT),
+                                arg.kind().name(),
+                            });
+                        };
+                        @field(set, arg_name) = value;
+                    } else {
+                        @field(set, arg_name) = null;
+                    }
+                    if (!optional) required_remaining -= 1;
+                }
+                return set;
+            }
+
+            pub fn extractNamed(self: *@This(), comptime T: type) !T {
+                // method should be called prior to actual iteration
+                std.debug.assert(self.index == 0);
+                // make sure T is a tuple
+                const valid = switch (@typeInfo(T)) {
+                    .@"struct" => |st| !st.is_tuple,
+                    else => false,
+                };
+                if (!valid) @compileError("Struct type expected, received: " ++ @typeName(T));
+                var set: T = undefined;
+                inline for (@typeInfo(T).@"struct".field_names) |arg_name| {
+                    const FT = @TypeOf(@field(set, arg_name));
+                    const VT, const optional = switch (@typeInfo(FT)) {
+                        .optional => |opt| .{ opt.child, true },
+                        else => .{ FT, false },
+                    };
+                    const arg_maybe: ?*Value = get: {
+                        const args = self.named_params orelse break :get null;
+                        if (args.get(arg_name) catch null) |value| {
+                            args.delete(arg_name);
+                            break :get value;
+                        }
+                    };
+                    if (arg_maybe) |arg| {
+                        const value = convertValue(VT, arg) catch |err| {
+                            const fn_name = if (self.callee.getName()) |s| s.slice else "(unknown)";
+                            if (error{NegativeValue} || @TypeOf(err) == @TypeOf(err)) {
+                                if (err == error.NegativeValue) {
+                                    return failure.report("{s}(): Named argument ${s} must be a positive integer, received {d}", .{
+                                        fn_name,
+                                        arg_name,
+                                        arg.getInteger() catch unreachable,
+                                    });
+                                }
+                            }
+                            return failure.report("{s}(): Named argument ${s} must be of type {s}, {s} given", .{
+                                fn_name,
+                                arg_name,
+                                valueTypeName(FT),
+                                arg.kind().name(),
+                            });
+                        };
+                        @field(set, arg_name) = value;
+                    } else {
+                        if (optional) {
+                            @field(set, arg_name) = null;
+                        } else {
+                            const fn_name = if (self.callee.getName()) |s| s.slice else "(unknown)";
+                            return failure.report("{s}(): Named argument ${s} is required and expected to be of type {s}", .{
+                                fn_name,
+                                arg_name,
+                                valueTypeName(FT),
+                            });
+                        }
+                    }
+                }
+                if (self.named_params) |args| {
+                    // if all named arguments were taken out, shrink the argument list
+                    if (args.length() == 0) {
+                        self.named_params = null;
+                        self.len -= 1;
+                    }
+                }
+            }
+
+            pub fn verifyCount(self: *const @This(), min: usize, max: usize) !void {
+                if (self.len < min or self.len > max) {
+                    const fn_name = if (self.callee.getName()) |s| s.slice() else "(unknown)";
+                    return failure.report("{s}() expects {s} {d} argument{s}, {d} given{s}", .{
+                        fn_name,
+                        if (max > min)
+                            "at most"
+                        else if (self.len < min)
+                            "at least"
+                        else
+                            "exactly",
+                        if (max > min) max else min,
+                        if (min != 1) "s" else "",
+                        self.len,
+                        if (self.hasNamed()) " (the last being named arguments)" else "",
+                    });
+                }
+            }
+
+            fn convertValue(comptime T: type, value: *const Value) !T {
+                return switch (@typeInfo(T)) {
+                    .bool => try value.getBoolean(),
+                    .int => |int| get: {
+                        const int_value = switch (int.signedness) {
+                            .signed => try value.getInteger(),
+                            .unsigned => try value.getUnsigned(),
+                        };
+                        if (int_value > std.math.maxInt(T) or int_value < std.math.minInt(T)) return error.OutOfBound;
+                        break :get @intCast(int_value);
+                    },
+                    .float => get: {
+                        const float_value = value.getFloat();
+                        break :get @floatCast(float_value);
+                    },
+                    .pointer => |pt| switch (pt.size) {
+                        .one => switch (pt.child) {
+                            String => try value.getString(),
+                            Array => try value.getArray(),
+                            Object => try value.getObject(),
+                            Resource => try value.getResource(),
+                            else => unsupported(T),
+                        },
+                        .slice => switch (pt.child) {
+                            u8 => (try value.getString()).slice(),
+                            else => unsupported(T),
+                        },
+                        else => unsupported(T),
+                    },
+                    .optional => |opt| if (value.isNull()) null else try convertValue(opt.child, value),
+                    .@"union" => |un| inline for (un.field_types, 0..) |FT, i| {
+                        if (convertValue(FT, value)) |nv| break @unionInit(T, un.field_names[i], nv) else |_| {}
+                    },
+                    else => unsupported(T),
+                };
+            }
+
+            fn valueTypeName(comptime T: type) []const u8 {
+                @setEvalBranchQuota(2_000_000);
+                return comptime switch (@typeInfo(T)) {
+                    .bool => "boolean",
+                    .int => "int",
+                    .float => "float",
+                    .pointer => |pt| switch (pt.size) {
+                        .one => switch (pt.child) {
+                            String => "string",
+                            Array => "array",
+                            Object => "object",
+                            Resource => "resource",
+                            else => unsupported(T),
+                        },
+                        .slice => switch (pt.child) {
+                            u8 => "string",
+                            else => unsupported(T),
+                        },
+                        else => unsupported(T),
+                    },
+                    .optional => |opt| std.fmt.comptimePrint("?{s}", .{valueTypeName(opt.child)}),
+                    .@"union" => |un| format: {
+                        const len = un.field_types.len;
+                        var names: [len][]const u8 = undefined;
+                        var combined_name_len: usize = 0;
+                        for (un.field_types, 0..) |FT, i| {
+                            const name = valueTypeName(FT);
+                            names[i] = name;
+                            combined_name_len += name.len;
+                            if (i != len - 1) combined_name_len += 1;
+                        }
+                        var combined_name: [combined_name_len]u8 = undefined;
+                        var offset: usize = 0;
+                        for (0..len) |i| {
+                            const name = names[i];
+                            @memcpy(combined_name[offset .. offset + name.len], name);
+                            offset += name.len;
+                            if (offset < combined_name_len) {
+                                combined_name[offset] = '|';
+                                offset += 1;
+                            }
+                        }
+                        break :format &combined_name;
+                    },
+                    else => unsupported(T),
+                };
+            }
+
+            fn unsupported(comptime T: type) noreturn {
+                @compileError("Unexpected type: " ++ @typeName(T));
+            }
+
+            arg_ptr: [*]Value,
+            this: *const Value,
+            use_this_first: bool = false,
+            named_params: ?Value,
+            len: usize,
+            total: usize,
+            index: usize = 0,
+            callee: *Function,
+        };
+
+        impl: pd.zend_execute_data,
+    };
+
+    impl: pd.zend_function,
+};

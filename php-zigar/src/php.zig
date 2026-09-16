@@ -77,7 +77,7 @@ const fn_transform = @import("zigft/fn-transform.zig");
 
 // on Windows, we link symbols in PHP DLL manually
 pub const pc = switch (builtin.target.os.tag) {
-    .windows => @import("php-win32-c.zig"),
+    .windows => @import("php/c-win32.zig"),
     else => c,
 };
 

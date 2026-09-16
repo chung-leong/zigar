@@ -8,14 +8,20 @@ const getSharedLibraryPath = @import("compilation.zig").getSharedLibraryPath;
 const ModuleHost = @import("host.zig").ModuleHost;
 const Options = @import("options.zig").Options;
 const php = @import("php.zig");
+const php_ng = @import("php-new.zig");
+const Array = php_ng.Array;
+const Function = php_ng.Function;
+const castTo = php_ng.castTo;
+const castFrom = php_ng.castFrom;
+const Value = php_ng.Value;
 const ArgumentIterator = php.ArgumentIterator;
 const FunctionInfo = php.FunctionInfo;
-const ExecuteData = php.ExecuteData;
+const ExecuteDataOG = php.ExecuteData;
 const FunctionEntry = php.FunctionEntry;
 const InternalArgInfo = php.InternalArgInfo;
 const ModuleEntry = php.ModuleEntry;
-const String = php.String;
-const Value = php.Value;
+const StringOG = php.String;
+const ValueOG = php.Value;
 const structure = @import("structure.zig");
 const system = @import("system.zig");
 const io = system.io;
@@ -34,7 +40,7 @@ pub fn DllMain(
     _: std.os.windows.DWORD,
     _: std.os.windows.LPVOID,
 ) std.os.windows.BOOL {
-    @import("php-win32-c.zig").link() catch return .FALSE;
+    @import("php/c-win32.zig").link() catch return .FALSE;
     return .TRUE;
 }
 
@@ -120,35 +126,28 @@ const functions = struct {
         pub const optional = .{ "mod_path", "params" };
         pub const variadic = true;
 
-        pub fn run(ed: *ExecuteData, retval: *Value) !void {
-            var arg_iter = ArgumentIterator.init(ed);
-            try arg_iter.verifyCount(required.len, required.len + optional.len, "zigar_compile");
+        pub fn run(ed: *ExecuteDataOG, retval_og: *ValueOG) !void {
+            const retval = castTo(Value, retval_og);
+            var arg_iter = castTo(Function.Arguments, ed).iterate();
+            const args = try arg_iter.extract(struct {
+                src_path: []const u8,
+                mod_path: ?[]const u8,
+                params: ?*Array,
+            });
             if (!options.recompile) {
-                retval.* = php.createValueBool(false);
+                retval.* = .fromBool(false);
                 return;
             }
-            const src_path = try php.getValueStringContent(arg_iter.next().?);
-            const mod_path, const params = get: {
-                if (arg_iter.next()) |arg1| {
-                    const arg1_type = php.getValueType(arg1);
-                    if (arg_iter.len == 2 and (arg1_type == .array or arg1_type == .object)) {
-                        const mod_path = try deriveModulePath(php.allocator, src_path);
-                        const params = try php.getValueHashTable(arg1);
-                        break :get .{ mod_path, params };
-                    } else {
-                        const mod_path = try getResolvedPath(php.allocator, arg1);
-                        errdefer php.allocator.free(mod_path);
-                        const params = if (arg_iter.next()) |arg2| try php.getValueHashTable(arg2) else null;
-                        break :get .{ mod_path, params };
-                    }
-                } else {
-                    const mod_path = try deriveModulePath(php.allocator, src_path);
-                    break :get .{ mod_path, null };
-                }
-            };
+            const src_path = try createResolvedPath(php.allocator, args.src_path);
+            defer php.allocator.free(src_path);
+            const mod_path = if (args.mod_path) |path|
+                try createResolvedPath(php.allocator, path)
+            else
+                try deriveModulePath(php.allocator, src_path);
             defer php.allocator.free(mod_path);
-            try ZigCompiler.compile(src_path, mod_path, params);
-            retval.* = php.createValueBool(true);
+            const params_og = if (args.params) |p| castFrom(Array, p) else null;
+            try ZigCompiler.compile(src_path, mod_path, params_og);
+            retval.* = .fromBool(true);
         }
     };
     pub const zigar_use = struct {
@@ -156,11 +155,11 @@ const functions = struct {
         pub const optional = .{"params"};
         pub const variadic = true;
 
-        pub fn run(ed: *ExecuteData, retval: *Value) !void {
+        pub fn run(ed: *ExecuteDataOG, retval: *ValueOG) !void {
             var arg_iter = ArgumentIterator.init(ed);
             try arg_iter.verifyCount(required.len, required.len + optional.len, "zigar_use");
             const src_path, const mod_path = get: {
-                const path = try getResolvedPath(php.allocator, arg_iter.next().?);
+                const path = try getResolvedPathOG(php.allocator, arg_iter.next().?);
                 errdefer php.allocator.free(path);
                 var dir = std.Io.Dir.openDirAbsolute(io, path, .{}) catch |err| {
                     if (err != error.NotDir) return err;
@@ -186,11 +185,11 @@ const functions = struct {
         pub const optional = .{ "callback", "params" };
         pub const variadic = true;
 
-        pub fn run(ed: *ExecuteData, retval: *Value) !void {
+        pub fn run(ed: *ExecuteDataOG, retval: *ValueOG) !void {
             var arg_iter = ArgumentIterator.init(ed);
             try arg_iter.verifyCount(required.len, required.len + optional.len, "zigar_import");
             const src_path, const mod_path = get: {
-                const path = try getResolvedPath(php.allocator, arg_iter.next().?);
+                const path = try getResolvedPathOG(php.allocator, arg_iter.next().?);
                 errdefer php.allocator.free(path);
                 var dir = std.Io.Dir.openDirAbsolute(io, path, .{}) catch |err| {
                     if (err != error.NotDir) return err;
@@ -239,6 +238,25 @@ const functions = struct {
         }
     };
 
+    fn verifyArgCount(arg_iter: *const php_ng.Function.Arguments.Iterator, min: usize, max: usize, fn_name: []const u8) !void {
+        const len = arg_iter.length();
+        if (len < min or len > max) {
+            return failure.report("{s}() expects {s} {d} argument{s}, {d} given{s}", .{
+                fn_name,
+                if (max > min)
+                    "at most"
+                else if (len < min)
+                    "at least"
+                else
+                    "exactly",
+                if (max > min) max else min,
+                if (min != 1) "s" else "",
+                len,
+                if (arg_iter.hasNamed()) " (the last being named arguments)" else "",
+            });
+        }
+    }
+
     fn deriveModulePath(allocator: std.mem.Allocator, src_path: []const u8) ![]const u8 {
         const src_dir = std.fs.path.dirname(src_path) orelse "";
         const src_name = std.fs.path.stem(src_path);
@@ -248,7 +266,13 @@ const functions = struct {
         return try std.fs.path.resolve(php.allocator, &.{ src_dir, mod_rel_path, mod_filename });
     }
 
-    fn getResolvedPath(allocator: std.mem.Allocator, value: *Value) ![]const u8 {
+    fn createResolvedPath(allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
+        const cwd_path = try std.process.currentPathAlloc(io, allocator);
+        defer php.allocator.free(cwd_path);
+        return try std.fs.path.resolve(allocator, &.{ cwd_path, path });
+    }
+
+    fn getResolvedPathOG(allocator: std.mem.Allocator, value: *ValueOG) ![]const u8 {
         const path = try php.getValueStringContent(value);
         const cwd_path = try std.process.currentPathAlloc(io, allocator);
         defer php.allocator.free(cwd_path);
