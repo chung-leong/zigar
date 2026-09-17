@@ -22,14 +22,36 @@ pub const DynLib = struct {
         const path_copy = try std.heap.c_allocator.dupeZ(u8, path[offset..]);
         const handle = switch (builtin.target.os.tag) {
             .windows => load: {
-                break :load c.LoadLibraryA(path_copy.ptr) orelse return error.FileNotFound;
+                break :load c.LoadLibraryA(path_copy.ptr) orelse {
+                    const error_code = c.GetLastError();
+                    var msg_buffer: [*]u8 = undefined;
+                    const len = c.FormatMessageA(
+                        c.FORMAT_MESSAGE_ALLOCATE_BUFFER | c.FORMAT_MESSAGE_FROM_SYSTEM | c.FORMAT_MESSAGE_IGNORE_INSERTS,
+                        null,
+                        error_code,
+                        0,
+                        @ptrCast(&msg_buffer),
+                        0,
+                        null,
+                    );
+                    if (len > 0) {
+                        const msg = msg_buffer[0..len];
+                        std.debug.print("{s}\n", .{msg});
+                    }
+                    return error.UnableToLoadLibrary;
+                };
             },
             else => load: {
                 var flags: u32 = c.RTLD_LAZY;
                 if (@hasDecl(c, "RTLD_DEEPBIND")) {
                     flags |= c.RTLD_DEEPBIND;
                 }
-                break :load std.c.dlopen(path_copy, @bitCast(flags)) orelse return error.FileNotFound;
+                break :load std.c.dlopen(path_copy, @bitCast(flags)) orelse {
+                    if (std.c.dlerror()) |msg| {
+                        std.debug.print("{s}\n", .{msg});
+                    }
+                    return error.UnableToLoadLibrary;
+                };
             },
         };
         return .{ .handle = handle, .path = path_copy, .is_handle_owner = true };
