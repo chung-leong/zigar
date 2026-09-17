@@ -16,7 +16,7 @@ pub const Resource = struct {
 
     pub fn release(self: *@This()) void {
         const zres = &self.impl;
-        pi.zend_list_delete(zres);
+        _ = pi.zend_list_delete(zres);
     }
 
     pub fn subtractRef(self: *@This()) void {

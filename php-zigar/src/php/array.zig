@@ -5,8 +5,8 @@ const pd = c.declarations;
 const pi = c.imports;
 const castTo = c.castTo;
 const castFrom = c.castFrom;
-
 const String = @import("string.zig").String;
+const unsupported = @import("failure.zig").unsupported;
 const Value = @import("value.zig").Value;
 
 pub const Array = struct {
@@ -15,13 +15,25 @@ pub const Array = struct {
         return ht.nNumOfElements;
     }
 
-    pub fn nextIndex(self: *const @This()) usize {
+    pub fn nextIndex(self: *const @This()) isize {
         const ht = &self.impl;
-        return ht.nNextFreeElement;
+        return switch (ht.nNextFreeElement) {
+            std.math.minInt(@TypeOf(ht.nNextFreeElement)) => 0,
+            else => |i| i,
+        };
     }
 
     pub fn isZeroBased(self: *const @This()) bool {
         return self.nextIndex() == self.length();
+    }
+
+    pub fn isAssociative(self: *const @This()) bool {
+        const ht = &self.impl;
+        if (ht.u.flags & pd.HASH_FLAG_PACKED != 0) return false;
+        return for (0..ht.nNumUsed) |i| {
+            const p = ht.arData[i];
+            if (p.val.u1.v.type != pd.IS_UNDEF and p.key == null) break false;
+        } else true;
     }
 
     pub fn create() *@This() {
@@ -55,32 +67,35 @@ pub const Array = struct {
     }
 
     pub fn has(self: *const @This(), key: anytype) bool {
-        return if (self.get(key)) |_| true else |_| false;
+        if (self.get(key)) |value| {
+            value.release();
+            return true;
+        } else {
+            return false;
+        }
     }
 
-    pub fn get(self: *const @This(), key: anytype) !*Value {
+    pub fn get(self: *const @This(), key: anytype) !Value {
         const ht = &self.impl;
         const zval = switch (Key.fromAny(key)) {
             .integer => |i| pi.zend_hash_index_find(ht, i),
             .string => |s| pi.zend_hash_find(ht, s),
             .slice => |s| pi.zend_hash_str_find(ht, s.ptr, s.len),
         } orelse return error.Missing;
-        return castTo(Value, zval);
+        const value = castTo(Value, zval);
+        value.addRef();
+        return value;
     }
 
     pub fn set(self: *@This(), key: anytype, value: *const Value) void {
-        _ = self.insert(key, value);
-    }
-
-    pub fn insert(self: *@This(), key: anytype, value: *const Value) *Value {
         const ht = &self.impl;
         const zval = @constCast(castFrom(Value, value));
-        const result = switch (Key.fromAny(key)) {
+        _ = switch (Key.fromAny(key)) {
             .integer => |i| pi.zend_hash_index_update(ht, i, zval),
             .string => |s| pi.zend_hash_update(ht, s, zval),
             .slice => |s| pi.zend_hash_str_update(ht, s.ptr, s.len, zval),
         };
-        return castTo(Value, result);
+        value.addRef();
     }
 
     pub fn delete(self: *@This(), key: anytype) void {
@@ -102,6 +117,7 @@ pub const Array = struct {
         const zval = @constCast(castFrom(Value, value));
         ht.*.u.flags |= pd.HASH_FLAG_ALLOW_COW_VIOLATION;
         _ = pi.zend_hash_next_index_insert(ht, zval);
+        value.addRef();
     }
 
     pub fn iterate(self: *const @This(), options: Iterator.Options) Iterator {
@@ -147,7 +163,7 @@ pub const Array = struct {
             self.returned = false;
         }
 
-        pub fn next(self: *@This()) ?*Value {
+        pub fn next(self: *@This()) ?Value {
             defer self.returned = true;
             if (self.returned) {
                 switch (self.options.dir) {
@@ -155,42 +171,38 @@ pub const Array = struct {
                     .backward => _ = pi.zend_hash_move_backwards_ex(self.ht, &self.pos),
                 }
             }
-            self.key = null;
-            const zval = pi.zend_hash_get_current_data_ex(self.ht, &self.pos);
-            return castTo(Value, zval);
+            self.key_value = null;
+            const zval = pi.zend_hash_get_current_data_ex(self.ht, &self.pos) orelse return null;
+            return castTo(Value, zval).*;
         }
 
-        pub fn key(self: *@This()) *Value {
-            if (self.key == null) {
+        pub fn key(self: *@This()) Value {
+            if (self.key_value == null) {
                 var key_value: Value = undefined;
                 const zval = castFrom(Value, &key_value);
-                pi.zend_hash_get_current_key_zval_ex(self.ht, &zval, &self.pos);
+                pi.zend_hash_get_current_key_zval_ex(self.ht, zval, &self.pos);
                 self.key_value = key_value;
                 // don't increment the key's refcount
                 if (key_value.kind() == .string) key_value.release();
             }
-            return &self.key_value.?;
+            return self.key_value.?;
         }
     };
-    pub const Key = union(enum) {
-        integer: c_long,
-        string: *String,
-        slice: []const u8,
-
-        pub fn fromAny(key: anytype) @This() {
-            const KT = @TypeOf(key);
+    const Key = union(enum) {
+        pub fn fromAny(arg: anytype) @This() {
+            const KT = @TypeOf(arg);
             return switch (@typeInfo(KT)) {
-                .int, .comptime_int => .{ .integer = @intCast(key) },
+                .int, .comptime_int => .{ .integer = @intCast(arg) },
                 .pointer => |pt| switch (pt.child) {
-                    String => .{ .string = @constCast(key) },
+                    String => .{ .string = @constCast(arg) },
                     u8 => switch (pt.size) {
-                        .slice => .{ .slice = key },
-                        .c, .many => .{ .slice = std.mem.sliceTo(key, 0) },
+                        .slice => .{ .slice = arg },
+                        .c, .many => .{ .slice = std.mem.sliceTo(arg, 0) },
                         else => unsupported(KT),
                     },
                     else => switch (@typeInfo(pt.child)) {
                         .array => |ar| switch (ar.child) {
-                            u8 => .{ .slice = key },
+                            u8 => .{ .slice = arg },
                             else => unsupported(KT),
                         },
                         else => unsupported(KT),
@@ -200,9 +212,9 @@ pub const Array = struct {
             };
         }
 
-        fn unsupported(comptime KT: type) noreturn {
-            @compileError("Unexpected type: " ++ @typeName(KT));
-        }
+        integer: c_long,
+        string: *String,
+        slice: []const u8,
     };
 
     impl: pd.zend_array,

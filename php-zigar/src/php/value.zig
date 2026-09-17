@@ -1,14 +1,18 @@
+const std = @import("std");
+
+const Array = @import("array.zig").Array;
 const c = @import("c.zig");
 const pd = c.declarations;
 const pi = c.imports;
 const castTo = c.castTo;
 const castFrom = c.castFrom;
-
-const Array = @import("array.zig").Array;
+const Callable = @import("callable.zig").Callable;
+const Dictionary = @import("dictionary.zig").Dictionary;
 const Object = @import("object.zig").Object;
 const Resource = @import("resource.zig").Resource;
 const Stream = @import("stream.zig").Stream;
 const String = @import("string.zig").String;
+const unsupported = @import("failure.zig").unsupported;
 
 pub const Value = struct {
     pub fn kind(self: *const @This()) Kind {
@@ -18,8 +22,13 @@ pub const Value = struct {
         };
     }
 
-    pub fn isNull(self: *const @This()) c_long {
+    pub fn isNull(self: *const @This()) bool {
         return self.kind() == .null;
+    }
+
+    pub fn isCallable(self: *const @This()) bool {
+        const zval = @constCast(&self.impl);
+        return pi.zend_is_callable_ex(zval, null, 0, null, null, null);
     }
 
     pub fn boolean(self: *const @This()) bool {
@@ -46,16 +55,16 @@ pub const Value = struct {
         return castTo(Object, self.impl.value.obj);
     }
 
-    pub fn resource(self: *const @This()) *Object {
-        return castTo(Resource, self.impl.value.obj);
+    pub fn resource(self: *const @This()) *Resource {
+        return castTo(Resource, self.impl.value.res);
     }
 
-    pub fn reuse(self: *@This()) *@This() {
+    pub fn reuse(self: *@This()) @This() {
         self.addRef();
-        return self;
+        return self.*;
     }
 
-    pub fn addRef(self: *@This()) void {
+    pub fn addRef(self: *const @This()) void {
         const zval = &self.impl;
         // persistent value
         if (zval.u1.type_info & c.Z_TYPE_FLAGS_MASK == 0) return;
@@ -64,18 +73,20 @@ pub const Value = struct {
             .array => self.array().addRef(),
             .object => self.object().addRef(),
             .resource => self.resource().addRef(),
+            else => {},
         }
     }
 
-    pub fn release(self: *@This()) void {
+    pub fn release(self: *const @This()) void {
         const zval = &self.impl;
         // persistent value
-        if (zval.u1.type_info & c.Z_TYPE_FLAGS_MASK == 0) return;
+        if (zval.u1.type_info & pd.Z_TYPE_FLAGS_MASK == 0) return;
         switch (self.kind()) {
             .string => self.string().release(),
             .array => self.array().release(),
             .object => self.object().release(),
             .resource => self.resource().release(),
+            else => {},
         }
     }
 
@@ -88,6 +99,7 @@ pub const Value = struct {
             .array => self.array().subtractRef(),
             .object => self.object().subtractRef(),
             .resource => self.resource().subtractRef(),
+            else => {},
         }
     }
 
@@ -102,7 +114,7 @@ pub const Value = struct {
         return switch (self.kind()) {
             .integer => self.integer(),
             .float => try floatToInteger(self.float()),
-            .string => switch (self.string().toNumeric()) {
+            .string => switch (try self.string().toNumeric()) {
                 .integer => |i| i,
                 .float => |f| try floatToInteger(f),
             },
@@ -155,6 +167,75 @@ pub const Value = struct {
         };
     }
 
+    pub fn getDictionary(self: *const @This()) !Dictionary {
+        return switch (self.kind()) {
+            .array => get: {
+                const arr = self.array();
+                if (!arr.isAssociative()) return error.NotAssociativeArray;
+                break :get .{ .array = arr };
+            },
+            .object => .{ .object = self.object() },
+            else => error.NotArrayOrObject,
+        };
+    }
+
+    pub fn getCallable(self: *const @This()) !Callable {
+        if (!self.isCallable()) return error.NotCallable;
+        return .{ .value = self.* };
+    }
+
+    pub fn stringify(self: *const @This()) !*String {
+        var copy = self.*;
+        pi._convert_to_string(&copy.impl);
+        return copy.string();
+    }
+
+    pub fn convertTo(self: *const @This(), comptime T: type) !T {
+        return switch (@typeInfo(T)) {
+            .bool => try self.getBoolean(),
+            .int => |int| get: {
+                const int_value = switch (int.signedness) {
+                    .signed => try self.getInteger(),
+                    .unsigned => try self.getUnsigned(),
+                };
+                if (int_value > std.math.maxInt(T) or int_value < std.math.minInt(T)) return error.OutOfBound;
+                break :get @intCast(int_value);
+            },
+            .float => get: {
+                const float_value = self.getFloat();
+                break :get @floatCast(float_value);
+            },
+            .pointer => |pt| switch (pt.size) {
+                .one => switch (pt.child) {
+                    String => try self.getString(),
+                    Array => try self.getArray(),
+                    Object => try self.getObject(),
+                    Resource => try self.getResource(),
+                    else => unsupported(T),
+                },
+                .slice => switch (pt.child) {
+                    u8 => (try self.getString()).slice(),
+                    else => unsupported(T),
+                },
+                else => unsupported(T),
+            },
+            .optional => |opt| if (self.isNull()) null else try self.convertValue(opt.child),
+            .@"struct" => switch (T) {
+                Callable => try self.getCallable(),
+                // TODO: handle packed struct
+                else => unsupported(T),
+            },
+            .@"union" => |un| switch (T) {
+                Dictionary => try self.getDictionary(),
+                else => inline for (un.field_types, 0..) |FT, i| {
+                    if (self.convertTo(FT)) |nv| break @unionInit(T, un.field_names[i], nv) else |_| {}
+                },
+            },
+
+            else => unsupported(T),
+        };
+    }
+
     pub fn fromNull() @This() {
         return .{
             .impl = .{ .u1 = .{ .type_info = pd.IS_NULL } },
@@ -201,10 +282,6 @@ pub const Value = struct {
                 .value = .{ .str = @constCast(castFrom(String, s)) },
             },
         };
-    }
-
-    pub fn fromStaticString(comptime slice: []const u8) @This() {
-        return fromString(String.static(slice));
     }
 
     pub fn fromArray(a: *const Array) @This() {

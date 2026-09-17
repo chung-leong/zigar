@@ -1,12 +1,14 @@
 pub const std = @import("std");
 
+const Array = @import("array.zig").Array;
 const c = @import("c.zig");
-const failure = @import("failure.zig");
 const pd = c.declarations;
 const pi = c.imports;
 const castTo = c.castTo;
-
-const Array = @import("array.zig").Array;
+const Callable = @import("callable.zig").Callable;
+const Dictionary = @import("dictionary.zig").Dictionary;
+const failure = @import("failure.zig");
+const unsupported = failure.unsupported;
 const Object = @import("object.zig").Object;
 const Resource = @import("resource.zig").Resource;
 const String = @import("string.zig").String;
@@ -19,8 +21,8 @@ pub const Function = struct {
     }
 
     pub const Arguments = struct {
-        pub fn this(self: *const @This()) *const Value {
-            return castTo(Value, &self.impl.This);
+        pub fn this(self: *const @This()) Value {
+            return castTo(Value, &self.impl.This).*;
         }
 
         pub fn getExtraNamed(self: *const @This()) ?*Array {
@@ -76,26 +78,24 @@ pub const Function = struct {
                 return self.named_params != null;
             }
 
-            pub fn next(self: *@This()) ?*const Value {
-                return if (self.peek()) |v| get: {
+            pub fn next(self: *@This()) ?Value {
+                return if (self.peek(self.index)) |value| get: {
                     self.index += 1;
-                    break :get v;
+                    break :get value;
                 } else null;
             }
 
-            pub fn peek(self: *@This()) ?*const Value {
-                if (self.index < self.len) {
-                    var index = self.index;
+            pub fn peek(self: *@This(), index: usize) ?Value {
+                if (index < self.len) {
                     // return named parameters as last argument
                     if (index == self.len - 1) {
-                        if (self.named_params) |*p| return p;
+                        if (self.named_params) |p| return p;
                     }
                     // return this pointer as first argument
-                    if (self.use_this_first) {
-                        if (index > 0) index -= 1 else return self.this;
-                    }
+                    if (self.use_this_first and index == 0) return self.this;
                     // return regular argument
-                    return &self.arg_ptr[index];
+                    const offset: usize = if (self.use_this_first) 1 else 0;
+                    return self.arg_ptr[index - offset];
                 } else {
                     return null;
                 }
@@ -133,41 +133,45 @@ pub const Function = struct {
                     break :init .{ required, field_types.len };
                 };
                 try self.verifyCount(min, max);
-                var required_remaining = min;
                 var set: T = undefined;
+                var mismatch: ?ArgumentMismatch = null;
+                var required_remaining = min;
                 inline for (@typeInfo(T).@"struct".field_names, 0..) |arg_name, i| {
                     const FT = @TypeOf(@field(set, arg_name));
                     const VT, const optional = switch (@typeInfo(FT)) {
                         .optional => |opt| .{ opt.child, true },
                         else => .{ FT, false },
                     };
+                    // take value for optional argument only when there're enough left to satistfy
+                    // remaining required ones
                     if (!optional or i + required_remaining < self.len) {
                         const arg = self.next().?;
-                        const value = convertValue(VT, arg) catch |err| {
-                            const fn_name = if (self.callee.getName()) |s| s.slice() else "(unknown)";
-                            if (error{NegativeValue} || @TypeOf(err) == @TypeOf(err)) {
-                                if (err == error.NegativeValue) {
-                                    return failure.report("{s}(): Argument #{d} ${s} must be a positive integer, received {d}", .{
-                                        fn_name,
-                                        i + 1,
-                                        arg_name,
-                                        arg.getInteger() catch unreachable,
-                                    });
-                                }
+                        const value = arg.convertTo(VT) catch |err| report: {
+                            if (mismatch == null) {
+                                // remember the first mismatch
+                                mismatch = .{
+                                    .fn_name = self.callee.getName(),
+                                    .arg_name = arg_name,
+                                    .value_type = valueTypeName(VT),
+                                    .index = i,
+                                    .value = arg,
+                                    .err = err,
+                                };
                             }
-                            return failure.report("{s}(): Argument #{d} (${s}) must be of type {s}, {s} given", .{
-                                fn_name,
-                                i + 1,
-                                arg_name,
-                                valueTypeName(FT),
-                                arg.kind().name(),
-                            });
+                            self.index -= 1;
+                            // break out of for loop if argument is required
+                            if (!optional) break;
+                            break :report null;
                         };
                         @field(set, arg_name) = value;
+                        if (!optional) required_remaining -= 1;
                     } else {
                         @field(set, arg_name) = null;
                     }
-                    if (!optional) required_remaining -= 1;
+                }
+                if (mismatch) |m| {
+                    // report the mismatch only if we've failed to reach the end
+                    if (self.index < self.len) return m.report();
                 }
                 return set;
             }
@@ -182,6 +186,7 @@ pub const Function = struct {
                 };
                 if (!valid) @compileError("Struct type expected, received: " ++ @typeName(T));
                 var set: T = undefined;
+                var mismatch: ?ArgumentMismatch = null;
                 inline for (@typeInfo(T).@"struct".field_names) |arg_name| {
                     const FT = @TypeOf(@field(set, arg_name));
                     const VT, const optional = switch (@typeInfo(FT)) {
@@ -196,38 +201,33 @@ pub const Function = struct {
                         }
                     };
                     if (arg_maybe) |arg| {
-                        const value = convertValue(VT, arg) catch |err| {
-                            const fn_name = if (self.callee.getName()) |s| s.slice else "(unknown)";
-                            if (error{NegativeValue} || @TypeOf(err) == @TypeOf(err)) {
-                                if (err == error.NegativeValue) {
-                                    return failure.report("{s}(): Named argument ${s} must be a positive integer, received {d}", .{
-                                        fn_name,
-                                        arg_name,
-                                        arg.getInteger() catch unreachable,
-                                    });
-                                }
-                            }
-                            return failure.report("{s}(): Named argument ${s} must be of type {s}, {s} given", .{
-                                fn_name,
-                                arg_name,
-                                valueTypeName(FT),
-                                arg.kind().name(),
-                            });
+                        const value = arg.convertTo(VT) catch |err| {
+                            mismatch = .{
+                                .fn_name = self.callee.getName(),
+                                .arg_name = arg_name,
+                                .value = arg,
+                                .value_type = valueTypeName(FT),
+                                .err = err,
+                            };
+                            break;
                         };
                         @field(set, arg_name) = value;
                     } else {
                         if (optional) {
                             @field(set, arg_name) = null;
                         } else {
-                            const fn_name = if (self.callee.getName()) |s| s.slice else "(unknown)";
-                            return failure.report("{s}(): Named argument ${s} is required and expected to be of type {s}", .{
-                                fn_name,
-                                arg_name,
-                                valueTypeName(FT),
-                            });
+                            mismatch = .{
+                                .fn_name = self.callee.getName(),
+                                .arg_name = arg_name,
+                                .value = .fromNull(),
+                                .value_type = valueTypeName(FT),
+                                .err = error.Missing,
+                            };
+                            break;
                         }
                     }
                 }
+                if (mismatch) |m| return m.report();
                 if (self.named_params) |args| {
                     // if all named arguments were taken out, shrink the argument list
                     if (args.length() == 0) {
@@ -235,6 +235,7 @@ pub const Function = struct {
                         self.len -= 1;
                     }
                 }
+                return set;
             }
 
             pub fn verifyCount(self: *const @This(), min: usize, max: usize) !void {
@@ -254,43 +255,6 @@ pub const Function = struct {
                         if (self.hasNamed()) " (the last being named arguments)" else "",
                     });
                 }
-            }
-
-            fn convertValue(comptime T: type, value: *const Value) !T {
-                return switch (@typeInfo(T)) {
-                    .bool => try value.getBoolean(),
-                    .int => |int| get: {
-                        const int_value = switch (int.signedness) {
-                            .signed => try value.getInteger(),
-                            .unsigned => try value.getUnsigned(),
-                        };
-                        if (int_value > std.math.maxInt(T) or int_value < std.math.minInt(T)) return error.OutOfBound;
-                        break :get @intCast(int_value);
-                    },
-                    .float => get: {
-                        const float_value = value.getFloat();
-                        break :get @floatCast(float_value);
-                    },
-                    .pointer => |pt| switch (pt.size) {
-                        .one => switch (pt.child) {
-                            String => try value.getString(),
-                            Array => try value.getArray(),
-                            Object => try value.getObject(),
-                            Resource => try value.getResource(),
-                            else => unsupported(T),
-                        },
-                        .slice => switch (pt.child) {
-                            u8 => (try value.getString()).slice(),
-                            else => unsupported(T),
-                        },
-                        else => unsupported(T),
-                    },
-                    .optional => |opt| if (value.isNull()) null else try convertValue(opt.child, value),
-                    .@"union" => |un| inline for (un.field_types, 0..) |FT, i| {
-                        if (convertValue(FT, value)) |nv| break @unionInit(T, un.field_names[i], nv) else |_| {}
-                    },
-                    else => unsupported(T),
-                };
             }
 
             fn valueTypeName(comptime T: type) []const u8 {
@@ -314,39 +278,91 @@ pub const Function = struct {
                         else => unsupported(T),
                     },
                     .optional => |opt| std.fmt.comptimePrint("?{s}", .{valueTypeName(opt.child)}),
-                    .@"union" => |un| format: {
-                        const len = un.field_types.len;
-                        var names: [len][]const u8 = undefined;
-                        var combined_name_len: usize = 0;
-                        for (un.field_types, 0..) |FT, i| {
-                            const name = valueTypeName(FT);
-                            names[i] = name;
-                            combined_name_len += name.len;
-                            if (i != len - 1) combined_name_len += 1;
-                        }
-                        var combined_name: [combined_name_len]u8 = undefined;
-                        var offset: usize = 0;
-                        for (0..len) |i| {
-                            const name = names[i];
-                            @memcpy(combined_name[offset .. offset + name.len], name);
-                            offset += name.len;
-                            if (offset < combined_name_len) {
-                                combined_name[offset] = '|';
-                                offset += 1;
+                    .@"struct" => switch (T) {
+                        Callable => "callable",
+                        else => unsupported(T),
+                    },
+                    .@"union" => |un| switch (T) {
+                        Dictionary => "array|object",
+                        else => format: {
+                            const len = un.field_types.len;
+                            var names: [len][]const u8 = undefined;
+                            var combined_name_len: usize = 0;
+                            for (un.field_types, 0..) |FT, i| {
+                                const name = valueTypeName(FT);
+                                names[i] = name;
+                                combined_name_len += name.len;
+                                if (i != len - 1) combined_name_len += 1;
                             }
-                        }
-                        break :format &combined_name;
+                            var combined_name: [combined_name_len]u8 = undefined;
+                            var offset: usize = 0;
+                            for (0..len) |i| {
+                                const name = names[i];
+                                @memcpy(combined_name[offset .. offset + name.len], name);
+                                offset += name.len;
+                                if (offset < combined_name_len) {
+                                    combined_name[offset] = '|';
+                                    offset += 1;
+                                }
+                            }
+                            break :format &combined_name;
+                        },
                     },
                     else => unsupported(T),
                 };
             }
 
-            fn unsupported(comptime T: type) noreturn {
-                @compileError("Unexpected type: " ++ @typeName(T));
-            }
+            const ArgumentMismatch = struct {
+                fn_name: ?*String = null,
+                arg_name: []const u8,
+                value_type: []const u8,
+                index: ?usize = null,
+                value: Value,
+                err: anyerror,
+
+                pub fn report(self: @This()) error{FailureReported} {
+                    const fn_name = if (self.fn_name) |n| n.slice() else "(unknown)";
+                    if (self.index) |index| {
+                        return switch (self.err) {
+                            error.NegativeValue => failure.report("{s}(): Argument #{d} ${s} must be a positive integer, received {d}", .{
+                                fn_name,
+                                index + 1,
+                                self.arg_name,
+                                self.value.getInteger() catch unreachable,
+                            }),
+                            else => failure.report("{s}(): Argument #{d} (${s}) must be of type {s}, {s} given", .{
+                                fn_name,
+                                index + 1,
+                                self.arg_name,
+                                self.value_type,
+                                self.value.kind().name(),
+                            }),
+                        };
+                    } else {
+                        return switch (self.err) {
+                            error.NegativeValue => failure.report("{s}(): Named argument ${s} must be a positive integer, received {d}", .{
+                                fn_name,
+                                self.arg_name,
+                                self.value.getInteger() catch unreachable,
+                            }),
+                            error.Missing => failure.report("{s}(): Named argument ${s} is required and expected to be of type {s}", .{
+                                fn_name,
+                                self.arg_name,
+                                self.value_type,
+                            }),
+                            else => failure.report("{s}(): Named argument ${s} must be of type {s}, {s} given", .{
+                                fn_name,
+                                self.arg_name,
+                                self.value_type,
+                                self.value.kind().name(),
+                            }),
+                        };
+                    }
+                }
+            };
 
             arg_ptr: [*]Value,
-            this: *const Value,
+            this: Value,
             use_this_first: bool = false,
             named_params: ?Value,
             len: usize,

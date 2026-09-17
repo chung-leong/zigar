@@ -79,3 +79,7 @@ pub fn errorMessage(err: anytype) [:0]const u8 {
         },
     };
 }
+
+pub fn unsupported(comptime T: type) noreturn {
+    @compileError("Unexpected type: " ++ @typeName(T));
+}

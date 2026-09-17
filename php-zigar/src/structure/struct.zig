@@ -157,7 +157,7 @@ pub const Struct = struct {
             return error.Missing;
         }
 
-        pub fn exportSymbolsToGlobalNamespace(self: *@This(), callback: ?*Value) !Value {
+        pub fn exportSymbolsToGlobalNamespace(self: *@This(), callback: ?*const Value) !Value {
             const root = self.root.?;
             if (root.symbol_names != null) return error.CalledAlready;
             var call_cache: FunctionCallCache = if (callback) |cb| try .init(cb) else undefined;

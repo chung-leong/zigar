@@ -7,7 +7,6 @@ const argCount = c.argCount;
 const deref = c.deref;
 const castTo = c.castTo;
 const castFrom = c.castFrom;
-
 const Object = @import("object.zig").Object;
 const Resource = @import("resource.zig").Resource;
 const String = @import("string.zig").String;

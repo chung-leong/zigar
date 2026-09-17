@@ -1,9 +1,12 @@
 pub const Array = @import("php/array.zig").Array;
+pub const castFrom = @import("php/c.zig").castFrom;
+pub const castTo = @import("php/c.zig").castTo;
+pub const Callable = @import("php/callable.zig").Callable;
+pub const ClassEntry = @import("php/class-entry.zig").ClassEntry;
+pub const Dictionary = @import("php/dictionary.zig").Dictionary;
+pub const failure = @import("php/failure.zig");
 pub const Function = @import("php/function.zig").Function;
 pub const Object = @import("php/object.zig").Object;
 pub const Resource = @import("php/resource.zig").Resource;
 pub const String = @import("php/string.zig").String;
 pub const Value = @import("php/value.zig").Value;
-
-pub const castFrom = @import("php/c.zig").castFrom;
-pub const castTo = @import("php/c.zig").castTo;

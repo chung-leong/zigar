@@ -6,7 +6,7 @@ const pi = c.imports;
 const deref = c.deref;
 const castTo = c.castTo;
 const emalloc = @import("allocator.zig").emalloc;
-
+const unsupported = @import("failure.zig").unsupported;
 const Value = @import("value.zig").Value;
 
 pub const String = struct {
@@ -63,6 +63,31 @@ pub const String = struct {
         return castTo(@This(), zstr);
     }
 
+    pub fn createFromAny(arg: anytype) @This() {
+        const AT = @TypeOf(arg);
+        return switch (@typeInfo(AT)) {
+            .pointer => |pt| switch (pt.child) {
+                String => arg.reuse(),
+                u8 => switch (pt.size) {
+                    .slice => create(arg),
+                    .c, .many => create(std.mem.sliceTo(arg, 0)),
+                    else => unsupported(AT),
+                },
+                else => switch (@typeInfo(pt.child)) {
+                    .array => |ar| switch (ar.child) {
+                        u8 => create(&arg),
+                        else => unsupported(AT),
+                    },
+                    else => unsupported(AT),
+                },
+            },
+            .@"struct" => switch (AT) {
+                Value => arg.stringify(),
+            },
+            else => unsupported(AT),
+        };
+    }
+
     pub fn reuse(self: *@This()) *@This() {
         self.addRef();
         return self;
@@ -93,7 +118,7 @@ pub const String = struct {
         return .fromString(self);
     }
 
-    pub fn toNumeric(self: *const @This()) union(enum) {
+    pub fn toNumeric(self: *const @This()) !union(enum) {
         integer: c_long,
         float: f64,
     } {
@@ -109,6 +134,16 @@ pub const String = struct {
             pd.IS_DOUBLE => .{ .float = double },
             else => error.NotNumeric,
         };
+    }
+
+    pub fn parseBoolean(self: *const @This()) bool {
+        const zstr = @constCast(&self.impl);
+        return pi.zend_ini_parse_bool(zstr);
+    }
+
+    pub fn parseInteger(self: *const @This()) c_long {
+        const s = &self.slice();
+        return pi.zend_atol(s.ptr, s.len);
     }
 
     pub fn static(comptime s: []const u8) *@This() {
@@ -152,8 +187,8 @@ pub const String = struct {
 
     fn StringWithLength(comptime len: usize) type {
         return extern struct {
-            gc: c.zend_refcounted_h = undefined,
-            h: c.zend_ulong = undefined,
+            gc: pd.zend_refcounted_h = undefined,
+            h: pd.zend_ulong = undefined,
             len: usize = len,
             val: [len + 1]u8 = undefined,
         };

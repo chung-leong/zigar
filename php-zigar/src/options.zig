@@ -10,10 +10,14 @@ const php = @import("php.zig");
 const HashTable = php.HashTable;
 const HashTableIterator = php.HashTableIterator;
 const IniEntry = php.IniEntry;
-const Long = php.Long;
-const N = php.getStaticString;
-const String = php.String;
-const Value = php.Value;
+const StringOG = php.String;
+const ValueOG = php.Value;
+const php_ng = @import("php-new.zig");
+const castTo = php_ng.castTo;
+const Dictionary = php_ng.Dictionary;
+const String = php_ng.String;
+const N = String.static;
+const Value = php_ng.Value;
 
 pub const Options = struct {
     recompile: bool = true,
@@ -21,8 +25,8 @@ pub const Options = struct {
     event_loop: LoopType = .temporary,
     module_rel_path: [:0]const u8 = "../lib",
     build_dir: [:0]const u8,
-    build_dir_size: Long = 4 * 1024 * 1024 * 1024,
-    eval_branch_quota: Long = 2000000,
+    build_dir_size: c_long = 4 * 1024 * 1024 * 1024,
+    eval_branch_quota: c_long = 2000000,
     optimize: Optimize = .debug,
     arch: Arch = .this,
     platform: Platform = .this,
@@ -40,8 +44,8 @@ pub const Options = struct {
     // these aren't applicable to PHP--the fields are only here so we can generate
     // the same config file as on the JavaScript side
     is_wasm: bool = false,
-    max_memory: ?Long = null,
-    stack_size: Long = 256 * 1024,
+    max_memory: ?c_long = null,
+    stack_size: c_long = 256 * 1024,
     use_pthread_emulation: bool = false,
 
     pub const Arch = enum {
@@ -182,8 +186,8 @@ pub const Options = struct {
                         if (value) "On" else "Off"
                     else
                         "",
-                    Long => std.fmt.comptimePrint("{d}", .{@field(template, field_name)}),
-                    ?Long => if (@field(template, field_name)) |value|
+                    c_long => std.fmt.comptimePrint("{d}", .{@field(template, field_name)}),
+                    ?c_long => if (@field(template, field_name)) |value|
                         std.fmt.comptimePrint("{d}", .{value})
                     else
                         "",
@@ -206,8 +210,8 @@ pub const Options = struct {
                 .on_modify = switch (FT) {
                     bool => onUpdateBool,
                     ?bool => onUpdateOptionalBool,
-                    Long => onUpdateLong,
-                    ?Long => onUpdateOptionalLong,
+                    c_long => onUpdateLong,
+                    ?c_long => onUpdateOptionalLong,
                     [:0]const u8 => onUpdateString,
                     Arch => onUpdateArch,
                     Platform => onUpdatePlatform,
@@ -253,36 +257,31 @@ pub const Options = struct {
         std.heap.c_allocator.free(default_build_dir);
     }
 
-    pub fn override(self: *@This(), ht: *HashTable) !void {
+    pub fn override(self: *@This(), dict: Dictionary) !void {
         @setEvalBranchQuota(2_000_000);
-        var iter: HashTableIterator = .init(ht, .{});
+        var iter = try dict.iterate(.{});
+        defer iter.deinit();
         while (iter.next()) |value| {
             inline for (comptime std.meta.fieldNames(@This())) |field_name| {
                 const field_enum = @field(std.meta.FieldEnum(@This()), field_name);
-                const name = iter.currentName() orelse return error.UnexpectedIntegerKey;
-                if (php.matchString(name, field_name) and field_enum != .recompile) {
+                const name = iter.name();
+                if (name.matchSlice(field_name) and field_enum != .recompile) {
                     const T = @FieldType(@This(), field_name);
-                    const vt = php.getValueType(value);
+                    const vk = value.kind();
                     @field(self, field_name) = extractValue(T, value) catch |err| {
                         const Error = @TypeOf(err);
                         inline for (comptime std.meta.fieldNames(Error)) |err_name| {
                             if (std.mem.eql(u8, err_name, "NotBoolean") and err == error.NotBoolean) {
-                                return failure.report("option '{s}' is a boolean, received {}", .{ field_name, vt });
+                                return failure.report("option '{s}' is a boolean, received {}", .{ field_name, vk });
                             }
                             if (std.mem.eql(u8, err_name, "NotInteger") and err == error.NotInteger) {
-                                return failure.report("option '{s}' is an integer, received {}", .{ field_name, vt });
+                                return failure.report("option '{s}' is an integer, received {}", .{ field_name, vk });
                             }
                             if (std.mem.eql(u8, err_name, "NotString") and err == error.NotString) {
-                                return failure.report("option '{s}' is a string, received {}", .{ field_name, vt });
+                                return failure.report("option '{s}' is a string, received {}", .{ field_name, vk });
                             }
                             if (std.mem.eql(u8, err_name, "NoMatching") and err == error.NoMatching and @typeInfo(T) == .@"enum") {
-                                var copy = value.*;
-                                php.addRef(&copy);
-                                defer php.release(&copy);
-                                const string = get: {
-                                    php.convertValue(&copy, .string) catch break :get N("(object)");
-                                    break :get try php.getValueString(&copy);
-                                };
+                                const string = value.stringify() catch N("(object)");
                                 return reportBadEnum(T, N(field_name), string);
                             }
                         }
@@ -294,32 +293,32 @@ pub const Options = struct {
         }
     }
 
-    fn extractValue(comptime T: type, value: *const Value) !T {
+    fn extractValue(comptime T: type, value: Value) !T {
         return switch (T) {
-            bool => try php.getValueBool(value),
-            ?bool => switch (php.isValueNull(value)) {
+            bool => try value.getBoolean(),
+            ?bool => switch (value.isNull()) {
                 false => null,
-                else => try php.getValueBool(value),
+                else => try value.getBoolean(),
             },
-            Long => try php.getValueLong(value),
-            ?Long => switch (php.isValueNull(value)) {
+            c_long => try value.getInteger(),
+            ?c_long => switch (value.isNull()) {
                 false => null,
-                else => try php.getValueLong(value),
+                else => try value.getInteger(),
             },
-            [:0]const u8 => try php.getValueStringContent(value),
+            [:0]const u8 => (try value.getString()).slice(),
             else => switch (@typeInfo(T)) {
                 .@"enum" => get: {
-                    const string = try php.getValueString(value);
+                    const string = try value.getString();
                     break :get extractEnum(T, string);
                 },
-                else => @compileError("No recognized type: " ++ @typeName(T)),
+                else => @compileError("Unrecognized type: " ++ @typeName(T)),
             },
         };
     }
 
     fn extractEnum(comptime T: type, string: *String) !T {
-        return inline for (comptime std.meta.fieldNames(T)) |field_name| {
-            if (php.matchString(string, field_name)) {
+        return inline for (@typeInfo(T).@"enum".field_names) |field_name| {
+            if (string.matchSlice(field_name)) {
                 break @field(T, field_name);
             }
         } else return error.NoMatching;
@@ -328,16 +327,16 @@ pub const Options = struct {
     fn reportBadEnum(comptime T: type, name: *String, string: *String) error{FailureReported} {
         const list = comptime join: {
             var text: []const u8 = "";
-            for (std.meta.fieldNames(T)) |field_name| {
+            for (@typeInfo(T).@"enum".field_names) |field_name| {
                 const quoted = "'" ++ field_name ++ "'";
                 text = if (text.len == 0) quoted else text ++ ", " ++ quoted;
             }
             break :join text;
         };
         return failure.report("option '{s}' can be {s}, received: '{s}'", .{
-            php.getStringContent(name),
+            name.slice(),
             list,
-            php.getStringContent(string),
+            string.slice(),
         });
     }
 
@@ -345,70 +344,88 @@ pub const Options = struct {
         const address = @intFromPtr(self) + offset;
         const ptr: *T = @ptrFromInt(address);
         ptr.* = switch (T) {
-            bool => php.parseBool(string),
-            ?bool => switch (string.len) {
+            bool => string.parseBoolean(),
+            ?bool => switch (string.length()) {
                 0 => null,
-                else => php.parseBool(string),
+                else => string.parseBoolean(),
             },
-            Long => php.parseLong(string),
-            ?Long => switch (string.len) {
+            c_long => string.parseInteger(),
+            ?c_long => switch (string.len) {
                 0 => null,
-                else => php.parseLong(string),
+                else => string.parseInteger(),
             },
-            [:0]const u8 => php.getStringContent(string),
+            [:0]const u8 => string.slice(),
             else => switch (@typeInfo(T)) {
                 .@"enum" => extractEnum(T, string) catch {
                     return php.triggerWarning(reportBadEnum(T, name, string));
                 },
-                else => @compileError("No recognized type: " ++ @typeName(T)),
+                else => @compileError("Unrecognized type: " ++ @typeName(T)),
             },
         };
     }
 
-    pub fn onUpdateBool(ini_intry: [*c]IniEntry, new_value: [*c]String, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
-        extension.options.setValueAt(bool, ini_intry.*.name, @intFromPtr(mh_arg1), new_value);
+    pub fn onUpdateBool(ini_intry: [*c]IniEntry, new_value_og: [*c]StringOG, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
+        const new_value = castTo(String, new_value_og);
+        const name = castTo(String, ini_intry.*.name);
+        extension.options.setValueAt(bool, name, @intFromPtr(mh_arg1), new_value);
         return php.SUCCESS;
     }
 
-    pub fn onUpdateOptionalBool(ini_intry: [*c]IniEntry, new_value: [*c]String, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
-        extension.options.setValueAt(?bool, ini_intry.*.name, @intFromPtr(mh_arg1), new_value);
+    pub fn onUpdateOptionalBool(ini_intry: [*c]IniEntry, new_value_og: [*c]StringOG, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
+        const new_value = castTo(String, new_value_og);
+        const name = castTo(String, ini_intry.*.name);
+        extension.options.setValueAt(?bool, name, @intFromPtr(mh_arg1), new_value);
         return php.SUCCESS;
     }
 
-    pub fn onUpdateLong(ini_intry: [*c]IniEntry, new_value: [*c]String, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
-        extension.options.setValueAt(Long, ini_intry.*.name, @intFromPtr(mh_arg1), new_value);
+    pub fn onUpdateLong(ini_intry: [*c]IniEntry, new_value_og: [*c]StringOG, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
+        const new_value = castTo(String, new_value_og);
+        const name = castTo(String, ini_intry.*.name);
+        extension.options.setValueAt(c_long, name, @intFromPtr(mh_arg1), new_value);
         return php.SUCCESS;
     }
 
-    pub fn onUpdateOptionalLong(ini_intry: [*c]IniEntry, new_value: [*c]String, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
-        extension.options.setValueAt(?Long, ini_intry.*.name, @intFromPtr(mh_arg1), new_value);
+    pub fn onUpdateOptionalLong(ini_intry: [*c]IniEntry, new_value_og: [*c]StringOG, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
+        const new_value = castTo(String, new_value_og);
+        const name = castTo(String, ini_intry.*.name);
+        extension.options.setValueAt(?c_long, name, @intFromPtr(mh_arg1), new_value);
         return php.SUCCESS;
     }
 
-    pub fn onUpdateString(ini_intry: [*c]IniEntry, new_value: [*c]String, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
-        extension.options.setValueAt([:0]const u8, ini_intry.*.name, @intFromPtr(mh_arg1), new_value);
+    pub fn onUpdateString(ini_intry: [*c]IniEntry, new_value_og: [*c]StringOG, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
+        const new_value = castTo(String, new_value_og);
+        const name = castTo(String, ini_intry.*.name);
+        extension.options.setValueAt([:0]const u8, name, @intFromPtr(mh_arg1), new_value);
         return php.SUCCESS;
     }
 
-    pub fn onUpdateArch(ini_intry: [*c]IniEntry, new_value: [*c]String, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
-        extension.options.setValueAt(Arch, ini_intry.*.name, @intFromPtr(mh_arg1), new_value);
+    pub fn onUpdateArch(ini_intry: [*c]IniEntry, new_value_og: [*c]StringOG, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
+        const new_value = castTo(String, new_value_og);
+        const name = castTo(String, ini_intry.*.name);
+        extension.options.setValueAt(Arch, name, @intFromPtr(mh_arg1), new_value);
         return php.SUCCESS;
     }
 
-    pub fn onUpdatePlatform(ini_intry: [*c]IniEntry, new_value: [*c]String, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
-        extension.options.setValueAt(Platform, ini_intry.*.name, @intFromPtr(mh_arg1), new_value);
+    pub fn onUpdatePlatform(ini_intry: [*c]IniEntry, new_value_og: [*c]StringOG, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
+        const new_value = castTo(String, new_value_og);
+        const name = castTo(String, ini_intry.*.name);
+        extension.options.setValueAt(Platform, name, @intFromPtr(mh_arg1), new_value);
         return php.SUCCESS;
     }
 
-    pub fn onUpdateOptimize(ini_intry: [*c]IniEntry, new_value: [*c]String, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
-        extension.options.setValueAt(Optimize, ini_intry.*.name, @intFromPtr(mh_arg1), new_value);
+    pub fn onUpdateOptimize(ini_intry: [*c]IniEntry, new_value_og: [*c]StringOG, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
+        const new_value = castTo(String, new_value_og);
+        const name = castTo(String, ini_intry.*.name);
+        extension.options.setValueAt(Optimize, name, @intFromPtr(mh_arg1), new_value);
         return php.SUCCESS;
     }
 
-    pub fn onUpdateLoopType(ini_intry: [*c]IniEntry, new_value: [*c]String, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
-        const text = php.getStringContent(new_value);
+    pub fn onUpdateLoopType(ini_intry: [*c]IniEntry, new_value_og: [*c]StringOG, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
+        const new_value = castTo(String, new_value_og);
+        const name = castTo(String, ini_intry.*.name);
+        const text = new_value.slice();
         CallDispatcher.event_loop.use(text) catch return php.FAILURE;
-        extension.options.setValueAt(LoopType, ini_intry.*.name, @intFromPtr(mh_arg1), new_value);
+        extension.options.setValueAt(LoopType, name, @intFromPtr(mh_arg1), new_value);
         return php.SUCCESS;
     }
 };

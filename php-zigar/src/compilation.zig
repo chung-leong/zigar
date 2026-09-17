@@ -8,8 +8,9 @@ const failure = @import("failure.zig");
 const io = @import("system.zig").io;
 const Options = @import("options.zig").Options;
 const php = @import("php.zig");
-const HashTable = php.HashTable;
-const Value = php.Value;
+const php_ng = @import("php-new.zig");
+const Dictionary = php_ng.Dictionary;
+const ValueOG = php.Value;
 
 pub const ZigCompiler = struct {
     arena: std.heap.ArenaAllocator,
@@ -29,7 +30,7 @@ pub const ZigCompiler = struct {
     pdb_path: ?[]const u8,
     compiler_args: [][]const u8,
 
-    pub fn compile(src_path: []const u8, mod_path: []const u8, options: ?*HashTable) !void {
+    pub fn compile(src_path: []const u8, mod_path: []const u8, options: ?Dictionary) !void {
         var self: @This() = undefined;
         self.arena = .init(php.allocator);
         defer self.arena.deinit();
@@ -50,11 +51,11 @@ pub const ZigCompiler = struct {
         return self.arena.allocator();
     }
 
-    fn acquireConfig(self: *@This(), src_path: []const u8, mod_path: []const u8, options: ?*HashTable) !void {
+    fn acquireConfig(self: *@This(), src_path: []const u8, mod_path: []const u8, options: ?Dictionary) !void {
         const al = self.allocator();
         self.options = extension.options;
-        if (options) |ht| {
-            try self.options.override(ht);
+        if (options) |dict| {
+            try self.options.override(dict);
         }
         const mod_name = std.fs.path.stem(mod_path);
         self.module_name = mod_name;

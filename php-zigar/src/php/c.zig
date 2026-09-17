@@ -2,6 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const pd = @import("c");
+pub const declarations = pd;
 
 // on Windows, we link symbols in PHP DLL manually
 pub const pi = switch (builtin.target.os.tag) {
@@ -9,7 +10,6 @@ pub const pi = switch (builtin.target.os.tag) {
     else => pd,
 };
 
-pub const declarations = pd;
 pub const imports = pi;
 
 // while function pointer dereference automatically, manually linked data variables
@@ -24,6 +24,7 @@ pub inline fn deref(arg: anytype) switch (builtin.target.os.tag) {
     };
 }
 
+// TODO: just use @ptrCast() once code is more or less done to reduce amount of comptime calculations
 pub fn castTo(comptime T: type, ptr: anytype) PtrWithSameConstAs(T, @TypeOf(ptr)) {
     const pt = @typeInfo(@TypeOf(ptr)).pointer;
     const Impl = ImplementationOf(T);
