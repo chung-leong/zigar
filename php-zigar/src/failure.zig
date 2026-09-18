@@ -78,6 +78,11 @@ pub fn reportLengthMismatch(class: *ZigClassEntry, expected: usize, received: us
     });
 }
 
+pub fn warn(comptime fmt: []const u8, params: anytype) void {
+    const err = report(fmt, params);
+    php.triggerWarning(err);
+}
+
 const oom_msg = "out of memory";
 threadlocal var error_message: ?[]const u8 = null;
 

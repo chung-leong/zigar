@@ -59,7 +59,7 @@ pub const Value = struct {
         return castTo(Resource, self.impl.value.res);
     }
 
-    pub fn reuse(self: *@This()) @This() {
+    pub fn reuse(self: *const @This()) @This() {
         self.addRef();
         return self.*;
     }
@@ -67,7 +67,7 @@ pub const Value = struct {
     pub fn addRef(self: *const @This()) void {
         const zval = &self.impl;
         // persistent value
-        if (zval.u1.type_info & c.Z_TYPE_FLAGS_MASK == 0) return;
+        if (zval.u1.type_info & pd.Z_TYPE_FLAGS_MASK == 0) return;
         switch (self.kind()) {
             .string => self.string().addRef(),
             .array => self.array().addRef(),
@@ -165,6 +165,19 @@ pub const Value = struct {
             .resource => self.resource(),
             else => error.NotResource,
         };
+    }
+
+    pub fn getStream(self: *const @This()) !*Stream {
+        if (self.kind() == .resource) {
+            const zres_ptr = pi.zend_fetch_resource2_ex(
+                @constCast(&self.impl),
+                "stream",
+                pi.php_file_le_stream(),
+                pi.php_file_le_pstream(),
+            );
+            if (zres_ptr) |ptr| return @ptrCast(@alignCast(ptr));
+        }
+        return error.NotStream;
     }
 
     pub fn getDictionary(self: *const @This()) !Dictionary {

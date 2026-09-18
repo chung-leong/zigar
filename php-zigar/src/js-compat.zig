@@ -81,7 +81,8 @@ pub const ArrayBuffer = struct {
         retval.* = switch (desired_type) {
             .string => get: {
                 const str = try self.buffer.getString(null);
-                break :get php.createValueString(str);
+                const str_og: *String = @ptrCast(str);
+                break :get php.createValueString(str_og);
             },
             .boolean => php.createValueBool(true),
             else => return php.FAILURE,
@@ -363,7 +364,8 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
             retval.* = switch (desired_type) {
                 .string => get: {
                     const str = try self.buffer.getString(null);
-                    break :get php.createValueString(str);
+                    const str_og: *String = @ptrCast(str);
+                    break :get php.createValueString(str_og);
                 },
                 .boolean => php.createValueBool(true),
                 else => return php.FAILURE,

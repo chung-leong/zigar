@@ -7,10 +7,9 @@ const extension = @import("extension.zig");
 const failure = @import("failure.zig");
 const io = @import("system.zig").io;
 const Options = @import("options.zig").Options;
-const php = @import("php.zig");
 const php_ng = @import("php-new.zig");
+const php_al = php_ng.allocator;
 const Dictionary = php_ng.Dictionary;
-const ValueOG = php.Value;
 
 pub const ZigCompiler = struct {
     arena: std.heap.ArenaAllocator,
@@ -32,7 +31,7 @@ pub const ZigCompiler = struct {
 
     pub fn compile(src_path: []const u8, mod_path: []const u8, options: ?Dictionary) !void {
         var self: @This() = undefined;
-        self.arena = .init(php.allocator);
+        self.arena = .init(php_al);
         defer self.arena.deinit();
         try self.acquireConfig(src_path, mod_path, options);
         try self.writeProject();
@@ -47,12 +46,8 @@ pub const ZigCompiler = struct {
         self.arena.reset();
     }
 
-    fn allocator(self: *@This()) std.mem.Allocator {
-        return self.arena.allocator();
-    }
-
     fn acquireConfig(self: *@This(), src_path: []const u8, mod_path: []const u8, options: ?Dictionary) !void {
-        const al = self.allocator();
+        const al = self.arena.allocator();
         self.options = extension.options;
         if (options) |dict| {
             try self.options.override(dict);
@@ -114,14 +109,13 @@ pub const ZigCompiler = struct {
         // use custom build file if it exists; otherwise use Zigar's own build file
         self.build_file_path = find: {
             if (findFile(al, self.module_dir_wo_sep, "build.zig") catch null) |path| {
-                const path_z = try php.allocator.dupeSentinel(u8, path, 0);
-                defer php.allocator.free(path_z);
+                // don't use arena allocator here
+                const path_z = try al.dupeSentinel(u8, path, 0);
                 // make sure it's not empty
-                var tree = std.zig.Ast.parse(php.allocator, path_z, .{ .mode = .zig }) catch {
+                var tree = std.zig.Ast.parse(al, path_z, .{ .mode = .zig }) catch {
                     // use the path if there's a syntax error so that the user would know
                     break :find path;
                 };
-                defer tree.deinit(php.allocator);
                 const decls = tree.rootDecls();
                 if (decls.len > 0) break :find path;
             }
@@ -134,7 +128,7 @@ pub const ZigCompiler = struct {
     }
 
     fn writeProject(self: *@This()) !void {
-        const al = self.allocator();
+        const al = self.arena.allocator();
         try makeDirectory(self.module_build_dir);
         try self.writeZigarLib();
         try self.writeBuildConfigFile();
@@ -163,7 +157,7 @@ pub const ZigCompiler = struct {
     }
 
     fn writeBuildConfigFile(self: *@This()) !void {
-        const al = self.allocator();
+        const al = self.arena.allocator();
         const config_path = try std.fs.path.resolve(al, &.{
             self.module_build_dir,
             "build.cfg.zig",
@@ -208,6 +202,7 @@ pub const ZigCompiler = struct {
     }
 
     fn writeZigarLib(self: *@This()) !void {
+        const al = self.arena.allocator();
         const signature: [:0]const u8 = @embedFile("./zig.tar.zstd.sha1");
         const has_existing = check: {
             var dir = std.Io.Dir.openDirAbsolute(io, self.zigar_src_path, .{}) catch {
@@ -237,8 +232,8 @@ pub const ZigCompiler = struct {
         try makeDirectory(self.zigar_src_path);
         var input: std.Io.Reader = .fixed(@embedFile("./zig.tar.zstd"));
         const buffer_len = std.compress.zstd.default_window_len + std.compress.zstd.block_size_max;
-        const buffer: []u8 = try php.allocator.alloc(u8, buffer_len);
-        defer php.allocator.free(buffer);
+        const buffer: []u8 = try al.alloc(u8, buffer_len);
+        defer al.free(buffer); // this will actually free the buffer since it's last allocated
         var decompressor: std.compress.zstd.Decompress = .init(&input, buffer, .{});
         var dir = try std.Io.Dir.openDirAbsolute(io, self.zigar_src_path, .{});
         defer dir.close(io);
@@ -253,7 +248,7 @@ pub const ZigCompiler = struct {
     }
 
     fn runCompiler(self: *@This()) !void {
-        const al = self.allocator();
+        const al = self.arena.allocator();
         var finished: std.atomic.Value(u32) = .init(0);
         const thread = try std.Thread.spawn(.{}, showProgress, .{ self, &finished });
         defer {
@@ -303,7 +298,7 @@ pub const ZigCompiler = struct {
 
     fn cleanBuildDirectory(self: *@This()) !void {
         // get the size and mtime of all sub-directories
-        const al = self.allocator();
+        const al = self.arena.allocator();
         const SubDir = struct {
             name: []const u8,
             mtime: i128,

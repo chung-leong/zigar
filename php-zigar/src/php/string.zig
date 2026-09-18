@@ -24,6 +24,10 @@ pub const String = struct {
         return (self.impl.gc.u.type_info & pd.IS_STR_INTERNED) != 0;
     }
 
+    pub fn isCopyOnWrite(self: *const @This()) bool {
+        return self.impl.gc.refcount > 1 or self.isInterned();
+    }
+
     pub fn create(s: []const u8) *@This() {
         return switch (s.len) {
             0 => castTo(@This(), deref(pi.zend_empty_string)),
@@ -31,9 +35,8 @@ pub const String = struct {
             else => create: {
                 const ns = createUnitialized(s.len);
                 if (s.len > 0) {
-                    const new_slice = ns.slice();
+                    const new_slice = @constCast(ns.slice());
                     @memcpy(new_slice, s);
-                    new_slice.ptr[s.len] = '\x00';
                 }
                 break :create ns;
             },
@@ -44,26 +47,29 @@ pub const String = struct {
         return switch (len) {
             0 => castTo(@This(), deref(pi.zend_empty_string)),
             else => create: {
-                const struct_size = @offsetOf(String, "val") + len + 1;
-                const aligned_size = std.mem.alignForward(usize, struct_size, c.ZEND_MM_ALIGNMENT);
-                const zs: *String = @ptrCast(@alignCast(emalloc(aligned_size, @src())));
+                const struct_size = @offsetOf(pd.zend_string, "val") + len + 1;
+                const aligned_size = std.mem.alignForward(usize, struct_size, pd.ZEND_MM_ALIGNMENT);
+                const bytes = emalloc(aligned_size, @src());
+                const zs: *pd.zend_string = @ptrCast(@alignCast(bytes));
                 zs.* = .{
-                    .gc = .{ .refcount = 1, .u = .{ .type_info = c.GC_STRING } },
+                    .gc = .{ .refcount = 1, .u = .{ .type_info = pd.GC_STRING } },
                     .h = 0,
                     .len = len,
                 };
-                break :create zs;
+                // set sentinel
+                bytes[struct_size - 1] = 0;
+                break :create @ptrCast(zs);
             },
         };
     }
 
-    pub fn createInterned(s: []const u8) *String {
+    pub fn createInterned(s: []const u8) !*String {
         const zend_string_init_interned = deref(pi.zend_string_init_interned);
         const zstr = zend_string_init_interned.?(s.ptr, s.len, false);
         return castTo(@This(), zstr);
     }
 
-    pub fn createFromAny(arg: anytype) @This() {
+    pub fn createFromAny(arg: anytype) *@This() {
         const AT = @TypeOf(arg);
         return switch (@typeInfo(AT)) {
             .pointer => |pt| switch (pt.child) {
@@ -75,7 +81,7 @@ pub const String = struct {
                 },
                 else => switch (@typeInfo(pt.child)) {
                     .array => |ar| switch (ar.child) {
-                        u8 => create(&arg),
+                        u8 => create(arg),
                         else => unsupported(AT),
                     },
                     else => unsupported(AT),
@@ -112,6 +118,10 @@ pub const String = struct {
 
     pub fn matchSlice(self: *const @This(), s2: []const u8) bool {
         return std.mem.eql(u8, self.slice(), s2);
+    }
+
+    pub fn duplicate(self: *const @This()) *@This() {
+        return .create(self.slice());
     }
 
     pub fn toValue(self: *const @This()) Value {

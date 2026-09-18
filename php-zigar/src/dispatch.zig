@@ -16,20 +16,15 @@ const Jscall = interface.Jscall;
 const Syscall = interface.Syscall;
 const ModuleHost = @import("host.zig").ModuleHost;
 const php = @import("php.zig");
-const ArgumentIterator = php.ArgumentIterator;
-const ExecuteData = php.ExecuteData;
-const FunctionCallCache = php.FunctionCallCache;
-const HashTable = php.HashTable;
-const HashTableIterator = php.HashTableIterator;
-const Long = php.Long;
-const N = php.getStaticString;
-const Object = php.Object;
-const Stream = php.Stream;
-const StreamContext = php.StreamContext;
-const StreamWrapper = php.StreamWrapper;
-const StreamWrapperOps = php.StreamWrapperOps;
-const String = php.String;
-const Value = php.Value;
+const php_ng = @import("php-new.zig");
+const pd = php_ng.c.declarations;
+const php_al = php_ng.allocator;
+const Array = php_ng.Array;
+const Function = php_ng.Function;
+const Stream = php_ng.Stream;
+const String = php_ng.String;
+const Value = php_ng.Value;
+const N = String.static;
 const redirection = @import("redirection.zig");
 const structure = @import("structure.zig");
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
@@ -47,7 +42,7 @@ pub const CallDispatcher = struct {
         .utimes = true,
     },
     redirection_cb: ?Value = null,
-    redirection_cache: FunctionCallCache = undefined,
+    redirection_cache: Function.CallCache = undefined,
     redirecting_root: bool = false,
     redirecting_other_libraries: bool = false,
     function_list: std.ArrayList(CallbackEntry) = .empty,
@@ -88,12 +83,12 @@ pub const CallDispatcher = struct {
         id: usize,
         class: *ZigClassEntry,
         callable: Value,
-        cache: FunctionCallCache,
+        cache: Function.CallCache,
         buffer: *ByteBuffer,
 
         pub fn deinit(self: *@This()) void {
             php.release(self.class.object);
-            php.release(&self.callable);
+            self.callable.release();
             // ByteBuffer.free() flags the contents of the buffer as invalid without
             // releasing the buffer;
             self.buffer.free();
@@ -107,7 +102,7 @@ pub const CallDispatcher = struct {
         entries: std.ArrayList(php.DirEntry) = .empty,
 
         pub fn create() !*@This() {
-            const self = try php.allocator.create(@This());
+            const self = try php_al.create(@This());
             self.* = .{};
             try self.addRootDirEntries();
             return self;
@@ -115,21 +110,21 @@ pub const CallDispatcher = struct {
 
         fn addRootDirEntries(self: *@This()) !void {
             inline for (.{ 1, 2 }) |level| {
-                const entry = try self.entries.addOne(php.allocator);
+                const entry = try self.entries.addOne(php_al);
                 inline for (0..level) |i| entry.d_name[i] = '.';
                 entry.d_name[level] = 0;
             }
         }
 
-        pub fn next(self: *@This(), stream: *Stream) !?*php.DirEntry {
+        pub fn next(self: *@This(), stream: *Stream) !?*pd.php_stream_dirent {
             if (self.index == std.math.maxInt(usize)) {
                 self.index = 0;
             } else {
                 self.index += 1;
             }
             while (self.index >= self.entries.items.len) {
-                const new_entry = try self.entries.addOne(php.allocator);
-                if (!php.readdir(stream, new_entry)) {
+                const new_entry = try self.entries.addOne(php_al);
+                if (!stream.readDirectory(new_entry)) {
                     _ = self.entries.pop();
                     return null;
                 }
@@ -155,13 +150,13 @@ pub const CallDispatcher = struct {
         pub fn release(self: *@This()) void {
             self.ref_count -= 1;
             if (self.ref_count == 0) {
-                self.entries.deinit(php.allocator);
-                php.allocator.destroy(self);
+                self.entries.deinit(php_al);
+                php_al.destroy(self);
             }
         }
     };
     const StreamEntry = struct {
-        fd: Long,
+        fd: c_long,
         stream: *Stream,
         path: *String,
         fd_stat: std.os.wasi.fdstat_t,
@@ -172,28 +167,28 @@ pub const CallDispatcher = struct {
         } = .{},
 
         pub fn deinit(self: *@This()) void {
-            php.release(self.path);
+            self.path.release();
             if (self.dir_iter) |iter| iter.release();
         }
     };
     const StreamWrapperSurrogate = struct {
-        original: *StreamWrapper,
-        wrapper: StreamWrapper,
-        wops: StreamWrapperOps,
+        original: *Stream.Wrapper,
+        wrapper: Stream.Wrapper,
+        wops: Stream.Wrapper.Ops,
         dispatcher: *CallDispatcher,
         ref_count: usize = 1,
 
-        pub fn init(original: *StreamWrapper, dispatcher: *CallDispatcher) !*@This() {
-            const self = try php.allocator.create(@This());
+        pub fn init(original: *Stream.Wrapper, dispatcher: *CallDispatcher) !*@This() {
+            const self = try php_al.create(@This());
             self.* = .{
                 .original = original,
                 .wrapper = original.*,
                 .dispatcher = dispatcher,
-                .wops = original.wops.*,
+                .wops = original.impl.wops.*,
             };
             // replace closer with hook function
             self.wops.stream_closer = close;
-            self.wrapper.wops = &self.wops;
+            self.wrapper.impl.wops = &self.wops;
             // keep a ref on the host so the dispatch doesn't disappear while the surrogate is in use
             dispatcher.host.addRef();
             return self;
@@ -214,20 +209,20 @@ pub const CallDispatcher = struct {
                 }
                 // release the hhost
                 self.dispatcher.host.release();
-                php.allocator.destroy(self);
+                php_al.destroy(self);
             }
         }
 
-        pub fn close(wrapper: [*c]StreamWrapper, strm: ?*Stream) callconv(.c) c_int {
+        pub fn close(zwrapper: [*c]pd.php_stream_wrapper, zstrm: ?*pd.php_stream) callconv(.c) c_int {
             // get pointer to dispatcher
-            const w: *StreamWrapper = @ptrCast(wrapper);
-            const s = strm.?;
+            const w: *Stream.Wrapper = @ptrCast(zwrapper);
+            const strm: *Stream = @ptrCast(zstrm.?);
             const self: *@This() = @fieldParentPtr("wrapper", w);
             defer self.release();
-            self.dispatcher.removeStream(s);
-            php.setStreamWrapper(s, self.original);
-            const func = self.original.wops.*.stream_closer orelse return php.SUCCESS;
-            return func(wrapper, s);
+            self.dispatcher.removeStream(strm);
+            strm.setWrapper(self.original);
+            const func = self.original.impl.wops.*.stream_closer orelse return pd.SUCCESS;
+            return func(zwrapper, zstrm);
         }
     };
     const ScheduledTask = struct {
@@ -282,8 +277,8 @@ pub const CallDispatcher = struct {
     const fd_max = 0x00ff_ffff;
 
     pub fn init(host: *ModuleHost) !*@This() {
-        const self = try php.allocator.create(@This());
-        errdefer php.allocator.destroy(self);
+        const self = try php_al.create(@This());
+        errdefer php_al.destroy(self);
         self.* = .{ .host = host, .pipe_ptr = &pipes };
         try extension.addRequestShutdownCallback(self, onRequestShutdown);
         return self;
@@ -302,8 +297,8 @@ pub const CallDispatcher = struct {
         self.releaseResources();
         if (self.env_variable_list) |list| c_allocator.free(list);
         if (self.env_variable_bytes) |bytes| c_allocator.free(bytes);
-        self.stream_wrapper_surrogate_list.deinit(php.allocator);
-        php.allocator.destroy(self);
+        self.stream_wrapper_surrogate_list.deinit(php_al);
+        php_al.destroy(self);
     }
 
     pub fn installHandler() !void {
@@ -347,7 +342,7 @@ pub const CallDispatcher = struct {
         for (pipes) |fd| _ = c.close(fd);
     }
 
-    pub fn createJsThunk(self: *@This(), class: *ZigClassEntry, callable: *Value, buffer: *ByteBuffer) !void {
+    pub fn createJsThunk(self: *@This(), class: *ZigClassEntry, callable: Value, buffer: *ByteBuffer) !void {
         const fn_id = try self.saveCallback(class, callable, buffer);
         errdefer self.removeCallback(fn_id);
         const controller_address = getControllerAddress(class) catch {
@@ -390,18 +385,17 @@ pub const CallDispatcher = struct {
         return if (controller_address != 0) controller_address else error.Unexpected;
     }
 
-    fn saveCallback(self: *@This(), class: *ZigClassEntry, callable: *Value, buffer: *ByteBuffer) !usize {
-        const cache = try FunctionCallCache.init(callable);
+    fn saveCallback(self: *@This(), class: *ZigClassEntry, callable: Value, buffer: *ByteBuffer) !usize {
+        const cache = try Function.CallCache.init(callable);
         const fn_id = self.next_function_id;
         self.next_function_id += 1;
-        try self.function_list.append(php.allocator, .{
+        try self.function_list.append(php_al, .{
             .id = fn_id,
             .class = class,
-            .callable = callable.*,
+            .callable = callable.reuse(),
             .cache = cache,
             .buffer = buffer,
         });
-        php.addRef(callable);
         php.addRef(class.object);
         buffer.addRef();
         return fn_id;
@@ -440,7 +434,7 @@ pub const CallDispatcher = struct {
             }
             item.deinit();
         }
-        list.deinit(php.allocator);
+        list.deinit(php_al);
     }
 
     fn scheduleTask(self: *@This(), operation: ScheduledTask.Operation) !void {
@@ -623,14 +617,15 @@ pub const CallDispatcher = struct {
             self.multithread_count += 1;
             total_multithread_count += 1;
             if (total_multithread_count > 1) return;
-            const strm_obj = try php.openDescriptor(pipes[0], "r");
-            errdefer php.close(strm_obj, true);
+            const strm = try Stream.openDescriptor(pipes[0], "r");
+            errdefer strm.close(true);
             if (builtin.target.os.tag != .windows) {
-                try php.setBlocking(strm_obj, false);
+                try strm.setBlocking(false);
             }
-            const strm = php.createValueStream(strm_obj);
-            defer php.release(&strm);
-            try event_loop.init(&strm);
+            const strm_value = strm.toValue();
+            defer strm_value.release();
+            const strm_value_og: *const pd.zval = @ptrCast(&strm_value);
+            try event_loop.init(strm_value_og);
         } else {
             return error.NotInMainThread;
         }
@@ -694,7 +689,7 @@ pub const CallDispatcher = struct {
         }
     }
 
-    pub fn setEnvironmentVariables(self: *@This(), ht: *HashTable) !void {
+    pub fn setEnvironmentVariables(self: *@This(), array: *Array) !void {
         if (self.env_variable_list) |list| {
             c_allocator.free(list);
             self.env_variable_list = null;
@@ -704,13 +699,13 @@ pub const CallDispatcher = struct {
             self.env_variable_bytes = null;
         }
         const deferred = &self.env_variable_deferred;
-        const count = php.getHashLength(ht);
+        const count = array.length();
         var len: usize = 0;
-        var iter: HashTableIterator = .init(ht, .{});
+        var iter = array.iterate(.{});
         while (iter.next()) |value| {
-            const name = iter.currentName() orelse return error.NotString;
-            const value_str = try php.getValueString(value);
-            len += name.len + 1 + value_str.len + 1;
+            const name = try iter.key().getString();
+            const value_str = try value.getString();
+            len += name.length() + 1 + value_str.length() + 1;
         }
         const list = try c_allocator.alloc(?[*:0]const u8, count + 1);
         errdefer c_allocator.free(list);
@@ -721,16 +716,16 @@ pub const CallDispatcher = struct {
         var index: usize = 0;
         while (iter.next()) |value| {
             list[index] = @ptrCast(bytes.ptr + offset);
-            const name = iter.currentName() orelse return error.NotString;
-            const value_str = try php.getValueString(value);
-            const name_sc = php.getStringContent(name);
-            @memcpy(bytes[offset .. offset + name_sc.len], name_sc);
-            bytes[offset + name.len] = '=';
-            offset += name.len + 1;
-            const value_sc = php.getStringContent(value_str);
-            @memcpy(bytes[offset .. offset + value_str.len], value_sc);
-            bytes[offset + value_str.len] = 0;
-            offset += value_str.len + 1;
+            const name = try iter.key().getString();
+            const value_str = try value.getString();
+            const name_s = name.slice();
+            @memcpy(bytes[offset .. offset + name_s.len], name_s);
+            bytes[offset + name_s.len] = '=';
+            offset += name_s.len + 1;
+            const value_s = value_str.slice();
+            @memcpy(bytes[offset .. offset + value_s.len], value_s);
+            bytes[offset + value_s.len] = 0;
+            offset += value_s.len + 1;
             index += 1;
         }
         list[count] = null;
@@ -748,37 +743,36 @@ pub const CallDispatcher = struct {
         self.env_variable_bytes = bytes;
     }
 
-    pub fn isVirtualStream(_: *@This(), fd: Long) bool {
+    pub fn isVirtualStream(_: *@This(), fd: c_long) bool {
         return fd >= fd_min and fd <= fd_max;
     }
 
-    pub fn addStream(self: *@This(), strm: *Stream, is_dir: bool) !Long {
+    pub fn addStream(self: *@This(), strm: *Stream, is_dir: bool) !c_long {
         return for (self.stream_list.items) |*item| {
             if (item.stream == strm) break item.fd;
         } else create: {
             const fd = try self.createDescriptor();
             const path = try getStreamPath(strm);
-            defer php.release(path);
+            defer path.release();
             const fdstat = getStreamStat(strm, is_dir);
             // the surrogate wrapper's stream_closer will call removeStream() to close the file
             // descriptor then call the original function
-            const org_wrapper = php.getStreamWrapper(strm);
+            const org_wrapper = strm.wrapper();
             const new_wrapper = try self.getSurrogateWrapper(org_wrapper);
-            php.setStreamWrapper(strm, new_wrapper);
+            strm.setWrapper(new_wrapper);
             _ = try self.addStreamEntry(fd, path, strm, &fdstat);
             break :create fd;
         };
     }
 
-    fn addStreamEntry(self: *@This(), fd: Long, path: *String, strm: *Stream, stat: *const std.os.wasi.fdstat_t) !*StreamEntry {
-        const entry = try self.stream_list.addOne(php.allocator);
+    fn addStreamEntry(self: *@This(), fd: c_long, path: *String, strm: *Stream, stat: *const std.os.wasi.fdstat_t) !*StreamEntry {
+        const entry = try self.stream_list.addOne(php_al);
         entry.* = .{
             .fd = fd,
-            .path = path,
+            .path = path.reuse(),
             .stream = strm,
             .fd_stat = stat.*,
         };
-        php.addRef(path);
         if (stat.fs_filetype == .DIRECTORY) {
             entry.dir_iter = try DirEntryIterator.create();
         }
@@ -795,7 +789,7 @@ pub const CallDispatcher = struct {
         }
     }
 
-    pub fn closeDescriptor(self: *@This(), fd: Long) !void {
+    pub fn closeDescriptor(self: *@This(), fd: c_long) !void {
         if (fd == -1) self.redirecting_root = false;
         for (self.stream_list.items, 0..) |*item, i| {
             if (item.fd == fd) {
@@ -808,7 +802,7 @@ pub const CallDispatcher = struct {
                     _ = self.stream_list.swapRemove(i);
                 } else {
                     // close the stream--the stream's close handler will call removeStream()
-                    php.close(item.stream, item.flags.is_owner);
+                    item.stream.close(item.flags.is_owner);
                 }
                 break;
             }
@@ -834,7 +828,7 @@ pub const CallDispatcher = struct {
         const slice = std.mem.sliceTo(path, 0);
         if (slice.len > prefix.len and std.mem.eql(u8, slice[0..prefix.len], prefix)) {
             const num_str = slice[prefix.len..];
-            if (std.fmt.parseInt(Long, num_str, 10) catch null) |fd| {
+            if (std.fmt.parseInt(c_long, num_str, 10) catch null) |fd| {
                 if (self.isVirtualStream(fd)) {
                     for (self.stream_list.items) |*item| {
                         if (item.fd == fd) return item;
@@ -845,7 +839,7 @@ pub const CallDispatcher = struct {
         return null;
     }
 
-    fn getSurrogateWrapper(self: *@This(), wrapper: *StreamWrapper) !*StreamWrapper {
+    fn getSurrogateWrapper(self: *@This(), wrapper: *Stream.Wrapper) !*Stream.Wrapper {
         return for (self.stream_wrapper_surrogate_list.items) |item| {
             if (item.original == wrapper) {
                 item.addRef();
@@ -853,7 +847,7 @@ pub const CallDispatcher = struct {
             }
         } else create: {
             const surrogate: *StreamWrapperSurrogate = try .init(wrapper, self);
-            try self.stream_wrapper_surrogate_list.append(php.allocator, surrogate);
+            try self.stream_wrapper_surrogate_list.append(php_al, surrogate);
             break :create &surrogate.wrapper;
         };
     }
@@ -861,23 +855,25 @@ pub const CallDispatcher = struct {
     fn removeAllStreams(self: *@This()) void {
         var list = self.stream_list;
         while (list.pop()) |*item| @constCast(item).deinit();
-        list.deinit(php.allocator);
+        list.deinit(php_al);
     }
 
     pub fn getStreamPath(strm: *Stream) !*String {
-        if (php.getStreamPath(strm)) |path_sc| {
-            return php.createString(path_sc);
-        } else if (php.getStreamWrapperProperty(strm, N("path"))) |value| {
-            defer php.release(&value);
-            if (php.getValueString(&value) catch null) |path| return php.reuse(path);
-        }
-        return failure.report("stream wrapper does not have the property 'path'", .{});
+        if (strm.getPath()) |path| return .create(path);
+        const value = strm.getWrapperProperty("path") catch {
+            return failure.report("stream wrapper does not have the property 'path'", .{});
+        };
+        defer value.release();
+        const path = value.getString() catch {
+            return failure.report("stream wrapper's 'path' property is not a string", .{});
+        };
+        return path.reuse();
     }
 
     pub fn getStreamStat(strm: *Stream, is_dir: bool) std.os.wasi.fdstat_t {
         const filetype: std.os.wasi.filetype_t = get: {
             var stat: std.os.wasi.filestat_t = undefined;
-            break :get if (php.fstat(strm, &stat))
+            break :get if (strm.stat(&stat))
                 stat.filetype
             else |_| if (is_dir) .DIRECTORY else .CHARACTER_DEVICE;
         };
@@ -887,7 +883,7 @@ pub const CallDispatcher = struct {
             .fs_rights_base = .{},
             .fs_rights_inheriting = .{},
         };
-        const mode = php.getStreamMode(strm);
+        const mode = strm.getMode() orelse "r";
         for (mode) |code| {
             switch (code) {
                 'r' => fdstat.fs_rights_base.FD_READ = true,
@@ -906,43 +902,43 @@ pub const CallDispatcher = struct {
         return fdstat;
     }
 
-    pub fn redirectStream(self: *@This(), fd: Long, arg: *Value) !void {
+    pub fn redirectStream(self: *@This(), fd: c_long, arg: Value) !void {
         if (fd == -1) {
             if (self.redirection_cb) |*cb| {
-                php.release(cb);
+                cb.release();
                 self.redirection_cb = null;
                 self.redirecting_root = false;
             }
-            if (FunctionCallCache.init(arg) catch null) |cache| {
-                self.redirection_cb = php.reuse(arg).*;
+            if (Function.CallCache.init(arg) catch null) |cache| {
+                self.redirection_cb = arg.reuse();
                 self.redirection_cache = cache;
                 self.redirecting_root = true;
                 self.closeDescriptor(fd) catch {};
                 return;
             }
         }
-        const strm = try php.getValueStream(arg);
+        const strm = try arg.getStream();
         const path = try getStreamPath(strm);
-        defer php.release(path);
+        defer path.release();
         const fdstat = getStreamStat(strm, fd == -1);
         self.closeDescriptor(fd) catch {};
         _ = try self.addStreamEntry(fd, path, strm, &fdstat);
         if (fd == -1) self.redirecting_root = true;
     }
 
-    fn findStream(self: *@This(), fd: Long) !*StreamEntry {
+    fn findStreamEntry(self: *@This(), fd: c_long) !*StreamEntry {
         for (self.stream_list.items) |*item| {
             if (item.fd == fd) return item;
         } else {
-            const path_sc: []const u8, const mode: [*:0]const u8 = switch (fd) {
+            const path_s: []const u8, const mode: [*:0]const u8 = switch (fd) {
                 0 => .{ "php://input", "r" },
                 1, 2 => .{ "php://output", "w" },
                 else => return error.Unexpected,
             };
-            const path = php.createString(path_sc);
-            defer php.release(path);
-            const strm = php.open(path, mode, null, 0) catch return error.Unexpected;
-            errdefer php.close(strm, true);
+            const path: *String = .create(path_s);
+            defer path.release();
+            const strm = Stream.open(path, mode, null, 0) catch return error.Unexpected;
+            errdefer strm.close(true);
             const fdstat: std.os.wasi.fdstat_t = .{
                 .fs_filetype = .CHARACTER_DEVICE,
                 .fs_flags = .{},
@@ -958,21 +954,26 @@ pub const CallDispatcher = struct {
         }
     }
 
-    fn useStream(self: *@This(), fd: Long, mode: [*c]const u8) !@Tuple(&.{ *Stream, bool }) {
+    fn findStream(self: *@This(), fd: c_long) !*Stream {
+        const entry = try self.findStreamEntry(fd);
+        return entry.stream;
+    }
+
+    fn useStream(self: *@This(), fd: c_long, mode: [*c]const u8) !@Tuple(&.{ *Stream, bool }) {
         switch (fd) {
             0, 1, 2, fd_min...fd_max => {
-                const entry = try self.findStream(fd);
-                return .{ entry.stream, false };
+                const strm = try self.findStream(fd);
+                return .{ strm, false };
             },
             else => {
-                const strm = try php.openDescriptor(@intCast(fd), mode);
+                const strm = try Stream.openDescriptor(@intCast(fd), mode);
                 return .{ strm, true };
             },
         }
     }
 
-    fn createDescriptor(self: *@This()) !Long {
-        var fd: Long = fd_min;
+    fn createDescriptor(self: *@This()) !c_long {
+        var fd: c_long = fd_min;
         return while (fd < fd_max) : (fd += 1) {
             for (self.stream_list.items) |item| {
                 if (item.fd == fd) break;
@@ -986,17 +987,17 @@ pub const CallDispatcher = struct {
             if (char == ':') {
                 if (i < path.len - 1 and path[i + 1] == '/') {
                     if (i < path.len - 2 and path[i + 2] == '/') {
-                        return php.createString(path[start..]);
+                        return .create(path[start..]);
                     } else {
                         // assume the '//' in 'protocol://host' got replaced by a single slash
                         const len = path.len - start + 1;
-                        const str = php.createStringWithLength(len);
-                        const sc = @constCast(php.getStringContent(str));
+                        const str: *String = .createUnitialized(len);
+                        const slice = @constCast(str.slice());
                         const j = i - start;
-                        @memcpy(sc[0..j], path[start..i]);
-                        @memcpy(sc[j .. j + 3], "://");
-                        @memcpy(sc[j + 3 ..], path[i + 2 ..]);
-                        sc.ptr[len] = 0;
+                        @memcpy(slice[0..j], path[start..i]);
+                        @memcpy(slice[j .. j + 3], "://");
+                        @memcpy(slice[j + 3 ..], path[i + 2 ..]);
+                        slice.ptr[len] = 0;
                         return str;
                     }
                 }
@@ -1011,44 +1012,42 @@ pub const CallDispatcher = struct {
 
     const PathInfo = struct {
         url: *String,
-        context: ?*StreamContext = null,
+        context: ?*Stream.Context = null,
 
         pub fn deinit(self: *const @This()) void {
-            php.release(self.url);
-            if (self.context) |cxt| php.release(cxt.res);
+            self.url.release();
+            if (self.context) |cxt| cxt.resource().release();
         }
     };
 
     fn resolvePath(self: *@This(), dirfd: i32, path_c: [*:0]const u8) !?PathInfo {
         const path = path_c[0..std.mem.len(path_c)];
-        var context: ?*StreamContext = null;
-        const url: *String = getWrapperUrl(path) orelse find: {
+        var context: ?*Stream.Context = null;
+        const url = getWrapperUrl(path) orelse find: {
             if (dirfd == -1) {
                 // if a callback was given, call it to see if this path should be redirected somewhere else
                 if (self.redirection_cb != null) {
-                    const args: [1]Value = .{php.createValueStringContent(path)};
-                    defer php.release(&args[0]);
+                    const args: [1]Value = .{.fromString(.create(path))};
+                    defer args[0].release();
                     const retval = try self.redirection_cache.invoke(&args);
-                    defer php.release(&retval);
-                    switch (php.getValueType(&retval)) {
-                        .null, .false => return null,
-                        .string => break :find {
-                            const string = php.getValueString(&retval) catch unreachable;
-                            break :find php.reuse(string);
-                        },
+                    defer retval.release();
+                    switch (retval.kind()) {
+                        .null => return null,
+                        .string => break :find retval.string().reuse(),
                         .resource => {
-                            const strm = try php.getValueStream(&retval);
+                            const strm = try retval.getStream();
                             const strm_path = try getStreamPath(strm);
-                            defer php.release(strm_path);
-                            const parent_path = php.getStringContent(strm_path);
-                            context = php.getStreamContext(strm);
-                            break :find joinPath(parent_path, path);
+                            defer strm_path.release();
+                            context = strm.getContext();
+                            break :find joinPath(strm_path.slice(), path);
+                        },
+                        .boolean => {
+                            if (retval.boolean() == false) return null;
+                            failure.warn("root redirection callback can return false but not true", .{});
+                            return error.InvalidReturnValueFromCallback;
                         },
                         else => |t| {
-                            const err = failure.report("invalid return value from root redirection callback: {s}", .{
-                                @tagName(t),
-                            });
-                            php.triggerWarning(err);
+                            failure.warn("invalid return value from root redirection callback: {s}", .{@tagName(t)});
                             return error.InvalidReturnValueFromCallback;
                         },
                     }
@@ -1056,12 +1055,11 @@ pub const CallDispatcher = struct {
                 // don't bother lookup the root stream if the root descriptor hasn't been redirected
                 if (!self.redirecting_root) return null;
             }
-            const parent = try self.findStream(dirfd);
-            const parent_path = php.getStringContent(parent.path);
-            context = php.getStreamContext(parent.stream);
-            break :find joinPath(parent_path, path);
+            const parent = try self.findStreamEntry(dirfd);
+            context = parent.stream.getContext();
+            break :find joinPath(parent.path.slice(), path);
         };
-        if (context) |cxt| php.addRef(cxt.res);
+        if (context) |cxt| cxt.resource().addRef();
         return .{ .url = url, .context = context };
     }
 
@@ -1073,12 +1071,11 @@ pub const CallDispatcher = struct {
             break :init 0;
         };
         const len = parent_path.len + slash_count + path.len;
-        const str = php.createStringWithLength(len);
-        const sc: [*]u8 = @ptrCast(&str.val[0]);
-        @memcpy(sc[0..parent_path.len], parent_path);
-        if (slash_count == 1) sc[parent_path.len] = '/';
-        @memcpy(sc[parent_path.len + slash_count .. len], path);
-        sc[len] = 0;
+        const str: *String = .createUnitialized(len);
+        const slice = @constCast(str.slice());
+        @memcpy(slice[0..parent_path.len], parent_path);
+        if (slash_count == 1) slice[parent_path.len] = '/';
+        @memcpy(slice[parent_path.len + slash_count .. len], path);
         return str;
     }
 
@@ -1093,7 +1090,7 @@ pub const CallDispatcher = struct {
         const strm, const file_type: std.os.wasi.filetype_t = open: {
             if (args.rights.FD_READDIR) {
                 // opening a directory
-                if (php.opendir(loc.url, 0, null) catch null) |strm| {
+                if (Stream.openDirectory(loc.url, 0, null) catch null) |strm| {
                     break :open .{ strm, .DIRECTORY };
                 }
             }
@@ -1110,10 +1107,10 @@ pub const CallDispatcher = struct {
                     "r+"
             else
                 "r";
-            const strm = php.open(loc.url, mode, loc.context, 0) catch return .NOENT;
+            const strm = Stream.open(loc.url, mode, loc.context, 0) catch return .NOENT;
             break :open .{ strm, .REGULAR_FILE };
         };
-        errdefer php.close(strm, true);
+        errdefer strm.close(true);
         const stat: std.os.wasi.fdstat_t = .{
             .fs_filetype = file_type,
             .fs_flags = args.descriptor_flags,
@@ -1133,101 +1130,111 @@ pub const CallDispatcher = struct {
     }
 
     fn handleRead(self: *@This(), args: anytype) !E {
-        const entry = self.findStream(args.fd) catch return .BADF;
-        const read = php.read(entry.stream, args.bytes, args.len) catch return .INVAL;
+        const strm = self.findStream(args.fd) catch return .BADF;
+        const slice = args.bytes[0..args.len];
+        const read = strm.read(slice) catch return .INVAL;
         args.read = @intCast(read);
         return .SUCCESS;
     }
 
     fn handleVectorRead(self: *@This(), args: anytype) !E {
-        const entry = self.findStream(args.fd) catch return .BADF;
+        const strm = self.findStream(args.fd) catch return .BADF;
         const len: usize = args.count;
         const iovs = args.iovs[0..len];
         var total: usize = 0;
         for (iovs) |iov| {
-            total += php.read(entry.stream, iov.base, iov.len) catch return .INVAL;
+            const slice = iov.base[0..iov.len];
+            total += strm.read(slice) catch return .INVAL;
         }
         args.read = @intCast(total);
         return .SUCCESS;
     }
 
     fn handlePositionalRead(self: *@This(), args: anytype) !E {
-        const entry = self.findStream(args.fd) catch return .BADF;
-        const pos = php.tell(entry.stream) catch return .SPIPE;
-        defer php.seek(entry.stream, @intCast(pos), 0) catch {};
-        php.seek(entry.stream, @intCast(args.offset), 0) catch return .SPIPE;
-        const read = php.read(entry.stream, args.bytes, args.len) catch return .IO;
+        const strm = self.findStream(args.fd) catch return .BADF;
+        const pos = strm.tell() catch return .SPIPE;
+        defer strm.seek(@intCast(pos), 0) catch {};
+        strm.seek(@intCast(args.offset), 0) catch return .SPIPE;
+        const slice = args.bytes[0..args.len];
+        const read = strm.read(slice) catch return .IO;
         args.read = @intCast(read);
         return .SUCCESS;
     }
 
     fn handlePositionalVectorRead(self: *@This(), args: anytype) !E {
-        const entry = self.findStream(args.fd) catch return .BADF;
-        const pos = php.tell(entry.stream) catch return .SPIPE;
-        defer php.seek(entry.stream, @intCast(pos), 0) catch {};
-        php.seek(entry.stream, @intCast(args.offset), 0) catch return .SPIPE;
+        const strm = self.findStream(args.fd) catch return .BADF;
+        const pos = strm.tell() catch return .SPIPE;
+        defer strm.seek(@intCast(pos), 0) catch {};
+        strm.seek(@intCast(args.offset), 0) catch return .SPIPE;
         const len: usize = args.count;
         const iovs = args.iovs[0..len];
         var total: usize = 0;
         for (iovs) |iov| {
-            total += php.read(entry.stream, iov.base, iov.len) catch return .INVAL;
+            const slice = iov.base[0..iov.len];
+            total += strm.read(slice) catch return .INVAL;
         }
         args.read = @intCast(total);
         return .SUCCESS;
     }
 
     fn handleWrite(self: *@This(), args: anytype) !E {
-        const entry = self.findStream(args.fd) catch return .BADF;
-        const written = php.write(entry.stream, args.bytes, args.len) catch return .INVAL;
+        const strm = self.findStream(args.fd) catch return .BADF;
+        const slice = args.bytes[0..args.len];
+        const written = strm.write(slice) catch return .INVAL;
         args.written = @intCast(written);
         return .SUCCESS;
     }
 
     fn handleWriteStderr(self: *@This(), args: anytype) !E {
-        const entry = self.findStream(2) catch return .BADF;
-        _ = php.write(entry.stream, args.bytes, args.len) catch return .INVAL;
+        const strm = self.findStream(2) catch return .BADF;
+        const slice = args.bytes[0..args.len];
+        _ = strm.write(slice) catch return .INVAL;
         return .SUCCESS;
     }
 
     fn handleVectorWrite(self: *@This(), args: anytype) !E {
-        const entry = self.findStream(args.fd) catch return .BADF;
+        const strm = self.findStream(args.fd) catch return .BADF;
         const len: usize = args.count;
         const iovs = args.iovs[0..len];
         var total: usize = 0;
         for (iovs) |iov| {
-            total += php.write(entry.stream, iov.base, iov.len) catch return .INVAL;
+            const slice = iov.base[0..iov.len];
+            total += strm.write(slice) catch return .INVAL;
         }
         args.written = @intCast(total);
         return .SUCCESS;
     }
 
     fn handlePositionalWrite(self: *@This(), args: anytype) !E {
-        const entry = self.findStream(args.fd) catch return .BADF;
-        const pos = php.tell(entry.stream) catch return .SPIPE;
-        defer php.seek(entry.stream, @intCast(pos), 0) catch {};
-        php.seek(entry.stream, @intCast(args.offset), 0) catch return .SPIPE;
-        const written = php.write(entry.stream, args.bytes, args.len) catch return .INVAL;
+        const strm = self.findStream(args.fd) catch return .BADF;
+        const pos = strm.tell() catch return .SPIPE;
+        defer strm.seek(@intCast(pos), 0) catch {};
+        strm.seek(@intCast(args.offset), 0) catch return .SPIPE;
+        const slice = args.bytes[0..args.len];
+        const written = strm.write(slice) catch return .INVAL;
         args.written = @intCast(written);
         return .SUCCESS;
     }
 
     fn handlePositionalVectorWrite(self: *@This(), args: anytype) !E {
-        const entry = self.findStream(args.fd) catch return .BADF;
-        const pos = php.tell(entry.stream) catch return .SPIPE;
-        defer php.seek(entry.stream, @intCast(pos), 0) catch {};
-        php.seek(entry.stream, @intCast(args.offset), 0) catch return .SPIPE;
+        const strm = self.findStream(args.fd) catch return .BADF;
+        const pos = strm.tell() catch return .SPIPE;
+        defer strm.seek(@intCast(pos), 0) catch {};
+        strm.seek(@intCast(args.offset), 0) catch return .SPIPE;
         const len: usize = args.count;
         const iovs = args.iovs[0..len];
         var total: usize = 0;
         for (iovs) |iov| {
-            total += php.write(entry.stream, iov.base, iov.len) catch return .INVAL;
+            const slice = iov.base[0..iov.len];
+            total += strm.write(slice) catch return .INVAL;
         }
         args.written = @intCast(total);
         return .SUCCESS;
     }
 
     fn handleSeek(self: *@This(), args: anytype) !E {
-        const entry = self.findStream(args.fd) catch return .BADF;
+        const entry = self.findStreamEntry(args.fd) catch return .BADF;
+        const strm = entry.stream;
         if (entry.dir_iter) |iter| {
             if (args.offset != 0) {
                 if (args.whence != c.SEEK_SET) return .INVAL;
@@ -1238,50 +1245,50 @@ pub const CallDispatcher = struct {
                 iter.reset();
             }
         }
-        php.seek(entry.stream, args.offset, args.whence) catch return .SPIPE;
-        args.position = php.tell(entry.stream) catch return .SPIPE;
+        strm.seek(args.offset, args.whence) catch return .SPIPE;
+        args.position = strm.tell() catch return .SPIPE;
         return .SUCCESS;
     }
 
     fn handleTell(self: *@This(), args: anytype) !E {
-        const entry = self.findStream(args.fd) catch return .BADF;
-        args.position = php.tell(entry.stream) catch return .SPIPE;
+        const strm = self.findStream(args.fd) catch return .BADF;
+        args.position = strm.tell() catch return .SPIPE;
         return .SUCCESS;
     }
 
     fn handleSettimes(self: *@This(), args: anytype) !E {
         const loc: PathInfo = get: {
             if (@hasField(@TypeOf(args.*), "fd")) {
-                const entry = self.findStream(args.fd) catch return .BADF;
-                php.addRef(entry.path);
+                const entry = self.findStreamEntry(args.fd) catch return .BADF;
                 break :get .{
-                    .url = entry.path,
-                    .context = php.getStreamContext(entry.stream),
+                    .url = entry.path.reuse(),
+                    .context = entry.stream.getContext(),
                 };
             } else {
                 break :get (self.resolvePath(args.dirfd, args.path) catch return .BADF) orelse return .OPNOTSUPP;
             }
         };
         defer loc.deinit();
-        const buf: php.utimbuf = .{
+        const buf: pd.utimbuf = .{
             .actime = @divTrunc(args.atime, 1_000_000_000),
             .modtime = @divTrunc(args.mtime, 1_000_000_000),
         };
-        php.touch(loc.url, &buf, loc.context) catch return .INVAL;
+        Stream.touch(loc.url, &buf, loc.context) catch return .INVAL;
         return .SUCCESS;
     }
 
     fn handleStat(self: *@This(), args: anytype) !E {
         if (@hasField(@TypeOf(args.*), "fd")) {
-            const entry = self.findStream(args.fd) catch return .BADF;
-            php.fstat(entry.stream, &args.stat) catch return .INVAL;
+            const strm = self.findStream(args.fd) catch return .BADF;
+            strm.stat(&args.stat) catch return .INVAL;
         } else {
             if (self.findStreamEntryWithFdPath(args.path)) |entry| {
-                php.fstat(entry.stream, &args.stat) catch return .INVAL;
+                const strm = entry.stream;
+                strm.stat(&args.stat) catch return .INVAL;
             } else {
                 const loc = (self.resolvePath(args.dirfd, args.path) catch return .NOENT) orelse return .OPNOTSUPP;
                 defer loc.deinit();
-                php.stat(loc.url, loc.context, args.lookup_flags, &args.stat) catch return .NOENT;
+                Stream.statPath(loc.url, loc.context, args.lookup_flags, &args.stat) catch return .NOENT;
             }
         }
         return .SUCCESS;
@@ -1289,48 +1296,51 @@ pub const CallDispatcher = struct {
 
     fn handleTruncate(self: *@This(), args: anytype) !E {
         if (@hasField(@TypeOf(args.*), "fd")) {
-            const entry = self.findStream(args.fd) catch return .BADF;
+            const strm = self.findStream(args.fd) catch return .BADF;
             const len = switch (args.len) {
-                std.math.maxInt(u64) => try php.tell(entry.stream),
+                std.math.maxInt(u64) => try strm.tell(),
                 else => args.len,
             };
-            php.truncate(entry.stream, len) catch return .FBIG;
+            strm.truncate(len) catch return .FBIG;
         } else {
             if (self.findStreamEntryWithFdPath(args.path)) |entry| {
-                php.truncate(entry.stream, args.len) catch return .FBIG;
+                const strm = entry.stream;
+                strm.truncate(args.len) catch return .FBIG;
             } else {
                 const loc = (self.resolvePath(args.dirfd, args.path) catch return .NOENT) orelse return .OPNOTSUPP;
                 defer loc.deinit();
-                const strm = php.open(loc.url, "x", loc.context, 0) catch return .NOENT;
-                defer php.close(strm, true);
-                php.truncate(strm, args.len) catch return .FBIG;
+                const strm = Stream.open(loc.url, "x", loc.context, 0) catch return .NOENT;
+                defer strm.close(true);
+                strm.truncate(args.len) catch return .FBIG;
             }
         }
         return .SUCCESS;
     }
 
     fn handleGetDescriptorFlags(self: *@This(), args: anytype) !E {
-        const entry = self.findStream(args.fd) catch return .BADF;
+        const entry = self.findStreamEntry(args.fd) catch return .BADF;
         args.fdstat = entry.fd_stat;
         return .SUCCESS;
     }
 
     fn handleSetDescriptorFlags(self: *@This(), args: anytype) !E {
-        const entry = self.findStream(args.fd) catch return .BADF;
-        php.setBlocking(entry.stream, !args.fdflags.NONBLOCK) catch return .INVAL;
+        const entry = self.findStreamEntry(args.fd) catch return .BADF;
+        const strm = entry.stream;
+        strm.setBlocking(!args.fdflags.NONBLOCK) catch return .INVAL;
         entry.fd_stat.fs_flags.NONBLOCK = args.fdflags.NONBLOCK;
         return .SUCCESS;
     }
 
     fn handleSetLock(self: *@This(), args: anytype) !E {
-        const entry = self.findStream(args.fd) catch return .BADF;
+        const strm = self.findStream(args.fd) catch return .BADF;
+        // TODO: use packed struct
         const lock_type: c_int = switch (args.lock.type) {
             Syscall.Lock.RDLCK => std.posix.LOCK.SH,
             Syscall.Lock.WRLCK => std.posix.LOCK.EX,
             Syscall.Lock.UNLCK => std.posix.LOCK.UN,
             else => return .INVAL,
         };
-        php.setLock(entry.stream, lock_type) catch {
+        strm.setLock(lock_type) catch {
             return switch (lock_type) {
                 std.posix.LOCK.UN => .NOLCK,
                 else => .AGAIN,
@@ -1340,16 +1350,16 @@ pub const CallDispatcher = struct {
     }
 
     fn handleGetLock(self: *@This(), args: anytype) !E {
-        const entry = self.findStream(args.fd) catch return .BADF;
+        const strm = self.findStream(args.fd) catch return .BADF;
         const lock_type: c_int = switch (args.lock.type) {
             Syscall.Lock.RDLCK => std.posix.LOCK.SH,
             Syscall.Lock.WRLCK => std.posix.LOCK.EX,
             else => return .INVAL,
         };
         // try setting the lock
-        if (php.setLock(entry.stream, lock_type)) {
+        if (strm.setLock(lock_type)) {
             // unlock it again
-            php.setLock(entry.stream, std.posix.LOCK.UN) catch {};
+            strm.setLock(std.posix.LOCK.UN) catch {};
             args.lock.type = Syscall.Lock.UNLCK;
         } else |_| {
             if (lock_type == std.posix.LOCK.SH) {
@@ -1357,8 +1367,8 @@ pub const CallDispatcher = struct {
                 args.lock.type = Syscall.Lock.WRLCK;
             } else {
                 // see if a shared lock would succeed
-                if (php.setLock(entry.stream, lock_type)) {
-                    php.setLock(entry.stream, std.posix.LOCK.SH) catch {};
+                if (strm.setLock(lock_type)) {
+                    strm.setLock(std.posix.LOCK.SH) catch {};
                     args.lock.type = Syscall.Lock.RDLCK;
                 } else |_| {
                     args.lock.type = Syscall.Lock.WRLCK;
@@ -1369,35 +1379,33 @@ pub const CallDispatcher = struct {
     }
 
     fn handleAdvise(self: *@This(), args: anytype) !E {
-        const entry = self.findStream(args.fd) catch return .BADF;
-        _ = entry;
+        _ = self.findStreamEntry(args.fd) catch return .BADF;
         return .SUCCESS;
     }
 
     fn handleAllocate(self: *@This(), args: anytype) !E {
-        const entry = self.findStream(args.fd) catch return .BADF;
-        _ = entry;
+        _ = self.findStreamEntry(args.fd) catch return .BADF;
         return .NOSYS;
     }
 
     fn handleSync(self: *@This(), args: anytype) !E {
-        const entry = self.findStream(args.fd) catch return .BADF;
-        php.flush(entry.stream);
+        const strm = self.findStream(args.fd) catch return .BADF;
+        strm.flush() catch return .IO;
         return .SUCCESS;
     }
 
     fn handleDatasync(self: *@This(), args: anytype) !E {
-        const entry = self.findStream(args.fd) catch return .BADF;
-        php.flush(entry.stream);
+        const strm = self.findStream(args.fd) catch return .BADF;
+        strm.flush() catch return .IO;
         return .SUCCESS;
     }
 
     fn handleMkdir(self: *@This(), args: anytype) !E {
         const loc = (self.resolvePath(args.dirfd, args.path) catch return .NOENT) orelse return .OPNOTSUPP;
         defer loc.deinit();
-        php.mkdir(loc.url, args.mode, loc.context) catch {
+        Stream.makeDirectory(loc.url, args.mode, loc.context) catch {
             var info: std.os.wasi.filestat_t = undefined;
-            return if (php.stat(loc.url, null, .{}, &info)) .EXIST else |_| .NOENT;
+            return if (Stream.statPath(loc.url, null, .{}, &info)) .EXIST else |_| .NOENT;
         };
         return .SUCCESS;
     }
@@ -1405,14 +1413,14 @@ pub const CallDispatcher = struct {
     fn handleRmdir(self: *@This(), args: anytype) !E {
         const loc = (self.resolvePath(args.dirfd, args.path) catch return .NOENT) orelse return .OPNOTSUPP;
         defer loc.deinit();
-        php.rmdir(loc.url, loc.context) catch return .NOENT;
+        Stream.removeDirectory(loc.url, loc.context) catch return .NOENT;
         return .SUCCESS;
     }
 
     fn handleUnlink(self: *@This(), args: anytype) !E {
         const loc = (self.resolvePath(args.dirfd, args.path) catch return .NOENT) orelse return .OPNOTSUPP;
         defer loc.deinit();
-        php.unlink(loc.url, loc.context) catch return .NOENT;
+        Stream.unlink(loc.url, loc.context) catch return .NOENT;
         return .SUCCESS;
     }
 
@@ -1433,13 +1441,12 @@ pub const CallDispatcher = struct {
         defer loc.deinit();
         const new_loc = (self.resolvePath(args.new_dirfd, args.new_path) catch return .NOENT) orelse return .OPNOTSUPP;
         defer new_loc.deinit();
-        php.rename(loc.url, new_loc.url, loc.context) catch return .NOENT;
+        Stream.rename(loc.url, new_loc.url, loc.context) catch return .NOENT;
         return .SUCCESS;
     }
 
     fn handleGetdents(self: *@This(), args: anytype) !E {
-        const entry = self.findStream(args.dirfd) catch return .BADF;
-        const dir_path = php.getStringContent(entry.path);
+        const entry = self.findStreamEntry(args.dirfd) catch return .BADF;
         var index: usize = 0;
         var remaining: usize = args.len;
         const iter = entry.dir_iter orelse return .NOTDIR;
@@ -1455,9 +1462,9 @@ pub const CallDispatcher = struct {
                 info.ino = 0;
                 info.filetype = .DIRECTORY;
             } else {
-                const path = joinPath(dir_path, name);
-                defer php.release(path);
-                php.stat(path, null, .{}, &info) catch {
+                const path = joinPath(entry.path.slice(), name);
+                defer path.release();
+                Stream.statPath(path, null, .{}, &info) catch {
                     info.ino = 0;
                     info.filetype = .UNKNOWN;
                 };
@@ -1484,10 +1491,10 @@ pub const CallDispatcher = struct {
 
     fn handleCopyFileRange(self: *@This(), args: anytype) !E {
         const out_strm, const close_out_strm = self.useStream(args.out_fd, "w") catch return .BADF;
-        defer if (close_out_strm) php.close(out_strm, true);
+        defer if (close_out_strm) out_strm.close(true);
         const in_strm, const close_in_strm = self.useStream(args.in_fd, "r") catch return .BADF;
-        defer if (close_in_strm) php.close(in_strm, true);
-        args.copied = php.copyFileRange(in_strm, out_strm, args.in_offset, args.out_offset, args.len) catch |err| {
+        defer if (close_in_strm) in_strm.close(true);
+        args.copied = out_strm.copyRange(args.out_offset, in_strm, args.in_offset, args.len) catch |err| {
             return switch (err) {
                 error.InvalidOffset => .INVAL,
                 else => .IO,
@@ -1517,7 +1524,7 @@ pub const CallDispatcher = struct {
         if (!self.release_resources_called) {
             self.release_resources_called = true;
             if (self.redirection_cb) |*cb| {
-                php.release(cb);
+                cb.release();
                 self.redirection_cache.deinit();
                 self.redirection_cb = null;
             }

@@ -31,7 +31,11 @@ pub const Array = struct {
         const ht = &self.impl;
         if (ht.u.flags & pd.HASH_FLAG_PACKED != 0) return false;
         return for (0..ht.nNumUsed) |i| {
-            const p = ht.arData[i];
+            const p = switch (@hasField(pd.zend_array, "arData")) {
+                // in newer version of PHP, the field is stored in an unnamed union
+                false => ht.unnamed_0.arData[i],
+                true => ht.arData[i],
+            };
             if (p.val.u1.v.type != pd.IS_UNDEF and p.key == null) break false;
         } else true;
     }
@@ -82,9 +86,7 @@ pub const Array = struct {
             .string => |s| pi.zend_hash_find(ht, s),
             .slice => |s| pi.zend_hash_str_find(ht, s.ptr, s.len),
         } orelse return error.Missing;
-        const value = castTo(Value, zval);
-        value.addRef();
-        return value;
+        return castTo(Value, zval);
     }
 
     pub fn set(self: *@This(), key: anytype, value: *const Value) void {

@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const allocator = @import("allocator.zig").instance;
+const allocator = @import("allocator.zig").allocator;
 
 pub fn report(comptime fmt: []const u8, params: anytype) error{FailureReported} {
     if (error_message) |msg| freeMessage(msg);

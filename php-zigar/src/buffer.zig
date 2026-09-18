@@ -2,11 +2,10 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const memory_map = @import("memory-map.zig");
-const php = @import("php.zig");
-const ClassEntry = php.ClassEntry;
-const Object = php.Object;
-const String = php.String;
-const Value = php.Value;
+const php_ng = @import("php-new.zig");
+const String = php_ng.String;
+const php_al = php_ng.allocator;
+const StringOG = @import("php.zig").String;
 
 pub const ByteBuffer = struct {
     bytes: []u8 = undefined,
@@ -70,7 +69,7 @@ pub const ByteBuffer = struct {
     }
 
     pub fn create(alignment: std.mem.Alignment) !*@This() {
-        const self = try php.allocator.create(@This());
+        const self = try php_al.create(@This());
         self.* = .{ .alignment = alignment };
         return self;
     }
@@ -99,7 +98,7 @@ pub const ByteBuffer = struct {
                 self.source = .{ .allocator = al };
                 self.flags.has_allocator = true;
             } else {
-                const byte_ptr = php.allocator.rawAlloc(len, self.alignment, 0) orelse return error.OutOfMemory;
+                const byte_ptr = php_al.rawAlloc(len, self.alignment, 0) orelse return error.OutOfMemory;
                 self.bytes = byte_ptr[0..len];
                 self.source_type = .php;
             }
@@ -109,24 +108,23 @@ pub const ByteBuffer = struct {
         }
     }
 
-    pub fn referenceString(self: *@This(), str: *String, read_only: bool) void {
+    pub fn referenceString(self: *@This(), str_og: *StringOG, read_only: bool) void {
         std.debug.assert(self.flags.uninitialized);
+        const str: *String = @ptrCast(str_og);
         defer self.flags.uninitialized = false;
         if (!read_only) {
-            const interned = php.isStringInterned(str);
             // separate the string if another variable is referencing it or if it's interned
-            if (str.gc.refcount > 1 or interned) {
-                const sc = php.getStringContent(str);
-                const new_str = php.createString(sc);
-                self.bytes = @constCast(php.getStringContent(new_str));
+            if (str.isCopyOnWrite()) {
+                const new_str = str.duplicate();
+                self.bytes = @constCast(new_str.slice());
                 self.source_type = .string;
                 self.source = .{ .string = new_str };
                 return;
             }
         }
-        self.bytes = @constCast(php.getStringContent(str));
+        self.bytes = @constCast(str.slice());
         self.source_type = .string;
-        self.source = .{ .string = php.reuse(str) };
+        self.source = .{ .string = str.reuse() };
         if (read_only) self.flags.read_only = true;
     }
 
@@ -159,7 +157,7 @@ pub const ByteBuffer = struct {
             true => .{ self.bit_offset +% bit_offset, .@"1" },
         };
         const bytes = try self.data(offset + len, false);
-        const new = try php.allocator.create(@This());
+        const new = try php_al.create(@This());
         const slice_bytes = bytes[offset .. offset + len];
         if (!self.flags.contains_packed_data) {
             std.debug.assert(alignment.check(@intFromPtr(slice_bytes.ptr)));
@@ -212,12 +210,12 @@ pub const ByteBuffer = struct {
         if (self.ref_count == 0) {
             switch (self.source_type) {
                 .buffer => self.source.buffer.release(),
-                .string => php.release(self.source.string),
+                .string => self.source.string.release(),
                 .allocator => self.source.allocator.rawFree(self.bytes, self.alignment, 0),
-                .php => php.allocator.rawFree(self.bytes, self.alignment, 0),
+                .php => php_al.rawFree(self.bytes, self.alignment, 0),
                 .none => {},
             }
-            php.allocator.destroy(self);
+            php_al.destroy(self);
         }
     }
 
@@ -247,20 +245,21 @@ pub const ByteBuffer = struct {
                 .base64 => {
                     const encoder = std.base64.url_safe_no_pad.Encoder;
                     const base64_len = encoder.calcSize(bytes.len);
-                    const str = php.createStringWithLength(base64_len);
-                    const dest = @constCast(php.getStringContent(str));
+                    const str: *String = .createUnitialized(base64_len);
+                    const dest = @constCast(str.slice());
                     _ = encoder.encode(dest, bytes);
                     dest.ptr[base64_len] = 0;
                     return str;
                 },
             }
         }
-        return php.createString(bytes);
+        return .create(bytes);
     }
 
-    pub fn copyString(self: *@This(), str: *String, encoding: ?Encoding) !void {
+    pub fn copyString(self: *@This(), str_og: *StringOG, encoding: ?Encoding) !void {
+        const str: *String = @ptrCast(str_og);
         const bytes = try self.data(0, true);
-        const sc = php.getStringContent(str);
+        const sc = str.slice();
         if (encoding) |ec| {
             switch (ec) {
                 .base64 => {
@@ -287,7 +286,7 @@ pub const ByteBuffer = struct {
         switch (self.source_type) {
             .buffer => return self.source.buffer.getMaximumExtent(),
             .string => {
-                const sc = php.getStringContent(self.source.string);
+                const sc = self.source.string.slice();
                 return .{ .address = @intFromPtr(sc.ptr), .len = sc.len };
             },
             .php, .allocator => {
@@ -401,7 +400,7 @@ pub const ByteBuffer = struct {
 pub const BufferMap = struct {
     map: Map = .{},
 
-    const Map = memory_map.MemoryMap(*ByteBuffer, php.allocator);
+    const Map = memory_map.MemoryMap(*ByteBuffer, php_al);
     const SearchResult = memory_map.SearchResult;
 
     pub fn deinit(self: *@This()) void {

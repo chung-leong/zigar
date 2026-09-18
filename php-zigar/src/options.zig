@@ -7,11 +7,8 @@ const extension = @import("extension.zig");
 const failure = @import("failure.zig");
 const LoopType = @import("event-loop.zig").LoopType;
 const php = @import("php.zig");
-const HashTable = php.HashTable;
-const HashTableIterator = php.HashTableIterator;
-const IniEntry = php.IniEntry;
+const IniEntryOG = php.IniEntry;
 const StringOG = php.String;
-const ValueOG = php.Value;
 const php_ng = @import("php-new.zig");
 const castTo = php_ng.castTo;
 const Dictionary = php_ng.Dictionary;
@@ -364,63 +361,63 @@ pub const Options = struct {
         };
     }
 
-    pub fn onUpdateBool(ini_intry: [*c]IniEntry, new_value_og: [*c]StringOG, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
+    pub fn onUpdateBool(ini_intry: [*c]IniEntryOG, new_value_og: [*c]StringOG, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
         const new_value = castTo(String, new_value_og);
         const name = castTo(String, ini_intry.*.name);
         extension.options.setValueAt(bool, name, @intFromPtr(mh_arg1), new_value);
         return php.SUCCESS;
     }
 
-    pub fn onUpdateOptionalBool(ini_intry: [*c]IniEntry, new_value_og: [*c]StringOG, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
+    pub fn onUpdateOptionalBool(ini_intry: [*c]IniEntryOG, new_value_og: [*c]StringOG, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
         const new_value = castTo(String, new_value_og);
         const name = castTo(String, ini_intry.*.name);
         extension.options.setValueAt(?bool, name, @intFromPtr(mh_arg1), new_value);
         return php.SUCCESS;
     }
 
-    pub fn onUpdateLong(ini_intry: [*c]IniEntry, new_value_og: [*c]StringOG, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
+    pub fn onUpdateLong(ini_intry: [*c]IniEntryOG, new_value_og: [*c]StringOG, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
         const new_value = castTo(String, new_value_og);
         const name = castTo(String, ini_intry.*.name);
         extension.options.setValueAt(c_long, name, @intFromPtr(mh_arg1), new_value);
         return php.SUCCESS;
     }
 
-    pub fn onUpdateOptionalLong(ini_intry: [*c]IniEntry, new_value_og: [*c]StringOG, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
+    pub fn onUpdateOptionalLong(ini_intry: [*c]IniEntryOG, new_value_og: [*c]StringOG, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
         const new_value = castTo(String, new_value_og);
         const name = castTo(String, ini_intry.*.name);
         extension.options.setValueAt(?c_long, name, @intFromPtr(mh_arg1), new_value);
         return php.SUCCESS;
     }
 
-    pub fn onUpdateString(ini_intry: [*c]IniEntry, new_value_og: [*c]StringOG, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
+    pub fn onUpdateString(ini_intry: [*c]IniEntryOG, new_value_og: [*c]StringOG, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
         const new_value = castTo(String, new_value_og);
         const name = castTo(String, ini_intry.*.name);
         extension.options.setValueAt([:0]const u8, name, @intFromPtr(mh_arg1), new_value);
         return php.SUCCESS;
     }
 
-    pub fn onUpdateArch(ini_intry: [*c]IniEntry, new_value_og: [*c]StringOG, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
+    pub fn onUpdateArch(ini_intry: [*c]IniEntryOG, new_value_og: [*c]StringOG, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
         const new_value = castTo(String, new_value_og);
         const name = castTo(String, ini_intry.*.name);
         extension.options.setValueAt(Arch, name, @intFromPtr(mh_arg1), new_value);
         return php.SUCCESS;
     }
 
-    pub fn onUpdatePlatform(ini_intry: [*c]IniEntry, new_value_og: [*c]StringOG, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
+    pub fn onUpdatePlatform(ini_intry: [*c]IniEntryOG, new_value_og: [*c]StringOG, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
         const new_value = castTo(String, new_value_og);
         const name = castTo(String, ini_intry.*.name);
         extension.options.setValueAt(Platform, name, @intFromPtr(mh_arg1), new_value);
         return php.SUCCESS;
     }
 
-    pub fn onUpdateOptimize(ini_intry: [*c]IniEntry, new_value_og: [*c]StringOG, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
+    pub fn onUpdateOptimize(ini_intry: [*c]IniEntryOG, new_value_og: [*c]StringOG, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
         const new_value = castTo(String, new_value_og);
         const name = castTo(String, ini_intry.*.name);
         extension.options.setValueAt(Optimize, name, @intFromPtr(mh_arg1), new_value);
         return php.SUCCESS;
     }
 
-    pub fn onUpdateLoopType(ini_intry: [*c]IniEntry, new_value_og: [*c]StringOG, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
+    pub fn onUpdateLoopType(ini_intry: [*c]IniEntryOG, new_value_og: [*c]StringOG, mh_arg1: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque, _: c_int) callconv(.c) c_int {
         const new_value = castTo(String, new_value_og);
         const name = castTo(String, ini_intry.*.name);
         const text = new_value.slice();

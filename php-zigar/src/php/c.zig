@@ -4,13 +4,13 @@ const builtin = @import("builtin");
 const pd = @import("c");
 pub const declarations = pd;
 
-// on Windows, we link symbols in PHP DLL manually
 pub const pi = switch (builtin.target.os.tag) {
+    // on Windows, we link symbols in PHP DLL manually
     .windows => @import("c-win32.zig"),
     else => pd,
 };
-
 pub const imports = pi;
+pub const use_tsrm = @hasDecl(pd, "ZTS");
 
 // while function pointer dereference automatically, manually linked data variables
 // need to be dereferenced manually
@@ -22,6 +22,16 @@ pub inline fn deref(arg: anytype) switch (builtin.target.os.tag) {
         .windows => arg.*,
         else => arg,
     };
+}
+
+pub inline fn globals(comptime name: []const u8) *@field(pd, "zend_" ++ name ++ "_globals") {
+    if (use_tsrm) {
+        const cache_address = @intFromPtr(pi.tsrm_get_ls_cache());
+        const offset = deref(@field(pi, name ++ "_globals_offset"));
+        return @ptrFromInt(cache_address + offset);
+    } else {
+        return deref(&@field(pi, name ++ "_globals"));
+    }
 }
 
 // TODO: just use @ptrCast() once code is more or less done to reduce amount of comptime calculations
@@ -76,7 +86,7 @@ pub extern fn get_stream_handlers(*const pd.php_stream) *const pd.php_stream_ops
 pub extern fn get_stream_mode(*const pd.php_stream) ?[*:0]const u8;
 pub extern fn get_stream_wrapper_data(*const pd.php_stream) *pd.zval;
 pub extern fn get_stream_wrapper(*const pd.php_stream) *pd.php_stream_wrapper;
-pub extern fn set_stream_wrapper(*pd.php_stream, pd.php_stream_wrapper) void;
+pub extern fn set_stream_wrapper(*pd.php_stream, *const pd.php_stream_wrapper) void;
 pub extern fn set_stream_no_close(*pd.php_stream) void;
 pub extern fn is_stdio_stream(*const pd.php_stream) bool;
 pub extern fn get_argument_info(*const pd.zend_execute_data, *ArgPtrCountExtra) void;

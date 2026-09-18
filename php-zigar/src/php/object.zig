@@ -8,6 +8,9 @@ const deref = c.deref;
 const castTo = c.castTo;
 const castFrom = c.castFrom;
 const ClassEntry = @import("class-entry.zig").ClassEntry;
+const efree = @import("allocator.zig").efree;
+const failure = @import("failure.zig");
+const Function = @import("function.zig").Function;
 const String = @import("string.zig").String;
 const unsupported = @import("failure.zig").unsupported;
 const Value = @import("value.zig").Value;
@@ -105,11 +108,12 @@ pub const Object = struct {
 
     pub fn getProperty(self: *const @This(), name: anytype) !Value {
         const zobj = @constCast(&self.impl);
-        const n: Value = .fromString(.createFromAny(name));
+        const n: *String = .createFromAny(name);
         defer n.release();
         var value: Value = undefined;
-        const zn = castFrom(Value, &n);
-        const result = pi.zend_read_property_ex(zobj.ce, zobj, zn, true, &value);
+        const zn = castFrom(String, n);
+        const zval: *pd.zval = @ptrCast(&value);
+        const result = pi.zend_read_property_ex(zobj.ce, zobj, zn, true, zval);
         if (result != pd.SUCCESS) return error.Missing;
         return value;
     }
@@ -125,6 +129,50 @@ pub const Object = struct {
         return deref(&pi.std_object_handlers).?;
     }
 
+    pub fn MethodCallCache(comptime names: anytype) type {
+        const Entries = init: {
+            var field_names: [names.len][]const u8 = undefined;
+            var field_types: [names.len]type = undefined;
+            var field_attrs: [names.len]std.lang.Type.Struct.FieldAttributes = undefined;
+            inline for (names, 0..) |name, i| {
+                field_names[i] = @tagName(name);
+                field_types[i] = Function.CallCache;
+                field_attrs[i] = .{};
+            }
+            break :init @Struct(.auto, null, &field_names, &field_types, &field_attrs);
+        };
+        return struct {
+            pub fn init(context: *const Value) !@This() {
+                var entries: Entries = undefined;
+                const field_names = comptime std.meta.fieldNames(Entries);
+                var init_count: usize = 0;
+                errdefer {
+                    inline for (0..field_names.len) |i| {
+                        if (i == init_count) break;
+                        @field(entries, field_names[i]).deinit();
+                    }
+                }
+                var arr = .init(null);
+                defer arr.deinit();
+                arr.set(0, context);
+                const callable = arr.toValue();
+                inline for (field_names) |field_name| {
+                    const name: Value = .fromStaticString(field_name);
+                    arr.set(1, &name);
+                    @field(entries, field_name) = try .init(&callable);
+                    init_count += 1;
+                }
+                return .{ .method = entries };
+            }
+
+            pub fn deinit(self: *@This()) void {
+                const field_names = comptime std.meta.fieldNames(Entries);
+                inline for (field_names) |field_name| @field(self.method, field_name).deinit();
+            }
+
+            method: Entries,
+        };
+    }
     pub const Handlers = c.zend_object_handlers;
     const Key = struct {
         pub fn createFromAny(arg: anytype) @This() {

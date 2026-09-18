@@ -8,11 +8,11 @@ const CallDispatcher = @import("../dispatch.zig").CallDispatcher;
 const failure = @import("../failure.zig");
 const Generator = @import("../generator.zig").Generator;
 const ZigObject = @import("../object.zig").ZigObject;
+const php_ng = @import("../php-new.zig");
 const php = @import("../php.zig");
 const ArgumentIterator = php.ArgumentIterator;
 const ClassEntry = php.ClassEntry;
 const ExecuteData = php.ExecuteData;
-const FunctionCallCache = php.FunctionCallCache;
 const HashTable = php.HashTable;
 const Object = php.Object;
 const String = php.String;
@@ -88,7 +88,7 @@ pub const Function = struct {
             return this_obj.ce == arg_class.entry() and this_obj != arg_class.object;
         }
 
-        pub fn runCallback(self: *@This(), call_cache: *FunctionCallCache, arg_bytes: []u8, futex_handle: usize) !void {
+        pub fn runCallback(self: *@This(), call_cache: *php_ng.Function.CallCache, arg_bytes: []u8, futex_handle: usize) !void {
             // need to make a copy of the arguments, since arg_bytes are on the stack
             const arg_buffer = try ByteBuffer.create(self.argument_class.alignment);
             defer arg_buffer.release();
@@ -111,23 +111,25 @@ pub const Function = struct {
             var named_args: ?*HashTable = null;
             try arg_struct.extractNamedArguments(arg_info, &named_args);
             defer if (named_args) |ht| php.release(ht);
-            call_cache.useNamedArguments(named_args);
+            const named_args_ng: ?*php_ng.Array = if (named_args) |na| @ptrCast(na) else null;
+            call_cache.useNamedArguments(named_args_ng);
             if (arg_struct.hasAsyncCallback()) {
                 // wake the calling thread prior to invoking the callback (which could potentially
                 // switch to a different fiber) when we have a promise or generator interface
                 CallDispatcher.releaseCallingThread(futex_handle, .SUCCESS);
             }
-            const result = call_cache.invoke(args) catch |err| get: {
+            const args_ng: []const php_ng.Value = @ptrCast(args);
+            const result_ng = call_cache.invoke(args_ng) catch |err| get: {
                 const ex = php.captureException() catch throw: {
                     _ = &php.throwError(err);
                     break :throw php.captureException() catch unreachable;
                 };
-                break :get php.createValueObject(ex);
+                break :get php_ng.Value.fromObject(@ptrCast(ex));
             };
-            defer php.release(&result);
+            defer result_ng.release();
             if (arg_struct.hasAsyncCallback()) {
                 // hand the value to the promise or generator
-                arg_struct.sendReturnValue(&result) catch |err| {
+                arg_struct.sendReturnValue(@ptrCast(&result_ng)) catch |err| {
                     php.triggerWarning(err);
                 };
                 return error.EarlyRelease;
@@ -136,7 +138,7 @@ pub const Function = struct {
                 var stack_buffer: ByteBuffer = .init(arg_bytes);
                 arg_struct.buffer = &stack_buffer;
                 defer arg_struct.buffer = arg_buffer;
-                try arg_struct.setReturnValue(&result);
+                try arg_struct.setReturnValue(@ptrCast(&result_ng));
             }
         }
     };
@@ -190,7 +192,8 @@ pub const Function = struct {
             if (static.argument_class.type == .variadic_struct) {
                 return failure.report("variadic function pointer cannot point to a PHP function", .{});
             }
-            try class.host.dispatcher.createJsThunk(class, @constCast(value), self.buffer);
+            const value_ng = @as(*const php_ng.Value, @ptrCast(value)).*;
+            try class.host.dispatcher.createJsThunk(class, value_ng, self.buffer);
         } else {
             return error.Unsupported;
         }

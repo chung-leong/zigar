@@ -15,6 +15,7 @@ const Object = php.Object;
 const ObjectHandlers = php.ObjectHandlers;
 const String = php.String;
 const Value = php.Value;
+const php_ng = @import("php-new.zig");
 const structure = @import("structure.zig");
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 
@@ -201,7 +202,8 @@ pub const SpecialExports = struct {
             .stderr => 2,
             .root => -1,
         };
-        self.host.dispatcher.redirectStream(fd, arg1) catch |err| {
+        const arg1_new = @as(*php_ng.Value, @ptrCast(arg1)).*;
+        self.host.dispatcher.redirectStream(fd, arg1_new) catch |err| {
             if (err == error.NotString) {
                 const arg1_d = php.createValueDebug(arg1);
                 defer php.release(&arg1_d);
@@ -260,7 +262,7 @@ pub const SpecialExports = struct {
             .env => {
                 const arg1 = arg_iter.next() orelse return error.NotArrayOrObject;
                 const ht = try php.getValueHashTable(arg1);
-                try self.host.dispatcher.setEnvironmentVariables(ht);
+                try self.host.dispatcher.setEnvironmentVariables(@ptrCast(ht));
             },
         }
     }
@@ -273,7 +275,7 @@ pub const SpecialExports = struct {
         const arg0 = arg_iter.next().?;
         const strm = try php.getValueStream(arg0);
         const is_dir = if (arg_iter.next()) |arg1| try php.getValueBool(arg1) else false;
-        const fd = try self.host.dispatcher.addStream(strm, is_dir);
+        const fd = try self.host.dispatcher.addStream(@ptrCast(strm), is_dir);
         retval.* = php.createValueLong(fd);
     }
 

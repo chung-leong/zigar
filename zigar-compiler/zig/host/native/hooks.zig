@@ -1,19 +1,20 @@
 const std = @import("std");
 const c_allocator = std.heap.c_allocator;
 const POLL = std.c.POLL;
-const pollfd = switch (builtin.target.os.tag) {
-    .windows => c_int,
-    else => std.c.pollfd,
-};
 const nfds_t = std.c.nfds_t;
 const builtin = @import("builtin");
 
 const c = @import("c");
 const off_t = c.off_t;
-const off64_t = if (@hasDecl(c, "off64_t")) c.off64_t else c.off_t;
 
 const io = @import("../../system.zig").io;
 const fn_transform = @import("../../zigft/fn-transform.zig");
+
+const pollfd = switch (builtin.target.os.tag) {
+    .windows => c_int,
+    else => std.c.pollfd,
+};
+const off64_t = if (@hasDecl(c, "off64_t")) c.off64_t else c.off_t;
 
 const size_t = usize;
 const ssize_t = isize;
@@ -120,7 +121,7 @@ pub const Syscall = extern struct {
         },
         pread: extern struct {
             fd: i32,
-            bytes: [*]const u8,
+            bytes: [*]u8,
             len: u32,
             offset: u64,
             read: u32 = undefined,
@@ -148,14 +149,14 @@ pub const Syscall = extern struct {
         },
         read: extern struct {
             fd: i32,
-            bytes: [*]const u8,
+            bytes: [*]u8,
             len: u32,
             read: u32 = undefined,
         },
         readlink: extern struct {
             dirfd: i32,
             path: [*:0]const u8,
-            bytes: [*]const u8,
+            bytes: [*]u8,
             len: u32,
             read: u32 = undefined,
         },

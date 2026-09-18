@@ -667,7 +667,7 @@ pub const Struct = struct {
             }
         } else {
             // not a real file/dir--create a virtual descriptor
-            if (class.host.dispatcher.addStream(strm, is_dir) catch null) |fd| {
+            if (class.host.dispatcher.addStream(@ptrCast(strm), is_dir) catch null) |fd| {
                 if (builtin.target.os.tag == .windows) {
                     // the fake win32 handle for a virtual file is its descriptor left-shifted by 1
                     const address: usize = @intCast(fd);

@@ -5,16 +5,16 @@ const pd = c.declarations;
 const pi = c.imports;
 const argCount = c.argCount;
 
-pub fn emalloc(size: usize, comptime src: std.builtin.SourceLocation) ?*anyopaque {
+pub fn emalloc(size: usize, comptime src: std.builtin.SourceLocation) [*]u8 {
     const ptr = switch (comptime argCount(@TypeOf(pi._emalloc))) {
         5 => pi._emalloc(size, src.file, src.line, null, 0),
         1 => pi._emalloc(size),
         else => @compileError("Unexpected _emalloc argument count"),
     };
-    return ptr;
+    return @ptrCast(ptr);
 }
 
-pub fn efree(ptr: ?*anyopaque, comptime src: std.builtin.SourceLocation) void {
+pub fn efree(ptr: *anyopaque, comptime src: std.builtin.SourceLocation) void {
     switch (comptime argCount(@TypeOf(pi._efree))) {
         5 => pi._efree(ptr, src.file, src.line, null, 0),
         1 => pi._efree(ptr),
@@ -30,20 +30,21 @@ pub fn estrdup(s: [*:0]const u8, comptime src: std.builtin.SourceLocation) [*:0]
     };
 }
 
-pub fn malloc(size: usize) ?*anyopaque {
+pub fn malloc(size: usize) [*]u8 {
     const src = @src();
-    return switch (comptime argCount(@TypeOf(pi.__zend_malloc))) {
+    const ptr = switch (comptime argCount(@TypeOf(pi.__zend_malloc))) {
         5 => pi.__zend_malloc(size, src.file, src.line + 1, null, 0),
         1 => pi.__zend_malloc(size),
         else => @compileError("Unexpected __zend_malloc argument count"),
     };
+    return @ptrCast(ptr);
 }
 
 pub fn free(ptr: ?*anyopaque) void {
     c.free(ptr);
 }
 
-pub const instance: std.mem.Allocator = .{
+pub const allocator: std.mem.Allocator = .{
     .ptr = undefined,
     .vtable = &allocator_impl.vtable,
 };

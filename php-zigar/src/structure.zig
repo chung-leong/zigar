@@ -201,7 +201,8 @@ pub fn Parent(comptime S: type) type {
                         else => unreachable,
                     };
                     const str = try self.buffer.getString(encoding);
-                    return php.createValueString(str);
+                    const str_og: *String = @ptrCast(str);
+                    return php.createValueString(str_og);
                 },
                 .plain, .clamped_array, .typed_array => return error.Unsupported,
                 .none => {
@@ -667,7 +668,8 @@ pub fn ArrayLike(comptime S: type) type {
                             .string => {
                                 // return the original string if possible
                                 const str = self.buffer.source.string;
-                                if (str.len == len) return php.createValueString(php.reuse(str));
+                                const str_og: *String = @ptrCast(str);
+                                if (str.length() == len) return php.createValueString(php.reuse(str_og));
                             },
                             else => {},
                         }
