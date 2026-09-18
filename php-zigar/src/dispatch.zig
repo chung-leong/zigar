@@ -984,8 +984,8 @@ pub const CallDispatcher = struct {
         var start: usize = 0;
         for (path, 0..) |char, i| {
             if (char == ':') {
-                if (path[i + 1] == '/') {
-                    if (path[i + 2] == '/') {
+                if (i < path.len - 1 and path[i + 1] == '/') {
+                    if (i < path.len - 2 and path[i + 2] == '/') {
                         return php.createString(path[start..]);
                     } else {
                         // assume the '//' in 'protocol://host' got replaced by a single slash
