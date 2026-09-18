@@ -1,0 +1,13 @@
+.{
+    .name = .zig,
+    .version = "0.0.1",
+    .dependencies = .{
+        .libqt6zig = .{
+            .url = "git+https://github.com/rcalixte/libqt6zig#dafa055b268b0686d4db217d41476d3ce8baddd6",
+            .hash = "libqt6zig-6.8.2-OSXtXKzb_R8VaOg7C43TuPI5V8yZLl5GU6U1vm3dXGoi",
+        },
+    },
+    .minimum_zig_version = "0.17.0-dev.2085+5e36170b5",
+    .paths = .{""},
+    .fingerprint = 0xc1ce1081206d6524,
+}
