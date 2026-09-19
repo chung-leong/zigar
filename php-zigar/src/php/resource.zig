@@ -1,8 +1,8 @@
 pub const std = @import("std");
 
-const c = @import("c.zig");
-const pd = c.declarations;
-const pi = c.imports;
+const php = @import("root.zig");
+const c = php.c;
+const pi = php.imports;
 
 pub const Resource = struct {
     pub fn retain(self: *@This()) *@This() {
@@ -23,5 +23,5 @@ pub const Resource = struct {
         self.impl.gc.refcount -= 1;
     }
 
-    impl: pd.zend_resource,
+    impl: c.zend_resource,
 };

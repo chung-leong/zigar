@@ -1,12 +1,12 @@
 pub const std = @import("std");
 
-const c = @import("c.zig");
-const pd = c.declarations;
-const pi = c.imports;
-const deref = c.deref;
-const emalloc = @import("allocator.zig").emalloc;
-const unsupported = @import("failure.zig").unsupported;
-const Value = @import("value.zig").Value;
+const php = @import("root.zig");
+const c = php.c;
+const pi = php.imports;
+const deref = php.deref;
+const emalloc = php.emalloc;
+const unsupported = php.failure.unsupported;
+const Value = php.Value;
 
 pub const String = struct {
     pub fn slice(self: *const @This()) [:0]const u8 {
@@ -20,7 +20,7 @@ pub const String = struct {
     }
 
     pub fn isInterned(self: *const @This()) bool {
-        return (self.impl.gc.u.type_info & pd.IS_STR_INTERNED) != 0;
+        return (self.impl.gc.u.type_info & c.IS_STR_INTERNED) != 0;
     }
 
     pub fn isCopyOnWrite(self: *const @This()) bool {
@@ -46,12 +46,12 @@ pub const String = struct {
         return switch (len) {
             0 => @ptrCast(deref(pi.zend_empty_string)),
             else => create: {
-                const struct_size = @offsetOf(pd.zend_string, "val") + len + 1;
-                const aligned_size = std.mem.alignForward(usize, struct_size, pd.ZEND_MM_ALIGNMENT);
+                const struct_size = @offsetOf(c.zend_string, "val") + len + 1;
+                const aligned_size = std.mem.alignForward(usize, struct_size, c.ZEND_MM_ALIGNMENT);
                 const bytes = emalloc(aligned_size, @src());
-                const zs: *pd.zend_string = @ptrCast(@alignCast(bytes));
+                const zs: *c.zend_string = @ptrCast(@alignCast(bytes));
                 zs.* = .{
-                    .gc = .{ .refcount = 1, .u = .{ .type_info = pd.GC_STRING } },
+                    .gc = .{ .refcount = 1, .u = .{ .type_info = c.GC_STRING } },
                     .h = 0,
                     .len = len,
                 };
@@ -135,12 +135,12 @@ pub const String = struct {
         var long: c_long = undefined;
         var double: f64 = undefined;
         const result = if (s[0] > '9')
-            pd.IS_UNDEF
+            c.IS_UNDEF
         else
             pi._is_numeric_string_ex(s.ptr, s.len, &long, &double, false, null, null);
         return switch (result) {
-            pd.IS_LONG => .{ .integer = long },
-            pd.IS_DOUBLE => .{ .float = double },
+            c.IS_LONG => .{ .integer = long },
+            c.IS_DOUBLE => .{ .float = double },
             else => error.NotNumeric,
         };
     }
@@ -162,7 +162,7 @@ pub const String = struct {
                 .gc = .{
                     .refcount = 0,
                     .u = .{
-                        .type_info = pd.IS_STRING | pd.IS_STR_PERMANENT | pd.IS_STR_INTERNED | pd.GC_NOT_COLLECTABLE,
+                        .type_info = c.IS_STRING | c.IS_STR_PERMANENT | c.IS_STR_INTERNED | c.GC_NOT_COLLECTABLE,
                     },
                 },
                 .h = calculateHash(s),
@@ -196,12 +196,12 @@ pub const String = struct {
 
     fn StringWithLength(comptime len: usize) type {
         return extern struct {
-            gc: pd.zend_refcounted_h = undefined,
-            h: pd.zend_ulong = undefined,
+            gc: c.zend_refcounted_h = undefined,
+            h: c.zend_ulong = undefined,
             len: usize = len,
             val: [len + 1]u8 = undefined,
         };
     }
 
-    impl: pd.zend_string,
+    impl: c.zend_string,
 };

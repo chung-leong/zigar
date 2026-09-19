@@ -1,9 +1,10 @@
 pub const std = @import("std");
 
-const Array = @import("array.zig").Array;
-const Object = @import("object.zig").Object;
-const String = @import("string.zig").String;
-const Value = @import("value.zig").Value;
+const php = @import("root.zig");
+const Array = php.Array;
+const Object = php.Object;
+const String = php.String;
+const Value = php.Value;
 
 pub const Dictionary = union(enum) {
     pub fn addRef(self: *@This()) void {

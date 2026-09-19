@@ -7,7 +7,7 @@ const extension = @import("extension.zig");
 const failure = @import("failure.zig");
 const io = @import("system.zig").io;
 const Options = @import("options.zig").Options;
-const php_ng = @import("php-new.zig");
+const php_ng = @import("php/root.zig");
 const php_al = php_ng.allocator;
 const Dictionary = php_ng.Dictionary;
 

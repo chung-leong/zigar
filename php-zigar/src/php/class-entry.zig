@@ -1,10 +1,10 @@
 pub const std = @import("std");
 
-const c = @import("c.zig");
-const pd = c.declarations;
-const pi = c.imports;
-const String = @import("string.zig").String;
-const Value = @import("value.zig").Value;
+const php = @import("root.zig");
+const c = php.c;
+const pi = php.imports;
+const String = php.String;
+const Value = php.Value;
 
 pub const ClassEntry = struct {
     pub fn find(name: anytype) ?*@This() {
@@ -14,5 +14,5 @@ pub const ClassEntry = struct {
         return @ptrCast(zce);
     }
 
-    impl: pd.zend_class_entry,
+    impl: c.zend_class_entry,
 };

@@ -1,16 +1,37 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const pd = @import("c");
-pub const declarations = pd;
+pub const c = @import("c");
 
-pub const pi = switch (builtin.target.os.tag) {
+pub const allocator = @import("allocator.zig").allocator;
+pub const Array = @import("array.zig").Array;
+pub const Callable = @import("callable.zig").Callable;
+pub const ClassEntry = @import("class-entry.zig").ClassEntry;
+pub const Closure = @import("closure.zig").Closure;
+pub const Dictionary = @import("dictionary.zig").Dictionary;
+pub const efree = @import("allocator.zig").efree;
+pub const emalloc = @import("allocator.zig").emalloc;
+pub const failure = @import("failure.zig");
+pub const free = @import("allocator.zig").efree;
+pub const Function = @import("function.zig").Function;
+pub const malloc = @import("allocator.zig").emalloc;
+pub const Object = @import("object.zig").Object;
+pub const Reference = @import("reference.zig").Reference;
+pub const Resource = @import("resource.zig").Resource;
+pub const Stream = @import("stream.zig").Stream;
+pub const String = @import("string.zig").String;
+pub const Value = @import("value.zig").Value;
+
+pub const use_tsrm = @hasDecl(c, "ZTS");
+pub const imports = switch (builtin.target.os.tag) {
     // on Windows, we link symbols in PHP DLL manually
-    .windows => @import("c-win32.zig"),
-    else => pd,
+    .windows => @import("win32-imports.zig"),
+    else => c,
 };
-pub const imports = pi;
-pub const use_tsrm = @hasDecl(pd, "ZTS");
+pub const linkWindowsImports = switch (builtin.target.os.tag) {
+    .windows => imports.link,
+    else => {},
+};
 
 // while function pointer dereference automatically, manually linked data variables
 // need to be dereferenced manually
@@ -24,13 +45,13 @@ pub inline fn deref(arg: anytype) switch (builtin.target.os.tag) {
     };
 }
 
-pub inline fn globals(comptime name: []const u8) *@field(pd, "zend_" ++ name ++ "_globals") {
+pub inline fn globals(comptime name: []const u8) *@field(c, "zend_" ++ name ++ "_globals") {
     if (use_tsrm) {
-        const cache_address = @intFromPtr(pi.tsrm_get_ls_cache());
-        const offset = deref(@field(pi, name ++ "_globals_offset"));
+        const cache_address = @intFromPtr(imports.tsrm_get_ls_cache());
+        const offset = deref(@field(imports, name ++ "_globals_offset"));
         return @ptrFromInt(cache_address + offset);
     } else {
-        return deref(&@field(pi, name ++ "_globals"));
+        return deref(&@field(imports, name ++ "_globals"));
     }
 }
 
@@ -61,22 +82,3 @@ pub fn argCount(comptime Func: type) usize {
         else => @compileError("Not a function or function pointer"),
     };
 }
-
-pub extern fn set_zval_stream(*pd.zval, *const pd.php_stream) void;
-pub extern fn get_stream_context(*const pd.php_stream) ?*pd.php_stream_context;
-pub extern fn get_stream_resource(*const pd.php_stream) *pd.zend_resource;
-pub extern fn get_stream_path(*const pd.php_stream) ?[*:0]const u8;
-pub extern fn get_stream_flags(*const pd.php_stream) u32;
-pub extern fn get_stream_handlers(*const pd.php_stream) *const pd.php_stream_ops;
-pub extern fn get_stream_mode(*const pd.php_stream) ?[*:0]const u8;
-pub extern fn get_stream_wrapper_data(*const pd.php_stream) *pd.zval;
-pub extern fn get_stream_wrapper(*const pd.php_stream) *pd.php_stream_wrapper;
-pub extern fn set_stream_wrapper(*pd.php_stream, *const pd.php_stream_wrapper) void;
-pub extern fn set_stream_no_close(*pd.php_stream) void;
-pub extern fn is_stdio_stream(*const pd.php_stream) bool;
-pub extern fn get_argument_info(*const pd.zend_execute_data, *ArgPtrCountExtra) void;
-pub const ArgPtrCountExtra = extern struct {
-    ptr: [*]pd.zval,
-    len: usize,
-    extra: bool,
-};

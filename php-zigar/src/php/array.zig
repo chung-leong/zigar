@@ -1,11 +1,11 @@
 pub const std = @import("std");
 
-const c = @import("c.zig");
-const pd = c.declarations;
-const pi = c.imports;
-const String = @import("string.zig").String;
-const unsupported = @import("failure.zig").unsupported;
-const Value = @import("value.zig").Value;
+const php = @import("root.zig");
+const c = php.c;
+const pi = php.imports;
+const String = php.String;
+const unsupported = php.failure.unsupported;
+const Value = php.Value;
 
 pub const Array = struct {
     pub fn length(self: *const @This()) usize {
@@ -27,14 +27,14 @@ pub const Array = struct {
 
     pub fn isAssociative(self: *const @This()) bool {
         const ht = &self.impl;
-        if (ht.u.flags & pd.HASH_FLAG_PACKED != 0) return false;
+        if (ht.u.flags & c.HASH_FLAG_PACKED != 0) return false;
         return for (0..ht.nNumUsed) |i| {
-            const p = switch (@hasField(pd.zend_array, "arData")) {
+            const p = switch (@hasField(c.zend_array, "arData")) {
                 // in newer version of PHP, the field is stored in an unnamed union
                 false => ht.unnamed_0.arData[i],
                 true => ht.arData[i],
             };
-            if (p.val.u1.v.type != pd.IS_UNDEF and p.key == null) break false;
+            if (p.val.u1.v.type != c.IS_UNDEF and p.key == null) break false;
         } else true;
     }
 
@@ -44,8 +44,8 @@ pub const Array = struct {
     }
 
     pub fn createNonDestructive() *@This() {
-        const bytes = pi.emalloc(@sizeOf(pd.zend_array), @src());
-        const ht: *pd.zend_array = @ptrCast(@alignCast(bytes));
+        const bytes = pi.emalloc(@sizeOf(c.zend_array), @src());
+        const ht: *c.zend_array = @ptrCast(@alignCast(bytes));
         pi._zend_hash_init(ht, c.HT_MIN_SIZE, null, false);
         return @ptrCast(ht);
     }
@@ -89,7 +89,7 @@ pub const Array = struct {
 
     pub fn set(self: *@This(), key: anytype, value: *const Value) void {
         const ht = &self.impl;
-        const zval: *pd.zval = @ptrCast(@constCast(value));
+        const zval: *c.zval = @ptrCast(@constCast(value));
         _ = switch (Key.fromAny(key)) {
             .integer => |i| pi.zend_hash_index_update(ht, i, zval),
             .string => |s| pi.zend_hash_update(ht, s, zval),
@@ -109,12 +109,12 @@ pub const Array = struct {
             .string => |s| pi.zend_hash_del(ht, s),
             .slice => |s| pi.zend_hash_str_del(ht, s.ptr, s.len),
         };
-        return result == pd.SUCCESS;
+        return result == c.SUCCESS;
     }
 
     pub fn append(self: *@This(), value: *const Value) void {
         const ht = &self.impl;
-        ht.*.u.flags |= pd.HASH_FLAG_ALLOW_COW_VIOLATION;
+        ht.*.u.flags |= c.HASH_FLAG_ALLOW_COW_VIOLATION;
         _ = pi.zend_hash_next_index_insert(ht, @ptrCast(value));
         value.addRef();
     }
@@ -128,8 +128,8 @@ pub const Array = struct {
     }
 
     pub const Iterator = struct {
-        ht: *pd.zend_array,
-        pos: pd.HashPosition,
+        ht: *c.zend_array,
+        pos: c.HashPosition,
         options: Options,
         len: usize,
         key_value: ?Value = undefined,
@@ -140,7 +140,7 @@ pub const Array = struct {
         };
 
         pub fn init(array: *const Array, options: Options) @This() {
-            var pos: pd.HashPosition = undefined;
+            var pos: c.HashPosition = undefined;
             const ht = @constCast(&array.impl);
             switch (options.dir) {
                 .forward => pi.zend_hash_internal_pointer_reset_ex(ht, &pos),
@@ -215,5 +215,5 @@ pub const Array = struct {
         slice: []const u8,
     };
 
-    impl: pd.zend_array,
+    impl: c.zend_array,
 };

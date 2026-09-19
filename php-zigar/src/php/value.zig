@@ -1,21 +1,22 @@
 const std = @import("std");
 
 const Array = @import("array.zig").Array;
-const c = @import("c.zig");
-const pd = c.declarations;
-const pi = c.imports;
-const Callable = @import("callable.zig").Callable;
-const Dictionary = @import("dictionary.zig").Dictionary;
-const Object = @import("object.zig").Object;
-const Resource = @import("resource.zig").Resource;
-const Stream = @import("stream.zig").Stream;
-const String = @import("string.zig").String;
-const unsupported = @import("failure.zig").unsupported;
+const php = @import("root.zig");
+const c = php.c;
+const pi = php.imports;
+const Callable = php.Callable;
+const Dictionary = php.Dictionary;
+const Object = php.Object;
+const Reference = php.Reference;
+const Resource = php.Resource;
+const Stream = php.Stream;
+const String = php.String;
+const unsupported = php.failure.unsupported;
 
 pub const Value = struct {
     pub fn kind(self: *const @This()) Kind {
         return switch (self.impl.u1.v.type) {
-            pd.IS_TRUE => .boolean,
+            c.IS_TRUE => .boolean,
             else => @enumFromInt(self.impl.u1.v.type),
         };
     }
@@ -30,7 +31,7 @@ pub const Value = struct {
     }
 
     pub fn boolean(self: *const @This()) bool {
-        return self.impl.u1.v.type == pd.IS_TRUE;
+        return self.impl.u1.v.type == c.IS_TRUE;
     }
 
     pub fn integer(self: *const @This()) c_long {
@@ -57,6 +58,10 @@ pub const Value = struct {
         return @ptrCast(self.impl.value.res);
     }
 
+    pub fn reference(self: *const @This()) *Reference {
+        return @ptrCast(self.impl.value.ref);
+    }
+
     pub fn retain(self: *const @This()) @This() {
         self.addRef();
         return self.*;
@@ -65,7 +70,7 @@ pub const Value = struct {
     pub fn addRef(self: *const @This()) void {
         const zval = &self.impl;
         // persistent value
-        if (zval.u1.type_info & pd.Z_TYPE_FLAGS_MASK == 0) return;
+        if (zval.u1.type_info & c.Z_TYPE_FLAGS_MASK == 0) return;
         switch (self.kind()) {
             .string => self.string().addRef(),
             .array => self.array().addRef(),
@@ -78,7 +83,7 @@ pub const Value = struct {
     pub fn release(self: *const @This()) void {
         const zval = &self.impl;
         // persistent value
-        if (zval.u1.type_info & pd.Z_TYPE_FLAGS_MASK == 0) return;
+        if (zval.u1.type_info & c.Z_TYPE_FLAGS_MASK == 0) return;
         switch (self.kind()) {
             .string => self.string().release(),
             .array => self.array().release(),
@@ -162,6 +167,13 @@ pub const Value = struct {
         return switch (self.kind()) {
             .resource => self.resource(),
             else => error.NotResource,
+        };
+    }
+
+    pub fn getReference(self: *const @This()) !*Reference {
+        return switch (self.kind()) {
+            .reference => self.resource(),
+            else => error.NotReference,
         };
     }
 
@@ -249,20 +261,20 @@ pub const Value = struct {
 
     pub fn fromNull() @This() {
         return .{
-            .impl = .{ .u1 = .{ .type_info = pd.IS_NULL } },
+            .impl = .{ .u1 = .{ .type_info = c.IS_NULL } },
         };
     }
 
     pub fn fromBool(b: bool) @This() {
         return .{
-            .impl = .{ .u1 = .{ .type_info = if (b) pd.IS_TRUE else pd.IS_FALSE } },
+            .impl = .{ .u1 = .{ .type_info = if (b) c.IS_TRUE else c.IS_FALSE } },
         };
     }
 
     pub fn fromInteger(l: c_long) @This() {
         return .{
             .impl = .{
-                .u1 = .{ .type_info = pd.IS_LONG },
+                .u1 = .{ .type_info = c.IS_LONG },
                 .value = .{ .lval = l },
             },
         };
@@ -275,7 +287,7 @@ pub const Value = struct {
     pub fn fromFloat(d: f64) @This() {
         return .{
             .impl = .{
-                .u1 = .{ .type_info = pd.IS_DOUBLE },
+                .u1 = .{ .type_info = c.IS_DOUBLE },
                 .value = .{ .dval = d },
             },
         };
@@ -286,8 +298,8 @@ pub const Value = struct {
             .impl = .{
                 .u1 = .{
                     .type_info = switch (s.isInterned()) {
-                        false => pd.IS_STRING_EX, // with gc flag
-                        true => pd.IS_STRING,
+                        false => c.IS_STRING_EX, // with gc flag
+                        true => c.IS_STRING,
                     },
                 },
                 .value = .{ .str = @ptrCast(@constCast(s)) },
@@ -298,7 +310,7 @@ pub const Value = struct {
     pub fn fromArray(a: *const Array) @This() {
         return .{
             .impl = .{
-                .u1 = .{ .type_info = pd.IS_ARRAY_EX },
+                .u1 = .{ .type_info = c.IS_ARRAY_EX },
                 .value = .{ .arr = @ptrCast(@constCast(a)) },
             },
         };
@@ -307,7 +319,7 @@ pub const Value = struct {
     pub fn fromObject(o: *const Object) @This() {
         return .{
             .impl = .{
-                .u1 = .{ .type_info = pd.IS_OBJECT_EX },
+                .u1 = .{ .type_info = c.IS_OBJECT_EX },
                 .value = .{ .obj = @ptrCast(@constCast(o)) },
             },
         };
@@ -316,7 +328,7 @@ pub const Value = struct {
     pub fn fromResource(r: *const Resource) @This() {
         return .{
             .impl = .{
-                .u1 = .{ .type_info = pd.IS_RESOURCE },
+                .u1 = .{ .type_info = c.IS_RESOURCE },
                 .value = .{ .res = @ptrCast(@constCast(r)) },
             },
         };
@@ -327,19 +339,19 @@ pub const Value = struct {
     }
 
     pub const Kind = enum(u8) {
-        undefined = pd.IS_UNDEF, // 0
-        null = pd.IS_NULL, // 1
-        boolean = pd.IS_FALSE, // 2
-        integer = pd.IS_LONG, // 4
-        float = pd.IS_DOUBLE, // 5
-        string = pd.IS_STRING, // 6
-        array = pd.IS_ARRAY, // 7
-        object = pd.IS_OBJECT, // 8
-        resource = pd.IS_RESOURCE, // 9
-        reference = pd.IS_REFERENCE, // 10
-        constant_ast = pd.IS_CONSTANT_AST, // 11
-        callable = pd.IS_CALLABLE, // 12
-        pointer = pd.IS_PTR, // 13
+        undefined = c.IS_UNDEF, // 0
+        null = c.IS_NULL, // 1
+        boolean = c.IS_FALSE, // 2
+        integer = c.IS_LONG, // 4
+        float = c.IS_DOUBLE, // 5
+        string = c.IS_STRING, // 6
+        array = c.IS_ARRAY, // 7
+        object = c.IS_OBJECT, // 8
+        resource = c.IS_RESOURCE, // 9
+        reference = c.IS_REFERENCE, // 10
+        constant_ast = c.IS_CONSTANT_AST, // 11
+        callable = c.IS_CALLABLE, // 12
+        pointer = c.IS_PTR, // 13
         _,
 
         pub fn name(self: @This()) []const u8 {
@@ -350,7 +362,7 @@ pub const Value = struct {
         }
     };
 
-    impl: pd.zval,
+    impl: c.zval,
 };
 
 fn floatToInteger(value: f64) !c_long {

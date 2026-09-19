@@ -1,10 +1,11 @@
 const std = @import("std");
 
-const allocator = @import("allocator.zig").allocator;
+const php = @import("root.zig");
+const php_al = php.allocator;
 
 pub fn report(comptime fmt: []const u8, params: anytype) error{FailureReported} {
     if (error_message) |msg| freeMessage(msg);
-    error_message = std.fmt.allocPrintSentinel(allocator, fmt, params, 0) catch oom_msg;
+    error_message = std.fmt.allocPrintSentinel(php_al, fmt, params, 0) catch oom_msg;
     return error.FailureReported;
 }
 
@@ -28,11 +29,11 @@ pub fn acquireMessage(err: anytype) []const u8 {
         return msg;
     }
     const text = errorMessage(err);
-    return allocator.dupe(u8, text) catch oom_msg;
+    return php_al.dupe(u8, text) catch oom_msg;
 }
 
 pub fn freeMessage(msg: []const u8) void {
-    if (msg.ptr != oom_msg.ptr) allocator.free(msg);
+    if (msg.ptr != oom_msg.ptr) php_al.free(msg);
 }
 
 pub fn errorMessage(err: anytype) [:0]const u8 {

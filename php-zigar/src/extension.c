@@ -1,8 +1,11 @@
-#define zend_gc_delref inline_zend_gc_delref
-#define zval_addref_p inline_zval_addref_p
-#include "include/extension.h"
-#undef zend_gc_delref
-#undef zval_addref_p
+#include "php/root.c"
+
+extern zend_result php_zigar_mod_init(int type, int module_number);
+extern zend_result php_zigar_mod_shutdown(int type, int module_number);
+extern zend_result php_zigar_req_init(int type, int module_number);
+extern zend_result php_zigar_req_shutdown(int type, int module_number);
+extern void php_zigar_info(zend_module_entry* zend_module);
+extern zend_function_entry php_zigar_functions[];
 
 PHP_MINIT_FUNCTION(zigar) {
     return php_zigar_mod_init(type, module_number);
@@ -33,76 +36,8 @@ zend_module_entry zigar_module_entry = {
     PHP_RINIT(zigar),
     PHP_RSHUTDOWN(zigar),
     PHP_MINFO(zigar),
-    PHP_ZIGAR_VERSION,
+    "0.16.0",
 	STANDARD_MODULE_PROPERTIES,
 };
 
 ZEND_GET_MODULE(zigar)
-
-/* php_stream_to_zval() cannot be imported into Zig due to the presence of bit fields in php_stream */
-void set_zval_stream(zval* zv, php_stream* strm) {
-    php_stream_to_zval(strm, zv);
-}
-
-php_stream_context* get_stream_context(php_stream* strm) {
-    return PHP_STREAM_CONTEXT(strm);
-}
-
-zend_resource* get_stream_resource(php_stream* strm) {
-    return strm->res;
-}
-
-const char* get_stream_path(php_stream* strm) {
-    return strm->orig_path;
-}
-
-zval* get_stream_wrapper_data(php_stream* strm) {
-    return &strm->wrapperdata;
-}
-
-const char* get_stream_mode(php_stream* strm) {
-    return strm->mode;
-}
-
-uint32_t get_stream_flags(php_stream* strm) {
-    return strm->flags;
-}
-
-const php_stream_ops* get_stream_handlers(php_stream* strm) {
-    return strm->ops;
-}
-
-php_stream_wrapper* get_stream_wrapper(php_stream* strm) {
-    return strm->wrapper;
-}
-
-void set_stream_wrapper(php_stream* strm, php_stream_wrapper* wrapper) {
-    strm->wrapper = wrapper;
-}
-
-void set_stream_no_close(php_stream* strm) {
-    strm->flags |= PHP_STREAM_FLAG_NO_CLOSE;
-}
-
-typedef struct {
-    zval* ptr;
-    size_t len;
-    bool extra;
-} arg_info;
-
-void get_argument_info(zend_execute_data* ed, arg_info* info) {
-    info->ptr = ZEND_CALL_ARG(ed, 1);
-    info->len = ZEND_CALL_NUM_ARGS(ed);
-    info->extra = !!(ZEND_CALL_INFO(ed) & ZEND_CALL_HAS_EXTRA_NAMED_PARAMS);
-}
-
-uint32_t zend_gc_delref(zend_refcounted_h *p) {
-	ZEND_ASSERT(p->refcount > 0);
-	ZEND_RC_MOD_CHECK(p);
-	return --(p->refcount);
-}
-
-uint32_t zval_addref_p(zval* pz) {
-	ZEND_ASSERT(Z_REFCOUNTED_P(pz));
-	return GC_ADDREF(Z_COUNTED_P(pz));
-}

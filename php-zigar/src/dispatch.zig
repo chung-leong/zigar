@@ -3,8 +3,6 @@ const c_allocator = std.heap.c_allocator;
 const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
-const c = @import("c");
-
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const DynLib = @import("dyn-lib.zig").DynLib;
 const EventLoop = @import("event-loop.zig").EventLoop;
@@ -16,8 +14,8 @@ const Jscall = interface.Jscall;
 const Syscall = interface.Syscall;
 const ModuleHost = @import("host.zig").ModuleHost;
 const php = @import("php.zig");
-const php_ng = @import("php-new.zig");
-const pd = php_ng.c.declarations;
+const php_ng = @import("php/root.zig");
+const c = php_ng.c;
 const php_al = php_ng.allocator;
 const Array = php_ng.Array;
 const Function = php_ng.Function;
@@ -116,7 +114,7 @@ pub const CallDispatcher = struct {
             }
         }
 
-        pub fn next(self: *@This(), stream: *Stream) !?*pd.php_stream_dirent {
+        pub fn next(self: *@This(), stream: *Stream) !?*c.php_stream_dirent {
             if (self.index == std.math.maxInt(usize)) {
                 self.index = 0;
             } else {
@@ -213,7 +211,7 @@ pub const CallDispatcher = struct {
             }
         }
 
-        pub fn close(zwrapper: [*c]pd.php_stream_wrapper, zstrm: ?*pd.php_stream) callconv(.c) c_int {
+        pub fn close(zwrapper: [*c]c.php_stream_wrapper, zstrm: ?*c.php_stream) callconv(.c) c_int {
             // get pointer to dispatcher
             const w: *Stream.Wrapper = @ptrCast(zwrapper);
             const strm: *Stream = @ptrCast(zstrm.?);
@@ -221,7 +219,7 @@ pub const CallDispatcher = struct {
             defer self.release();
             self.dispatcher.removeStream(strm);
             strm.setWrapper(self.original);
-            const func = self.original.impl.wops.*.stream_closer orelse return pd.SUCCESS;
+            const func = self.original.impl.wops.*.stream_closer orelse return c.SUCCESS;
             return func(zwrapper, zstrm);
         }
     };
@@ -624,7 +622,7 @@ pub const CallDispatcher = struct {
             }
             const strm_value = strm.toValue();
             defer strm_value.release();
-            const strm_value_og: *const pd.zval = @ptrCast(&strm_value);
+            const strm_value_og: *const c.zval = @ptrCast(&strm_value);
             try event_loop.init(strm_value_og);
         } else {
             return error.NotInMainThread;
@@ -1269,7 +1267,7 @@ pub const CallDispatcher = struct {
             }
         };
         defer loc.deinit();
-        const buf: pd.utimbuf = .{
+        const buf: c.utimbuf = .{
             .actime = @divTrunc(args.atime, 1_000_000_000),
             .modtime = @divTrunc(args.mtime, 1_000_000_000),
         };

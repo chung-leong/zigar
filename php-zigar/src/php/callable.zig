@@ -1,10 +1,7 @@
 pub const std = @import("std");
 
-const c = @import("c.zig");
-const pd = c.declarations;
-const pi = c.imports;
-const String = @import("string.zig").String;
-const Value = @import("value.zig").Value;
+const php = @import("root.zig");
+const Value = php.Value;
 
 pub const Callable = struct {
     value: Value,

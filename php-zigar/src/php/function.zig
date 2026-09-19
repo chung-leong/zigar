@@ -1,23 +1,64 @@
 pub const std = @import("std");
 
-const Array = @import("array.zig").Array;
-const c = @import("c.zig");
-const pd = c.declarations;
-const pi = c.imports;
-const Callable = @import("callable.zig").Callable;
-const Dictionary = @import("dictionary.zig").Dictionary;
-const efree = @import("allocator.zig").efree;
-const failure = @import("failure.zig");
+const fn_transform = @import("../zigft/fn-transform.zig");
+const php = @import("root.zig");
+const Array = php.Array;
+const c = php.c;
+const pi = php.imports;
+const Callable = php.Callable;
+const Dictionary = php.Dictionary;
+const efree = php.efree;
+const failure = php.failure;
 const unsupported = failure.unsupported;
-const Object = @import("object.zig").Object;
-const Resource = @import("resource.zig").Resource;
-const String = @import("string.zig").String;
-const Value = @import("value.zig").Value;
+const Object = php.Object;
+const Resource = php.Resource;
+const String = php.String;
+const Value = php.Value;
 
 pub const Function = struct {
+    pub var exception_prefix: []const u8 = "";
+    pub var exception_suffix: []const u8 = "";
+
     pub fn getName(self: *const @This()) ?*String {
         const zstr = self.impl.common.function_name orelse return null;
         return @ptrCast(zstr);
+    }
+
+    pub fn fromAny(comptime func: anytype) Transformed(func) {
+        const PhpFnT = Transformed(func);
+        const PhpArgs = std.meta.ArgsTuple(PhpFnT);
+        const FnT = @TypeOf(func);
+        const Args = std.meta.ArgsTuple(FnT);
+        const PhpRT = @typeInfo(PhpFnT).@"fn".return_type.?;
+        const ns = struct {
+            fn call(php_args: PhpArgs) PhpRT {
+                var args: Args = undefined;
+                inline for (php_args, 0..) |php_arg, i| args[i] = translateArgument(php_arg);
+                const retval = @call(.auto, func, args);
+                return translateReturnValue(retval);
+            }
+        };
+        return fn_transform.spreadArgs(ns.call, .c);
+    }
+
+    pub fn Transformed(comptime func: anytype) type {
+        const func_info = @typeInfo(@TypeOf(func)).@"fn";
+        const len = func_info.param_types.len;
+        var param_types: [len]type = undefined;
+        var param_attrs: [len]std.lang.Type.Fn.ParamAttributes = undefined;
+        inline for (func_info.param_types, 0..) |param_type, i| {
+            param_types[i] = TransformPointer(param_type.?);
+            param_attrs[i] = .{};
+        }
+        const RT = func_info.return_type.?;
+        // remove error
+        const RTNE = switch (@typeInfo(RT)) {
+            .error_union => |eu| eu.payload,
+            else => RT,
+        };
+        const RTT = TransformPointer(RTNE);
+        const attrs: std.lang.Type.Fn.Attributes = .{ .@"callconv" = .c };
+        return @Fn(&param_types, &param_attrs, RTT, attrs);
     }
 
     pub const Arguments = struct {
@@ -38,8 +79,8 @@ pub const Function = struct {
             return .init(self);
         }
 
-        fn getInfo(self: *const @This()) c.ArgPtrCountExtra {
-            var info: c.ArgPtrCountExtra = undefined;
+        fn getInfo(self: *const @This()) c.arg_extra_info {
+            var info: c.arg_extra_info = undefined;
             c.get_argument_info(&self.impl, &info);
             return info;
         }
@@ -371,18 +412,18 @@ pub const Function = struct {
             callee: *Function,
         };
 
-        impl: pd.zend_execute_data,
+        impl: c.zend_execute_data,
     };
     pub const CallCache = struct {
         pub fn init(callable: Value) !@This() {
-            var fci: pd.zend_fcall_info = undefined;
-            var fcc: pd.zend_fcall_info_cache = undefined;
+            var fci: c.zend_fcall_info = undefined;
+            var fcc: c.zend_fcall_info_cache = undefined;
             fci.retval = null;
             fci.param_count = 0;
             fci.params = null;
             var err_msg: [*c]u8 = undefined;
             const result = pi.zend_fcall_info_init(@ptrCast(@constCast(&callable)), 0, &fci, &fcc, null, &err_msg);
-            if (result != pd.SUCCESS) {
+            if (result != c.SUCCESS) {
                 if (err_msg != null) {
                     defer efree(err_msg, @src());
                     return failure.report("{s}", .{err_msg});
@@ -397,7 +438,7 @@ pub const Function = struct {
             pi.zend_fcall_info_args_clear(&self.fci, true);
         }
 
-        pub fn argumentInfo(self: *@This()) []pd.zend_arg_info {
+        pub fn argumentInfo(self: *@This()) []c.zend_arg_info {
             const common = &self.fcc.function_handler.*.common;
             return if (common.*.num_args > 0) common.*.arg_info[0..common.*.num_args] else &.{};
         }
@@ -407,24 +448,84 @@ pub const Function = struct {
         }
 
         pub fn invoke(self: *@This(), args: []const Value) !Value {
-            const zargs: []const pd.zval = @ptrCast(args);
+            const zargs: []const c.zval = @ptrCast(args);
             pi.zend_fcall_info_argp(&self.fci, @truncate(zargs.len), @constCast(zargs.ptr));
             defer pi.zend_fcall_info_args_clear(&self.fci, false);
             defer self.fci.named_params = null;
             var retval: Value = undefined;
             self.fci.retval = @ptrCast(&retval);
             const result = pi.zend_call_function(&self.fci, &self.fcc);
-            if (result != pd.SUCCESS) return error.Failure;
+            if (result != c.SUCCESS) return error.Failure;
             if (retval.kind() == .undefined) {
-                const eg = c.globals("executor");
+                const eg = php.globals("executor");
                 if (eg.exception != null) return error.ExceptionThrown;
             }
             return retval;
         }
 
-        fci: pd.zend_fcall_info,
-        fcc: pd.zend_fcall_info_cache,
+        fci: c.zend_fcall_info,
+        fcc: c.zend_fcall_info_cache,
     };
 
-    impl: pd.zend_function,
+    fn TransformPointer(comptime T: type) type {
+        return switch (@typeInfo(T)) {
+            .pointer => |pt| switch (pt.child) {
+                anyopaque => if (pt.attrs.@"const") ?*const anyopaque else ?*anyopaque,
+                else => if (pt.attrs.@"const") [*c]const pt.child else [*c]pt.child,
+            },
+            else => T,
+        };
+    }
+
+    fn translateArgument(arg: anytype) switch (@TypeOf(arg)) {} {
+        return switch (@typeInfo(@TypeOf(arg))) {
+            .pointer => @ptrCast(arg.?),
+            else => arg,
+        };
+    }
+
+    fn translateReturnValue(retval: anytype) switch (@typeInfo(@TypeOf(retval))) {
+        .error_union => |eu| eu.payload,
+        else => @TypeOf(retval),
+    } {
+        const retval_ne = switch (@typeInfo(@TypeOf(retval))) {
+            .error_union => |eu| retval catch |err| report: {
+                // if an exception has already been thrown then don't do anything
+                if (failure.match(err, error.ExceptionThrown)) return;
+                const msg = failure.acquireMessage(err);
+                defer failure.freeMessage(msg);
+                _ = pi.zend_throw_exception_ex(
+                    null,
+                    0,
+                    "%s%s%s",
+                    msg.ptr,
+                    exception_prefix,
+                    exception_suffix,
+                );
+                break :report switch (eu.payload) {
+                    bool => false,
+                    void => {},
+                    c_int => c.FAILURE,
+                    else => |T| switch (@typeInfo(T)) {
+                        .optional => null,
+                        .pointer => |pt| switch (pt.attrs.@"allowzero") {
+                            true => null,
+                            false => undefined,
+                        },
+                        else => undefined,
+                    },
+                };
+            },
+            else => retval,
+        };
+        return switch (@typeInfo(@TypeOf(retval_ne))) {
+            .pointer => |pt| switch (pt.size) {
+                .slice => retval_ne.ptr,
+                else => retval_ne,
+            },
+            else => retval_ne,
+        };
+    }
+
+    impl: c.zend_function,
 };

@@ -15,7 +15,7 @@ const InternalArgInfo = php.InternalArgInfo;
 const ModuleEntry = php.ModuleEntry;
 const StringOG = php.String;
 const ValueOG = php.Value;
-const php_ng = @import("php-new.zig");
+const php_ng = @import("php/root.zig");
 const Array = php_ng.Array;
 const Callable = php_ng.Callable;
 const Dictionary = php_ng.Dictionary;
@@ -33,15 +33,6 @@ const ShutdownCallback = struct {
 };
 
 threadlocal var request_shutdown_callbacks: std.ArrayList(ShutdownCallback) = .empty;
-
-pub fn DllMain(
-    _: std.os.windows.HINSTANCE,
-    _: std.os.windows.DWORD,
-    _: std.os.windows.LPVOID,
-) std.os.windows.BOOL {
-    @import("php/c-win32.zig").link() catch return .FALSE;
-    return .TRUE;
-}
 
 pub fn addRequestShutdownCallback(ptr: *anyopaque, fn_ptr: *const fn (*anyopaque) void) !void {
     try request_shutdown_callbacks.append(php.allocator, .{ .ptr = ptr, .fn_ptr = fn_ptr });
@@ -289,4 +280,13 @@ comptime {
     entries[decl_names.len] = std.mem.zeroes(FunctionEntry);
     const const_entries = entries;
     @export(&const_entries, .{ .name = "php_zigar_functions" });
+}
+
+pub fn DllMain(
+    _: std.os.windows.HINSTANCE,
+    _: std.os.windows.DWORD,
+    _: std.os.windows.LPVOID,
+) std.os.windows.BOOL {
+    php_ng.linkWindowsImports() catch return .FALSE;
+    return .TRUE;
 }

@@ -1,21 +1,21 @@
 pub const std = @import("std");
 
-const Array = @import("array.zig").Array;
-const c = @import("c.zig");
-const pd = c.declarations;
-const pi = c.imports;
-const deref = c.deref;
-const ClassEntry = @import("class-entry.zig").ClassEntry;
-const efree = @import("allocator.zig").efree;
-const failure = @import("failure.zig");
-const Function = @import("function.zig").Function;
-const String = @import("string.zig").String;
-const unsupported = @import("failure.zig").unsupported;
-const Value = @import("value.zig").Value;
+const php = @import("root.zig");
+const Array = php.Array;
+const c = php.c;
+const pi = php.imports;
+const deref = php.deref;
+const ClassEntry = php.ClassEntry;
+const efree = php.efree;
+const failure = php.failure;
+const unsupported = failure.unsupported;
+const Function = php.Function;
+const String = php.String;
+const Value = php.Value;
 
 pub const Object = struct {
     pub fn create(ce: *const ClassEntry, params: []const Value) !*@This() {
-        var zval: pd.zval = undefined;
+        var zval: c.zval = undefined;
         const result = pi.object_init_ex(&zval, @ptrCast(ce));
         if (result != c.SUCCESS) return error.CannotCreateObject;
         const zobj = zval.value.obj.?;
@@ -81,7 +81,7 @@ pub const Object = struct {
         if (std_handlers.read_dimension == handler) {
             if (zobj.ce.*.arrayaccess_funcs_ptr == null) return error.NoArrayAccess;
         }
-        const rv = handler(zobj, @ptrCast(k.value), pd.BP_VAR_IS, &value);
+        const rv = handler(zobj, @ptrCast(k.value), c.BP_VAR_IS, &value);
         return rv != null;
     }
 
@@ -96,8 +96,8 @@ pub const Object = struct {
         if (std_handlers.read_dimension == handler) {
             if (zobj.ce.*.arrayaccess_funcs_ptr == null) return error.NoArrayAccess;
         }
-        const zk: *pd.zval = @ptrCast(&k.value);
-        const rv = handler(zobj, zk, pd.BP_VAR_R, &value);
+        const zk: *c.zval = @ptrCast(&k.value);
+        const rv = handler(zobj, zk, c.BP_VAR_R, &value);
         if (rv == null) return error.Missing;
         return rv.*;
     }
@@ -107,17 +107,17 @@ pub const Object = struct {
         const n: *String = .createFromAny(name);
         defer n.release();
         var value: Value = undefined;
-        const zn: *pd.zend_string = @ptrCast(n);
-        const zval: *pd.zval = @ptrCast(&value);
+        const zn: *c.zend_string = @ptrCast(n);
+        const zval: *c.zval = @ptrCast(&value);
         const result = pi.zend_read_property_ex(zobj.ce, zobj, zn, true, zval);
-        if (result != pd.SUCCESS) return error.Missing;
+        if (result != c.SUCCESS) return error.Missing;
         return value;
     }
 
     pub fn getProperties(self: *const @This()) *Array {
         var value = self.toValue();
-        const zval: *pd.zval = @ptrCast(&value);
-        const ht = pi.zend_get_properties_for(zval, pd.ZEND_PROP_PURPOSE_ARRAY_CAST).?;
+        const zval: *c.zval = @ptrCast(&value);
+        const ht = pi.zend_get_properties_for(zval, c.ZEND_PROP_PURPOSE_ARRAY_CAST).?;
         return @ptrCast(ht);
     }
 
@@ -186,5 +186,5 @@ pub const Object = struct {
         value: Value,
     };
 
-    impl: pd.zend_object,
+    impl: c.zend_object,
 };

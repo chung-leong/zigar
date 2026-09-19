@@ -1,14 +1,14 @@
 pub const std = @import("std");
 
-const c = @import("c.zig");
-const pd = c.declarations;
-const pi = c.imports;
-const argCount = c.argCount;
-const deref = c.deref;
-const Object = @import("object.zig").Object;
-const Resource = @import("resource.zig").Resource;
-const String = @import("string.zig").String;
-const Value = @import("value.zig").Value;
+const php = @import("root.zig");
+const c = php.c;
+const pi = php.imports;
+const argCount = php.argCount;
+const deref = php.deref;
+const Object = php.Object;
+const Resource = php.Resource;
+const String = php.String;
+const Value = php.Value;
 
 pub const Stream = opaque {
     pub fn isStdIo(strm: *const @This()) bool {
@@ -43,19 +43,19 @@ pub const Stream = opaque {
 
     pub fn getDescriptor(self: *const @This()) ?c_int {
         if (!self.isStdIo()) return null;
-        return inline for (.{ pd.PHP_STREAM_AS_FD_FOR_SELECT, pd.PHP_STREAM_AS_FD }) |as| {
+        return inline for (.{ c.PHP_STREAM_AS_FD_FOR_SELECT, c.PHP_STREAM_AS_FD }) |as| {
             var fd: c_int align(@alignOf(*anyopaque)) = undefined;
             const result = switch (@hasDecl(c, "_php_stream_cast")) {
                 false => pi.php_stream_cast(@ptrCast(self), as, @ptrCast(&fd), 0),
                 true => pi._php_stream_cast(@ptrCast(self), as, @ptrCast(&fd), 0),
             };
-            if (result == pd.SUCCESS) break fd;
+            if (result == c.SUCCESS) break fd;
         } else null;
     }
 
     pub fn getWrapperData(self: *const @This()) ?*Object {
         const zval = c.get_stream_wrapper_data(@ptrCast(self));
-        const value: *Value = @ptrCast(zval);
+        const value: *const Value = @ptrCast(zval);
         return value.getObject() catch null;
     }
 
@@ -77,7 +77,7 @@ pub const Stream = opaque {
     pub fn open(path: *const String, mode: [*c]const u8, context: ?*Context, options: c_int) !*Stream {
         const p = path.slice();
         const src = @src();
-        const pctx: ?*pd.php_stream_context = if (context) |ctx| @ptrCast(ctx) else null;
+        const pctx: ?*c.php_stream_context = if (context) |ctx| @ptrCast(ctx) else null;
         const pstrm = switch (comptime argCount(@TypeOf(pi._php_stream_open_wrapper_ex))) {
             10 => pi._php_stream_open_wrapper_ex(p.ptr, mode, options, null, pctx, 1, src.file, src.line, src.file, src.line),
             5 => pi._php_stream_open_wrapper_ex(p.ptr, mode, options, null, pctx),
@@ -89,8 +89,8 @@ pub const Stream = opaque {
     pub fn openDirectory(path: *String, options: c_int, context: ?*Context) !*Stream {
         const p = path.slice();
         const src = @src();
-        const pctx: ?*pd.php_stream_context = if (context) |ctx| @ptrCast(ctx) else null;
-        const pstrm = switch (comptime argCount(@TypeOf(pd._php_stream_opendir))) {
+        const pctx: ?*c.php_stream_context = if (context) |ctx| @ptrCast(ctx) else null;
+        const pstrm = switch (comptime argCount(@TypeOf(c._php_stream_opendir))) {
             8 => pi._php_stream_opendir(p.ptr, options, pctx, 1, src.file, src.line, src.file, src.line),
             3 => pi._php_stream_opendir(p.ptr, options, pctx),
             else => @compileError("Unexpected _php_stream_opendir argument count"),
@@ -114,28 +114,28 @@ pub const Stream = opaque {
 
     pub fn close(self: *@This(), destroy: bool) void {
         const options = switch (destroy) {
-            true => pd.PHP_STREAM_FREE_CLOSE,
-            false => pd.PHP_STREAM_FREE_KEEP_RSRC | pd.PHP_STREAM_FREE_CALL_DTOR | pd.PHP_STREAM_FREE_RELEASE_STREAM,
+            true => c.PHP_STREAM_FREE_CLOSE,
+            false => c.PHP_STREAM_FREE_KEEP_RSRC | c.PHP_STREAM_FREE_CALL_DTOR | c.PHP_STREAM_FREE_RELEASE_STREAM,
         };
-        const pstrm: *pd.php_stream = @ptrCast(self);
-        _ = switch (@hasDecl(pd, "_php_stream_free")) {
+        const pstrm: *c.php_stream = @ptrCast(self);
+        _ = switch (@hasDecl(c, "_php_stream_free")) {
             false => pi.php_stream_free(pstrm, options), // 8.6
             true => pi._php_stream_free(pstrm, options),
         };
     }
 
     pub fn flush(self: *@This()) !void {
-        const pstrm: *pd.php_stream = @ptrCast(self);
-        const result = switch (@hasDecl(pd, "_php_stream_flush")) {
+        const pstrm: *c.php_stream = @ptrCast(self);
+        const result = switch (@hasDecl(c, "_php_stream_flush")) {
             false => pi.php_stream_flush(pstrm), // 8.6
             true => pi._php_stream_flush(pstrm, 0),
         };
-        if (result != pd.SUCCESS) return error.Failure;
+        if (result != c.SUCCESS) return error.Failure;
     }
 
     pub fn read(self: *@This(), buf: []u8) !usize {
-        const pstrm: *pd.php_stream = @ptrCast(self);
-        const result = switch (@hasDecl(pd, "_php_stream_read")) {
+        const pstrm: *c.php_stream = @ptrCast(self);
+        const result = switch (@hasDecl(c, "_php_stream_read")) {
             false => pi.php_stream_read(pstrm, buf.ptr, buf.len), // 8.6
             true => pi._php_stream_read(pstrm, buf.ptr, buf.len),
         };
@@ -144,7 +144,7 @@ pub const Stream = opaque {
     }
 
     pub fn readDirectory(self: *@This(), ent: *DirectoryEntry) bool {
-        const pstrm: *pd.php_stream = @ptrCast(self);
+        const pstrm: *c.php_stream = @ptrCast(self);
         const result = switch (@hasDecl(c, "_php_stream_readdir")) {
             false => pi.php_stream_readdir(pstrm, ent), // 8.6
             true => pi._php_stream_readdir(pstrm, ent),
@@ -153,8 +153,8 @@ pub const Stream = opaque {
     }
 
     pub fn write(self: *@This(), buf: []const u8) !usize {
-        const pstrm: *pd.php_stream = @ptrCast(self);
-        const result = switch (@hasDecl(pd, "_php_stream_write")) {
+        const pstrm: *c.php_stream = @ptrCast(self);
+        const result = switch (@hasDecl(c, "_php_stream_write")) {
             false => pi.php_stream_write(pstrm, buf.ptr, buf.len), // 8.6
             true => pi._php_stream_write(pstrm, buf.ptr, buf.len),
         };
@@ -163,12 +163,12 @@ pub const Stream = opaque {
     }
 
     pub fn seek(self: *@This(), offset: i64, whence: u32) !void {
-        const pstrm: *pd.php_stream = @ptrCast(self);
+        const pstrm: *c.php_stream = @ptrCast(self);
         const ops = c.get_stream_handlers(pstrm);
         const flags = c.get_stream_flags(pstrm);
-        if (ops.seek == null) return error.Unseekable;
-        if (flags & pd.PHP_STREAM_FLAG_NO_SEEK != 0) return error.Unseekable;
-        const pos = switch (@hasDecl(pd, "_php_stream_seek")) {
+        if (ops.*.seek == null) return error.Unseekable;
+        if (flags & c.PHP_STREAM_FLAG_NO_SEEK != 0) return error.Unseekable;
+        const pos = switch (@hasDecl(c, "_php_stream_seek")) {
             false => pi.php_stream_seek(pstrm, offset, @intCast(whence)), // 8.6
             true => pi._php_stream_seek(pstrm, offset, @intCast(whence)),
         };
@@ -176,8 +176,8 @@ pub const Stream = opaque {
     }
 
     pub fn tell(self: *@This()) !u64 {
-        const pstrm: *pd.php_stream = @ptrCast(self);
-        const pos = switch (@hasDecl(pd, "_php_stream_tell")) {
+        const pstrm: *c.php_stream = @ptrCast(self);
+        const pos = switch (@hasDecl(c, "_php_stream_tell")) {
             false => pi.php_stream_tell(pstrm), // 8.6
             true => pi._php_stream_tell(pstrm),
         };
@@ -186,19 +186,19 @@ pub const Stream = opaque {
     }
 
     pub fn stat(self: *@This(), out: *Stat) !void {
-        const pstrm: *pd.php_stream = @ptrCast(self);
-        var stat_buf: pd.php_stream_statbuf = undefined;
-        const result = switch (@hasDecl(pd, "_php_stream_stat")) {
+        const pstrm: *c.php_stream = @ptrCast(self);
+        var stat_buf: c.php_stream_statbuf = undefined;
+        const result = switch (@hasDecl(c, "_php_stream_stat")) {
             false => pi.php_stream_stat(pstrm, &stat_buf), // 8.6
             true => pi._php_stream_stat(pstrm, &stat_buf),
         };
-        if (result != pd.SUCCESS) return error.Failure;
+        if (result != c.SUCCESS) return error.Failure;
         copyStat(&stat_buf.sb, out);
     }
 
     pub fn truncate(self: *@This(), len: u64) !void {
-        const pstrm: *pd.php_stream = @ptrCast(self);
-        const result = switch (@hasDecl(pd, "_php_stream_truncate_set_size")) {
+        const pstrm: *c.php_stream = @ptrCast(self);
+        const result = switch (@hasDecl(c, "_php_stream_truncate_set_size")) {
             false => pi.php_stream_truncate_set_size(pstrm, @intCast(len)), // 8.6
             true => pi._php_stream_truncate_set_size(pstrm, @intCast(len)),
         };
@@ -206,10 +206,10 @@ pub const Stream = opaque {
     }
 
     pub fn setBlocking(self: *@This(), set: bool) !void {
-        const id = pd.PHP_STREAM_OPTION_BLOCKING;
+        const id = c.PHP_STREAM_OPTION_BLOCKING;
         const value: c_int = if (set) 1 else 0;
-        const pstrm: *pd.php_stream = @ptrCast(self);
-        const result = switch (@hasDecl(pd, "_php_stream_set_option")) {
+        const pstrm: *c.php_stream = @ptrCast(self);
+        const result = switch (@hasDecl(c, "_php_stream_set_option")) {
             false => pi.php_stream_set_option(pstrm, id, value, null), // 8.6
             true => pi._php_stream_set_option(pstrm, id, value, null),
         };
@@ -217,13 +217,13 @@ pub const Stream = opaque {
     }
 
     pub fn setLock(self: *@This(), lock_type: c_int) !void {
-        const id = pd.PHP_STREAM_OPTION_LOCKING;
-        const pstrm: *pd.php_stream = @ptrCast(self);
+        const id = c.PHP_STREAM_OPTION_LOCKING;
+        const pstrm: *c.php_stream = @ptrCast(self);
         const result = switch (@hasDecl(c, "_php_stream_set_option")) {
             false => pi.php_stream_set_option(pstrm, id, lock_type, null), // 8.6
             true => pi._php_stream_set_option(pstrm, id, lock_type, null),
         };
-        if (result != pd.SUCCESS) return error.Failure;
+        if (result != c.SUCCESS) return error.Failure;
     }
 
     pub fn copyRange(self: *@This(), offset: ?*i64, in_strm: *@This(), in_offset: ?*i64, len: u64) !u32 {
@@ -235,7 +235,7 @@ pub const Stream = opaque {
             original_in_pos = try in_strm.tell();
             if (original_in_pos < 0) return error.Failure;
             if (original_in_pos != new_in_pos) {
-                try seek(in_strm, new_in_pos, pd.SEEK_SET);
+                try seek(in_strm, new_in_pos, c.SEEK_SET);
             }
         }
         if (offset) |ptr| {
@@ -243,7 +243,7 @@ pub const Stream = opaque {
             original_out_pos = try self.tell();
             if (original_out_pos < 0) return error.Failure;
             if (original_out_pos != new_out_pos) {
-                try seek(self, new_out_pos, pd.SEEK_SET);
+                try seek(self, new_out_pos, c.SEEK_SET);
             }
         }
         var buf: [8192]u8 = undefined;
@@ -258,30 +258,30 @@ pub const Stream = opaque {
         }
         if (in_offset) |ptr| {
             ptr.* += @intCast(copied);
-            try seek(in_strm, @intCast(original_in_pos), pd.SEEK_SET);
+            try seek(in_strm, @intCast(original_in_pos), c.SEEK_SET);
         }
         if (offset) |ptr| {
             ptr.* += @intCast(copied);
-            try seek(self, @intCast(original_out_pos), pd.SEEK_SET);
+            try seek(self, @intCast(original_out_pos), c.SEEK_SET);
         }
         return @intCast(copied);
     }
 
     pub fn statPath(path: *const String, context: ?*Context, _: LookupFlags, out: *Stat) !void {
         const p = path.slice();
-        var stat_buf: pd.php_stream_statbuf = undefined;
-        const zctx: ?*pd.php_stream_context = if (context) |ctx| @ptrCast(ctx) else null;
+        var stat_buf: c.php_stream_statbuf = undefined;
+        const zctx: ?*c.php_stream_context = if (context) |ctx| @ptrCast(ctx) else null;
         const result = switch (@hasDecl(c, "_php_stream_stat_path")) {
             false => pi.php_stream_stat_path_ex(p.ptr, 0, &stat_buf, zctx),
             true => pi._php_stream_stat_path(p.ptr, 0, &stat_buf, zctx),
         };
-        if (result != pd.SUCCESS) return error.Failure;
+        if (result != c.SUCCESS) return error.Failure;
         copyStat(&stat_buf.sb, out);
     }
 
     pub fn unlink(path: *const String, context: ?*Context) !void {
         const p = path.slice();
-        const zctx: ?*pd.php_stream_context = if (context) |ctx| @ptrCast(ctx) else null;
+        const zctx: ?*c.php_stream_context = if (context) |ctx| @ptrCast(ctx) else null;
         const w, const f = try Wrapper.getOp(p, "unlink");
         const result = f.?(w, p.ptr, 0, zctx);
         if (result == 0) return error.Failure;
@@ -290,25 +290,25 @@ pub const Stream = opaque {
     pub fn rename(path: *const String, new_path: *const String, context: ?*Context) !void {
         const p = path.slice();
         const np = new_path.slice();
-        const zctx: ?*pd.php_stream_context = if (context) |ctx| @ptrCast(ctx) else null;
+        const zctx: ?*c.php_stream_context = if (context) |ctx| @ptrCast(ctx) else null;
         const w, const f = try Wrapper.getOp(p, "rename");
         const nw, _ = try Wrapper.getOp(np, "rename");
         if (w != nw) return error.Failure;
         if (f.?(w, p.ptr, np.ptr, 0, zctx) == 0) return error.Failure;
     }
 
-    pub fn touch(path: *String, timebuf: *const pd.utimbuf, context: ?*Context) !void {
-        const zctx: ?*pd.php_stream_context = if (context) |ctx| @ptrCast(ctx) else null;
+    pub fn touch(path: *String, timebuf: *const c.utimbuf, context: ?*Context) !void {
+        const zctx: ?*c.php_stream_context = if (context) |ctx| @ptrCast(ctx) else null;
         const p = path.slice();
         const w, const f = try Wrapper.getOp(p, "stream_metadata");
-        const result = f.?(w, p.ptr, pd.PHP_STREAM_META_TOUCH, @constCast(timebuf), zctx);
-        if (result != pd.SUCCESS) return error.Failure;
+        const result = f.?(w, p.ptr, c.PHP_STREAM_META_TOUCH, @constCast(timebuf), zctx);
+        if (result != c.SUCCESS) return error.Failure;
     }
 
     pub fn makeDirectory(path: *const String, mode: u32, context: ?*Context) !void {
         const path_s = path.slice();
-        const zctx: ?*pd.php_stream_context = if (context) |ctx| @ptrCast(ctx) else null;
-        const result = switch (@hasDecl(pd, "_php_stream_mkdir")) {
+        const zctx: ?*c.php_stream_context = if (context) |ctx| @ptrCast(ctx) else null;
+        const result = switch (@hasDecl(c, "_php_stream_mkdir")) {
             false => pi.php_stream_mkdir(path_s.ptr, @intCast(mode), 0, zctx), // 8.6
             true => pi._php_stream_mkdir(path_s.ptr, @intCast(mode), 0, zctx),
         };
@@ -317,8 +317,8 @@ pub const Stream = opaque {
 
     pub fn removeDirectory(path: *const String, context: ?*Context) !void {
         const path_s = path.slice();
-        const zctx: ?*pd.php_stream_context = if (context) |ctx| @ptrCast(ctx) else null;
-        const result = switch (@hasDecl(pd, "_php_stream_rmdir")) {
+        const zctx: ?*c.php_stream_context = if (context) |ctx| @ptrCast(ctx) else null;
+        const result = switch (@hasDecl(c, "_php_stream_rmdir")) {
             false => pi.php_stream_rmdir(path_s.ptr, 0, zctx), // 8.6
             true => pi._php_stream_rmdir(path_s.ptr, 0, zctx),
         };
@@ -330,10 +330,10 @@ pub const Stream = opaque {
             return @ptrCast(self.impl.res);
         }
 
-        impl: pd.php_stream_context,
+        impl: c.php_stream_context,
     };
     pub const Wrapper = struct {
-        pub fn getOp(path: []const u8, comptime name: []const u8) !@Tuple(&.{ *pd.php_stream_wrapper, @FieldType(Wrapper.Ops, name) }) {
+        pub fn getOp(path: []const u8, comptime name: []const u8) !@Tuple(&.{ *c.php_stream_wrapper, @FieldType(Wrapper.Ops, name) }) {
             const w = pi.php_stream_locate_url_wrapper(path.ptr, null, 0);
             if (w == null or w.*.wops == null or @field(w.*.wops.*, name) == null) {
                 return error.Failure;
@@ -341,21 +341,21 @@ pub const Stream = opaque {
             return .{ w, @field(w.*.wops.*, name) };
         }
 
-        pub const Ops = pd.php_stream_wrapper_ops;
+        pub const Ops = c.php_stream_wrapper_ops;
 
-        impl: pd.php_stream_wrapper,
+        impl: c.php_stream_wrapper,
     };
     pub const LookupFlags = std.os.wasi.lookupflags_t;
     pub const Stat = std.os.wasi.filestat_t;
-    pub const DirectoryEntry = pd.php_stream_dirent;
+    pub const DirectoryEntry = c.php_stream_dirent;
 
     // since opaque can't have any field, the last public decl provides the implementation type
-    pub const Impl = pd.php_stream;
+    pub const Impl = c.php_stream;
 };
 
-fn copyStat(in: *pd.zend_stat_t, out: *std.os.wasi.filestat_t) void {
+fn copyStat(in: *c.zend_stat_t, out: *std.os.wasi.filestat_t) void {
     out.size = convertSize(in.st_size);
-    if (@hasField(pd.zend_stat_t, "st_atim")) {
+    if (@hasField(c.zend_stat_t, "st_atim")) {
         out.atim = convertTimespec(in.st_atim);
         out.ctim = convertTimespec(in.st_ctim);
         out.mtim = convertTimespec(in.st_mtim);
@@ -373,29 +373,29 @@ fn copyStat(in: *pd.zend_stat_t, out: *std.os.wasi.filestat_t) void {
         @compileError("Unsupported stat struct");
     }
     if (@hasDecl(c, "S_IFSOCK")) {
-        out.filetype = switch (in.st_mode & pd.S_IFMT) {
-            pd.S_IFSOCK => .SOCKET_STREAM,
-            pd.S_IFLNK => .SYMBOLIC_LINK,
-            pd.S_IFREG => .REGULAR_FILE,
-            pd.S_IFBLK => .BLOCK_DEVICE,
-            pd.S_IFDIR => .DIRECTORY,
-            pd.S_IFCHR => .CHARACTER_DEVICE,
+        out.filetype = switch (in.st_mode & c.S_IFMT) {
+            c.S_IFSOCK => .SOCKET_STREAM,
+            c.S_IFLNK => .SYMBOLIC_LINK,
+            c.S_IFREG => .REGULAR_FILE,
+            c.S_IFBLK => .BLOCK_DEVICE,
+            c.S_IFDIR => .DIRECTORY,
+            c.S_IFCHR => .CHARACTER_DEVICE,
             else => .UNKNOWN,
         };
     } else {
         // Windows
-        out.filetype = switch (in.st_mode & pd.S_IFMT) {
-            pd.S_IFLNK => .SYMBOLIC_LINK,
-            pd.S_IFREG => .REGULAR_FILE,
-            pd.S_IFBLK => .BLOCK_DEVICE,
-            pd.S_IFDIR => .DIRECTORY,
-            pd.S_IFCHR => .CHARACTER_DEVICE,
+        out.filetype = switch (in.st_mode & c.S_IFMT) {
+            c.S_IFLNK => .SYMBOLIC_LINK,
+            c.S_IFREG => .REGULAR_FILE,
+            c.S_IFBLK => .BLOCK_DEVICE,
+            c.S_IFDIR => .DIRECTORY,
+            c.S_IFCHR => .CHARACTER_DEVICE,
             else => .UNKNOWN,
         };
     }
     out.ino = @intCast(in.st_ino);
     out.dev = @intCast(in.st_dev);
-    out.nlink = if (@hasField(pd.zend_stat_t, "nlink")) in.nlink else 0;
+    out.nlink = if (@hasField(c.zend_stat_t, "nlink")) in.nlink else 0;
 }
 
 fn convertSize(value: anytype) usize {

@@ -15,7 +15,7 @@ const Object = php.Object;
 const ObjectHandlers = php.ObjectHandlers;
 const String = php.String;
 const Value = php.Value;
-const php_ng = @import("php-new.zig");
+const php_ng = @import("php/root.zig");
 const structure = @import("structure.zig");
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 

@@ -2,7 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const memory_map = @import("memory-map.zig");
-const php_ng = @import("php-new.zig");
+const php_ng = @import("php/root.zig");
 const String = php_ng.String;
 const php_al = php_ng.allocator;
 const StringOG = @import("php.zig").String;
