@@ -1,4 +1,5 @@
-pub const std = @import("std");
+const std = @import("std");
+const builtin = @import("builtin");
 
 const fn_transform = @import("../zigft/fn-transform.zig");
 const php = @import("root.zig");
@@ -16,49 +17,125 @@ const String = php.String;
 const Value = php.Value;
 
 pub const Function = struct {
-    pub var exception_prefix: []const u8 = "";
-    pub var exception_suffix: []const u8 = "";
+    pub var exception_prefix: [:0]const u8 = "";
+    pub var exception_suffix: [:0]const u8 = "";
 
     pub fn getName(self: *const @This()) ?*String {
         const zstr = self.impl.common.function_name orelse return null;
         return @ptrCast(zstr);
     }
 
-    pub fn fromAny(comptime func: anytype) Transformed(func) {
-        const PhpFnT = Transformed(func);
-        const PhpArgs = std.meta.ArgsTuple(PhpFnT);
-        const FnT = @TypeOf(func);
-        const Args = std.meta.ArgsTuple(FnT);
-        const PhpRT = @typeInfo(PhpFnT).@"fn".return_type.?;
-        const ns = struct {
-            fn call(php_args: PhpArgs) PhpRT {
-                var args: Args = undefined;
-                inline for (php_args, 0..) |php_arg, i| args[i] = translateArgument(php_arg);
-                const retval = @call(.auto, func, args);
-                return translateReturnValue(retval);
-            }
-        };
-        return fn_transform.spreadArgs(ns.call, .c);
-    }
+    // pub fn fromAny(comptime func: anytype) @This() {
+    //     const handler
+    // }
 
-    pub fn Transformed(comptime func: anytype) type {
-        const func_info = @typeInfo(@TypeOf(func)).@"fn";
-        const len = func_info.param_types.len;
-        var param_types: [len]type = undefined;
-        var param_attrs: [len]std.lang.Type.Fn.ParamAttributes = undefined;
-        inline for (func_info.param_types, 0..) |param_type, i| {
-            param_types[i] = TransformPointer(param_type.?);
-            param_attrs[i] = .{};
-        }
-        const RT = func_info.return_type.?;
-        // remove error
-        const RTNE = switch (@typeInfo(RT)) {
+    const StdHandler = fn ([*c]c.zend_execute_data, [*c]c.zval) callconv(.c) void;
+    const Handler = switch (builtin.target.os.tag) {
+        .windows => init: {
+            // handler uses fastcall
+            const f = @typeInfo(StdHandler).@"fn";
+            break :init @Fn(f.param_types, f.param_attrs, f.return_type.?, .{
+                .@"callconv" = switch (builtin.target.cpu.arch) {
+                    .x86_64 => .{ .x86_64_vectorcall = .{} },
+                    .x86 => .{ .x86_vectorcall = .{} },
+                    else => .c,
+                },
+            });
+        },
+        else => StdHandler,
+    };
+
+    fn getHandlerType(comptime F: type, comptime class: ?type) enum {
+        handler,
+        rawhandler,
+        method,
+    } {
+        const info = @typeInfo(F);
+        if (info != .@"fn") @compileError("Function expected, received: " ++ @typeName(F));
+        const AT = info.@"fn".param_types;
+        const RT = info.@"fn".return_type.?;
+        const PT = switch (@typeInfo(RT)) {
             .error_union => |eu| eu.payload,
             else => RT,
         };
-        const RTT = TransformPointer(RTNE);
-        const attrs: std.lang.Type.Fn.Attributes = .{ .@"callconv" = .c };
-        return @Fn(&param_types, &param_attrs, RTT, attrs);
+        if (AT[0] == *Arguments and AT[1] == *Value and PT == void) return .rawhandler;
+        if (AT.len == 1 and @typeInfo(AT[0].?) == .@"struct") return .handler;
+        if (class) |C| {
+            if (AT.len == 2 and @typeInfo(AT[1].?) == .@"struct") {
+                // see if the first argument is a .one pointer
+                switch (@typeInfo(AT[0].?)) {
+                    .pointer => |pt| if (pt.size == .one and pt.child == C) {
+                        return .method;
+                    },
+                    else => {},
+                }
+            }
+        }
+        @compileError("Improper function: " ++ @typeName(F));
+    }
+
+    pub fn handler(comptime func: anytype, comptime class: ?type) Handler {
+        const F = @TypeOf(func);
+        const handler_type = getHandlerType(F, class);
+        const f = @typeInfo(F).@"fn";
+        const AT = f.param_types;
+        const returning_error = @typeInfo(f.return_type.?) == .error_union;
+        const ns = struct {
+            pub fn rawhandler(zed: [*c]c.zend_execute_data, zretval: [*c]c.zval) callconv(.c) void {
+                const args: *Arguments = @ptrCast(zed);
+                const retval: *Value = @ptrCast(zretval);
+                switch (returning_error) {
+                    true => func(args, retval) catch |err| return throw(err),
+                    false => func(args, retval),
+                }
+            }
+
+            pub fn handler(zed: [*c]c.zend_execute_data, zretval: [*c]c.zval) callconv(.c) void {
+                const args: *Arguments = @ptrCast(zed);
+                const retval: *Value = @ptrCast(zretval);
+                var iter = args.iterate();
+                if (iter.extract(AT[0].?)) |arg0| {
+                    const result = switch (returning_error) {
+                        true => func(arg0) catch |err| return throw(err),
+                        false => func(arg0),
+                    };
+                    retval.* = .fromAny(result);
+                } else |err| throw(err);
+            }
+
+            pub fn method(zed: [*c]c.zend_execute_data, zretval: [*c]c.zval) callconv(.c) void {
+                const php_args: *Arguments = @ptrCast(zed);
+                const retval: *Value = @ptrCast(zretval);
+                var iter = php_args.iterate();
+                const this_obj = php_args.this.getObject() catch |err| return throw(err);
+                const this_obj_addr: usize = @intFromPtr(this_obj);
+                const offset = this_obj.impl.handlers.offset;
+                const arg0: AT[0].? = @ptrFromInt(this_obj_addr - offset);
+                if (iter.extract(AT[1].?)) |arg1| {
+                    const result = switch (returning_error) {
+                        true => func(arg0, arg1) catch |err| return throw(err),
+                        false => func(arg0, arg1),
+                    };
+                    retval.* = .fromAny(result);
+                } else |err| throw(err);
+            }
+
+            fn throw(err: anytype) void {
+                // if an exception has already been thrown then don't do anything
+                if (failure.match(err, error.ExceptionThrown)) return;
+                const msg = failure.acquireMessage(err);
+                defer failure.freeMessage(msg);
+                _ = pi.zend_throw_exception_ex(
+                    null,
+                    0,
+                    "%s%s%s",
+                    exception_prefix.ptr,
+                    msg.ptr,
+                    exception_suffix.ptr,
+                );
+            }
+        };
+        return @field(ns, @tagName(handler_type));
     }
 
     pub const Arguments = struct {
@@ -466,66 +543,6 @@ pub const Function = struct {
         fci: c.zend_fcall_info,
         fcc: c.zend_fcall_info_cache,
     };
-
-    fn TransformPointer(comptime T: type) type {
-        return switch (@typeInfo(T)) {
-            .pointer => |pt| switch (pt.child) {
-                anyopaque => if (pt.attrs.@"const") ?*const anyopaque else ?*anyopaque,
-                else => if (pt.attrs.@"const") [*c]const pt.child else [*c]pt.child,
-            },
-            else => T,
-        };
-    }
-
-    fn translateArgument(arg: anytype) switch (@TypeOf(arg)) {} {
-        return switch (@typeInfo(@TypeOf(arg))) {
-            .pointer => @ptrCast(arg.?),
-            else => arg,
-        };
-    }
-
-    fn translateReturnValue(retval: anytype) switch (@typeInfo(@TypeOf(retval))) {
-        .error_union => |eu| eu.payload,
-        else => @TypeOf(retval),
-    } {
-        const retval_ne = switch (@typeInfo(@TypeOf(retval))) {
-            .error_union => |eu| retval catch |err| report: {
-                // if an exception has already been thrown then don't do anything
-                if (failure.match(err, error.ExceptionThrown)) return;
-                const msg = failure.acquireMessage(err);
-                defer failure.freeMessage(msg);
-                _ = pi.zend_throw_exception_ex(
-                    null,
-                    0,
-                    "%s%s%s",
-                    msg.ptr,
-                    exception_prefix,
-                    exception_suffix,
-                );
-                break :report switch (eu.payload) {
-                    bool => false,
-                    void => {},
-                    c_int => c.FAILURE,
-                    else => |T| switch (@typeInfo(T)) {
-                        .optional => null,
-                        .pointer => |pt| switch (pt.attrs.@"allowzero") {
-                            true => null,
-                            false => undefined,
-                        },
-                        else => undefined,
-                    },
-                };
-            },
-            else => retval,
-        };
-        return switch (@typeInfo(@TypeOf(retval_ne))) {
-            .pointer => |pt| switch (pt.size) {
-                .slice => retval_ne.ptr,
-                else => retval_ne,
-            },
-            else => retval_ne,
-        };
-    }
 
     impl: c.zend_function,
 };

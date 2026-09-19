@@ -117,18 +117,12 @@ const functions = struct {
         pub const optional = .{ "mod_path", "params" };
         pub const variadic = true;
 
-        pub fn run(ed: *ExecuteDataOG, retval_og: *ValueOG) !void {
-            const retval: *Value = @ptrCast(retval_og);
-            var arg_iter = @as(*const Function.Arguments, @ptrCast(ed)).iterate();
-            const args = try arg_iter.extract(struct {
-                src_path: []const u8,
-                mod_path: ?[]const u8,
-                params: ?Dictionary,
-            });
-            if (!options.recompile) {
-                retval.* = .fromBool(false);
-                return;
-            }
+        pub fn run(args: struct {
+            src_path: []const u8,
+            mod_path: ?[]const u8,
+            params: ?Dictionary,
+        }) !bool {
+            if (!options.recompile) return false;
             const src_path = try createResolvedPath(php.allocator, args.src_path);
             defer php.allocator.free(src_path);
             const mod_path = if (args.mod_path) |path|
@@ -137,7 +131,7 @@ const functions = struct {
                 try deriveModulePath(php.allocator, src_path);
             defer php.allocator.free(mod_path);
             try ZigCompiler.compile(src_path, mod_path, args.params);
-            retval.* = .fromBool(true);
+            return true;
         }
     };
     pub const zigar_use = struct {
@@ -145,13 +139,10 @@ const functions = struct {
         pub const optional = .{"params"};
         pub const variadic = true;
 
-        pub fn run(ed: *ExecuteDataOG, retval_og: *ValueOG) !void {
-            const retval: *Value = @ptrCast(retval_og);
-            var arg_iter = @as(*const Function.Arguments, @ptrCast(ed)).iterate();
-            const args = try arg_iter.extract(struct {
-                src_path: []const u8,
-                params: ?Dictionary,
-            });
+        pub fn run(args: struct {
+            src_path: []const u8,
+            params: ?Dictionary,
+        }) !Value {
             const src_path, const mod_path = get: {
                 const path = try createResolvedPath(php.allocator, args.src_path);
                 errdefer php.allocator.free(path);
@@ -171,7 +162,7 @@ const functions = struct {
             const so_path = try getSharedLibraryPath(php.allocator, mod_path, .this, .this);
             defer php.allocator.free(so_path);
             var result = try ModuleHost.load(so_path);
-            retval.* = @as(*Value, @ptrCast(&result)).*;
+            return @as(*Value, @ptrCast(&result)).*;
         }
     };
     pub const zigar_import = struct {
@@ -179,14 +170,11 @@ const functions = struct {
         pub const optional = .{ "callback", "params" };
         pub const variadic = true;
 
-        pub fn run(ed: *ExecuteDataOG, retval_og: *ValueOG) !void {
-            const retval: *Value = @ptrCast(retval_og);
-            var arg_iter = @as(*const Function.Arguments, @ptrCast(ed)).iterate();
-            const args = try arg_iter.extract(struct {
-                src_path: []const u8,
-                callback: ?Callable,
-                params: ?Dictionary,
-            });
+        pub fn run(args: struct {
+            src_path: []const u8,
+            callback: ?Callable,
+            params: ?Dictionary,
+        }) !Value {
             const src_path, const mod_path = get: {
                 const path = try createResolvedPath(php.allocator, args.src_path);
                 errdefer php.allocator.free(path);
@@ -206,7 +194,6 @@ const functions = struct {
             const so_path = try getSharedLibraryPath(php.allocator, mod_path, .this, .this);
             defer php.allocator.free(so_path);
             const root_og = try ModuleHost.load(so_path);
-            retval.impl = root_og;
             // export symbols from root namespace
             const root_class = try ZigClassEntry.fromValue(&root_og);
             const root_static = root_class.getStaticData(structure.Struct);
@@ -214,6 +201,7 @@ const functions = struct {
             const callback_og = if (args.callback) |cb| &cb.value.impl else null;
             const list = try root_static.exportSymbolsToGlobalNamespace(callback_og);
             php.release(&list);
+            return @as(*const Value, @ptrCast(&root_og)).*;
         }
     };
 
@@ -246,7 +234,7 @@ comptime {
     var entries: [decl_names.len + 1]FunctionEntry = undefined;
     for (decl_names, 0..) |decl_name, i| {
         const function = @field(functions, decl_name);
-        const handler = php.transform(function.run);
+        const handler = Function.handler(function.run, null);
         @export(&handler, .{ .name = decl_name });
         const arg_info = init: {
             var len = function.required.len + function.optional.len;

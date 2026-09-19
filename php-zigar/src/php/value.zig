@@ -338,6 +338,57 @@ pub const Value = struct {
         return s.toValue();
     }
 
+    pub fn fromReference(r: *const Reference) @This() {
+        return .{
+            .impl = .{
+                .u1 = .{ .type_info = c.IS_REFERENCE },
+                .value = .{ .ref = @ptrCast(@constCast(r)) },
+            },
+        };
+    }
+
+    pub fn fromAny(arg: anytype) @This() {
+        const T = @TypeOf(arg);
+        if (T == @This()) return arg;
+        return switch (@typeInfo(T)) {
+            .void => .fromNull(),
+            .bool => .fromBool(arg),
+            .int => |int| switch (int.signedness) {
+                .signed => .fromInteger(arg),
+                .unsigned => .fromUnsigned(arg),
+            },
+            .float => .fromFloat(arg),
+            .@"enum" => .fromEnum(arg),
+            .pointer => |pt| switch (pt.size) {
+                .one => switch (pt.child) {
+                    String => .fromString(arg),
+                    Array => .fromArray(arg),
+                    Object => .fromObject(arg),
+                    Resource => .fromResource(arg),
+                    Stream => .fromStream(arg),
+                    Reference => .fromReference(arg),
+                    else => unsupported(T),
+                },
+                .slice => switch (pt.child) {
+                    u8 => .fromString(.create(arg)),
+                    else => unsupported(T),
+                },
+                else => unsupported(T),
+            },
+            .@"struct" => |st| if (st.backing_integer) |BT|
+                @as(BT, @bitCast(arg))
+            else
+                unsupported(T),
+            .@"union" => |un| if (un.tag_type) |Tag|
+                inline for (un.field_names) |name| {
+                    if (arg == @field(Tag, name)) break .fromAny(@field(arg, name));
+                } else unsupported(T)
+            else
+                unsupported(T),
+            else => unsupported(T),
+        };
+    }
+
     pub const Kind = enum(u8) {
         undefined = c.IS_UNDEF, // 0
         null = c.IS_NULL, // 1

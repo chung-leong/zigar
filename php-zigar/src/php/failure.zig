@@ -81,6 +81,12 @@ pub fn errorMessage(err: anytype) [:0]const u8 {
     };
 }
 
+pub fn match(err: anyerror, other_err: anyerror) bool {
+    const E1 = @TypeOf(err);
+    const E2 = @TypeOf(other_err);
+    return (E1 || E2 == E1 and err == other_err);
+}
+
 pub fn unsupported(comptime T: type) noreturn {
     @compileError("Unexpected type: " ++ @typeName(T));
 }

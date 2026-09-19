@@ -80,20 +80,13 @@ fn Ptr(comptime name: []const u8) type {
         .@"fn" => |f| {
             if (f.calling_convention == .@"inline") return void;
             if (@hasField(ZendFastCall, name)) {
-                var param_types: [f.params.len]type = undefined;
-                var param_attrs: [f.params.len]std.lang.Type.Fn.ParamAttributes = undefined;
-                for (f.params, 0..) |param, i| {
-                    param_types[i] = param.type.?;
-                    param_attrs[i] = .{};
-                }
-                const attrs: std.lang.Type.Fn.Attributes = .{
+                const F = @Fn(f.param_types, f.param_attrs, f.return_type.?, .{
                     .@"callconv" = switch (builtin.target.cpu.arch) {
                         .x86_64 => .{ .x86_64_vectorcall = .{} },
                         .x86 => .{ .x86_vectorcall = .{} },
                         else => .c,
                     },
-                };
-                const F = @Fn(&param_types, &param_attrs, f.return_type.?, attrs);
+                });
                 return *const F;
             }
         },
