@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const AbortSignal = @import("abort-signal.zig").AbortSignal;
-const extension = @import("extension.zig");
+const extension = @import("main.zig");
 const failure = @import("failure.zig");
 const io = @import("system.zig").io;
 const php = @import("php.zig");

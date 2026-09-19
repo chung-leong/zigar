@@ -3,7 +3,7 @@ const builtin = @import("builtin");
 
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
 const dyn_lib = @import("dyn-lib.zig");
-const extension = @import("extension.zig");
+const extension = @import("main.zig");
 const failure = @import("failure.zig");
 const LoopType = @import("event-loop.zig").LoopType;
 const php = @import("php.zig");

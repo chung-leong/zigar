@@ -3,7 +3,7 @@ const builtin = @import("builtin");
 
 const c = @import("c");
 
-const extension = @import("extension.zig");
+const extension = @import("main.zig");
 const failure = @import("failure.zig");
 const io = @import("system.zig").io;
 const Options = @import("options.zig").Options;

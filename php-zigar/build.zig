@@ -19,7 +19,7 @@ pub fn build(b: *std.Build) !void {
     if (php_ts) translate_c.defineCMacro("ZTS", null);
 
     const mod = b.createModule(.{
-        .root_source_file = b.path("src/extension.zig"),
+        .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
         .single_threaded = false,
@@ -45,7 +45,7 @@ pub fn build(b: *std.Build) !void {
     try c_flags.append(b.allocator, if (php_debug) "-DZEND_DEBUG=1" else "-DZEND_DEBUG=0");
     if (php_ts) try c_flags.append(b.allocator, "-DZTS");
     mod.addCSourceFile(.{
-        .file = b.path("src/extension.c"),
+        .file = b.path("src/main.c"),
         .flags = c_flags.items,
     });
     if (target.result.os.tag.isDarwin()) {
