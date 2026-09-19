@@ -5,8 +5,6 @@ const pd = c.declarations;
 const pi = c.imports;
 const argCount = c.argCount;
 const deref = c.deref;
-const castTo = c.castTo;
-const castFrom = c.castFrom;
 const Object = @import("object.zig").Object;
 const Resource = @import("resource.zig").Resource;
 const String = @import("string.zig").String;
@@ -14,57 +12,49 @@ const Value = @import("value.zig").Value;
 
 pub const Stream = opaque {
     pub fn isStdIo(strm: *const @This()) bool {
-        const ops = c.get_stream_handlers(strm);
+        const ops = c.get_stream_handlers(@ptrCast(strm));
         return ops == deref(&pi.php_stream_stdio_ops);
     }
 
     pub fn wrapper(self: *const @This()) *Wrapper {
-        const zstrm = castFrom(@This(), self);
-        const zwrapper = c.get_stream_wrapper(zstrm);
-        return @ptrCast(zwrapper);
+        const pwrapper = c.get_stream_wrapper(@ptrCast(self));
+        return @ptrCast(pwrapper);
     }
 
     pub fn resource(self: *const @This()) *Resource {
-        const zstrm = castFrom(@This(), self);
-        return c.get_stream_resource(zstrm);
+        return c.get_stream_resource(@ptrCast(self));
     }
 
     pub fn getPath(self: *const @This()) ?[]const u8 {
-        const zstrm = castFrom(@This(), self);
-        const ptr = c.get_stream_path(zstrm) orelse return null;
+        const ptr = c.get_stream_path(@ptrCast(self)) orelse return null;
         const len = std.mem.len(ptr);
         return ptr[0..len];
     }
 
     pub fn getContext(self: *const @This()) ?*Context {
-        const zstrm = castFrom(@This(), self);
-        const zctx = c.get_stream_context(zstrm) orelse return null;
-        return @ptrCast(zctx);
+        const pctx = c.get_stream_context(@ptrCast(self)) orelse return null;
+        return @ptrCast(pctx);
     }
 
     pub fn getMode(self: *const @This()) ?[]const u8 {
-        const zstrm = castFrom(@This(), self);
-        const ptr = c.get_stream_mode(zstrm) orelse return null;
-        const len = std.mem.len(ptr);
-        return ptr[0..len];
+        const mode = c.get_stream_mode(@ptrCast(self)) orelse return null;
+        return std.mem.sliceTo(mode, 0);
     }
 
     pub fn getDescriptor(self: *const @This()) ?c_int {
         if (!self.isStdIo()) return null;
-        const zstrm = castFrom(@This(), self);
         return inline for (.{ pd.PHP_STREAM_AS_FD_FOR_SELECT, pd.PHP_STREAM_AS_FD }) |as| {
             var fd: c_int align(@alignOf(*anyopaque)) = undefined;
             const result = switch (@hasDecl(c, "_php_stream_cast")) {
-                false => pi.php_stream_cast(zstrm, as, @ptrCast(&fd), 0),
-                true => pi._php_stream_cast(zstrm, as, @ptrCast(&fd), 0),
+                false => pi.php_stream_cast(@ptrCast(self), as, @ptrCast(&fd), 0),
+                true => pi._php_stream_cast(@ptrCast(self), as, @ptrCast(&fd), 0),
             };
             if (result == pd.SUCCESS) break fd;
         } else null;
     }
 
     pub fn getWrapperData(self: *const @This()) ?*Object {
-        const zstrm = castFrom(@This(), self);
-        const zval = c.get_stream_wrapper_data(zstrm);
+        const zval = c.get_stream_wrapper_data(@ptrCast(self));
         const value: *Value = @ptrCast(zval);
         return value.getObject() catch null;
     }
@@ -74,164 +64,164 @@ pub const Stream = opaque {
         return try data.getProperty(name);
     }
 
-    pub fn setWrapper(self: *@This(), w: *const Wrapper) void {
-        return c.set_stream_wrapper(@ptrCast(self), @ptrCast(w));
+    pub fn setWrapper(self: *@This(), wpr: *const Wrapper) void {
+        return c.set_stream_wrapper(@ptrCast(self), @ptrCast(wpr));
     }
 
     pub fn toValue(self: *const @This()) Value {
         var result: Value = undefined;
-        c.set_zval_stream(@ptrCast(&result), castFrom(@This(), self));
+        c.set_zval_stream(@ptrCast(&result), @ptrCast(self));
         return result;
     }
 
     pub fn open(path: *const String, mode: [*c]const u8, context: ?*Context, options: c_int) !*Stream {
         const p = path.slice();
         const src = @src();
-        const zctx = if (context) |ctx| castFrom(Context, ctx) else null;
-        const zstrm = switch (comptime argCount(@TypeOf(pi._php_stream_open_wrapper_ex))) {
-            10 => pi._php_stream_open_wrapper_ex(p.ptr, mode, options, null, zctx, 1, src.file, src.line, src.file, src.line),
-            5 => pi._php_stream_open_wrapper_ex(p.ptr, mode, options, null, zctx),
+        const pctx: ?*pd.php_stream_context = if (context) |ctx| @ptrCast(ctx) else null;
+        const pstrm = switch (comptime argCount(@TypeOf(pi._php_stream_open_wrapper_ex))) {
+            10 => pi._php_stream_open_wrapper_ex(p.ptr, mode, options, null, pctx, 1, src.file, src.line, src.file, src.line),
+            5 => pi._php_stream_open_wrapper_ex(p.ptr, mode, options, null, pctx),
             else => @compileError("Unexpected _php_stream_open_wrapper_ex argument count"),
         } orelse return error.Failure;
-        return castTo(@This(), zstrm);
+        return @ptrCast(pstrm);
     }
 
     pub fn openDirectory(path: *String, options: c_int, context: ?*Context) !*Stream {
         const p = path.slice();
         const src = @src();
-        const zctx = if (context) |ctx| castFrom(Context, ctx) else null;
-        const zstrm = switch (comptime argCount(@TypeOf(pd._php_stream_opendir))) {
-            8 => pi._php_stream_opendir(p.ptr, options, zctx, 1, src.file, src.line, src.file, src.line),
-            3 => pi._php_stream_opendir(p.ptr, options, zctx),
+        const pctx: ?*pd.php_stream_context = if (context) |ctx| @ptrCast(ctx) else null;
+        const pstrm = switch (comptime argCount(@TypeOf(pd._php_stream_opendir))) {
+            8 => pi._php_stream_opendir(p.ptr, options, pctx, 1, src.file, src.line, src.file, src.line),
+            3 => pi._php_stream_opendir(p.ptr, options, pctx),
             else => @compileError("Unexpected _php_stream_opendir argument count"),
         } orelse return error.Failure;
-        return castTo(@This(), zstrm);
+        return @ptrCast(pstrm);
     }
 
     pub fn openDescriptor(fd: c_int, mode: [*c]const u8) !*Stream {
         const src = @src();
         // arg count varies depending on PHP version and whether debug is enabled
-        const zstrm = switch (comptime argCount(@TypeOf(pi._php_stream_fopen_from_fd))) {
+        const pstrm = switch (comptime argCount(@TypeOf(pi._php_stream_fopen_from_fd))) {
             3 => pi._php_stream_fopen_from_fd(fd, mode, null), // function in PHP 8.1 doesn't have zero_position
             4 => pi._php_stream_fopen_from_fd(fd, mode, null, false),
             8 => pi._php_stream_fopen_from_fd(fd, mode, null, 1, src.file, src.line, src.file, src.line),
             9 => pi._php_stream_fopen_from_fd(fd, mode, null, false, 1, src.file, src.line, src.file, src.line),
             else => @compileError("Unexpected _php_stream_fopen_from_fd argument count"),
         } orelse return error.Failure;
-        c.set_stream_no_close(zstrm);
-        return castTo(@This(), zstrm);
+        c.set_stream_no_close(pstrm);
+        return @ptrCast(pstrm);
     }
 
     pub fn close(self: *@This(), destroy: bool) void {
-        const zstrm = castFrom(@This(), self);
         const options = switch (destroy) {
             true => pd.PHP_STREAM_FREE_CLOSE,
             false => pd.PHP_STREAM_FREE_KEEP_RSRC | pd.PHP_STREAM_FREE_CALL_DTOR | pd.PHP_STREAM_FREE_RELEASE_STREAM,
         };
+        const pstrm: *pd.php_stream = @ptrCast(self);
         _ = switch (@hasDecl(pd, "_php_stream_free")) {
-            false => pi.php_stream_free(zstrm, options), // 8.6
-            true => pi._php_stream_free(zstrm, options),
+            false => pi.php_stream_free(pstrm, options), // 8.6
+            true => pi._php_stream_free(pstrm, options),
         };
     }
 
     pub fn flush(self: *@This()) !void {
-        const zstrm = castFrom(@This(), self);
+        const pstrm: *pd.php_stream = @ptrCast(self);
         const result = switch (@hasDecl(pd, "_php_stream_flush")) {
-            false => pi.php_stream_flush(zstrm), // 8.6
-            true => pi._php_stream_flush(zstrm, 0),
+            false => pi.php_stream_flush(pstrm), // 8.6
+            true => pi._php_stream_flush(pstrm, 0),
         };
         if (result != pd.SUCCESS) return error.Failure;
     }
 
     pub fn read(self: *@This(), buf: []u8) !usize {
-        const zstrm = castFrom(@This(), self);
+        const pstrm: *pd.php_stream = @ptrCast(self);
         const result = switch (@hasDecl(pd, "_php_stream_read")) {
-            false => pi.php_stream_read(zstrm, buf.ptr, buf.len), // 8.6
-            true => pi._php_stream_read(zstrm, buf.ptr, buf.len),
+            false => pi.php_stream_read(pstrm, buf.ptr, buf.len), // 8.6
+            true => pi._php_stream_read(pstrm, buf.ptr, buf.len),
         };
         if (result < 0) return error.Failure;
         return @intCast(result);
     }
 
     pub fn readDirectory(self: *@This(), ent: *DirectoryEntry) bool {
-        const zstrm = castFrom(@This(), self);
+        const pstrm: *pd.php_stream = @ptrCast(self);
         const result = switch (@hasDecl(c, "_php_stream_readdir")) {
-            false => pi.php_stream_readdir(zstrm, ent), // 8.6
-            true => pi._php_stream_readdir(zstrm, ent),
+            false => pi.php_stream_readdir(pstrm, ent), // 8.6
+            true => pi._php_stream_readdir(pstrm, ent),
         };
         return result != null;
     }
 
     pub fn write(self: *@This(), buf: []const u8) !usize {
-        const zstrm = castFrom(@This(), self);
+        const pstrm: *pd.php_stream = @ptrCast(self);
         const result = switch (@hasDecl(pd, "_php_stream_write")) {
-            false => pi.php_stream_write(zstrm, buf.ptr, buf.len), // 8.6
-            true => pi._php_stream_write(zstrm, buf.ptr, buf.len),
+            false => pi.php_stream_write(pstrm, buf.ptr, buf.len), // 8.6
+            true => pi._php_stream_write(pstrm, buf.ptr, buf.len),
         };
         if (result < 0) return error.Failure;
         return @intCast(result);
     }
 
     pub fn seek(self: *@This(), offset: i64, whence: u32) !void {
-        const zstrm = castFrom(@This(), self);
-        const ops = c.get_stream_handlers(zstrm);
-        const flags = c.get_stream_flags(zstrm);
+        const pstrm: *pd.php_stream = @ptrCast(self);
+        const ops = c.get_stream_handlers(pstrm);
+        const flags = c.get_stream_flags(pstrm);
         if (ops.seek == null) return error.Unseekable;
         if (flags & pd.PHP_STREAM_FLAG_NO_SEEK != 0) return error.Unseekable;
         const pos = switch (@hasDecl(pd, "_php_stream_seek")) {
-            false => pi.php_stream_seek(zstrm, offset, @intCast(whence)), // 8.6
-            true => pi._php_stream_seek(zstrm, offset, @intCast(whence)),
+            false => pi.php_stream_seek(pstrm, offset, @intCast(whence)), // 8.6
+            true => pi._php_stream_seek(pstrm, offset, @intCast(whence)),
         };
         if (pos < 0) return error.InvalidOffset;
     }
 
     pub fn tell(self: *@This()) !u64 {
-        const zstrm = castFrom(@This(), self);
+        const pstrm: *pd.php_stream = @ptrCast(self);
         const pos = switch (@hasDecl(pd, "_php_stream_tell")) {
-            false => pi.php_stream_tell(zstrm), // 8.6
-            true => pi._php_stream_tell(zstrm),
+            false => pi.php_stream_tell(pstrm), // 8.6
+            true => pi._php_stream_tell(pstrm),
         };
         if (pos < 0) return error.Failure;
         return @intCast(pos);
     }
 
     pub fn stat(self: *@This(), out: *Stat) !void {
-        const zstrm = castFrom(@This(), self);
+        const pstrm: *pd.php_stream = @ptrCast(self);
         var stat_buf: pd.php_stream_statbuf = undefined;
         const result = switch (@hasDecl(pd, "_php_stream_stat")) {
-            false => pi.php_stream_stat(zstrm, &stat_buf), // 8.6
-            true => pi._php_stream_stat(zstrm, &stat_buf),
+            false => pi.php_stream_stat(pstrm, &stat_buf), // 8.6
+            true => pi._php_stream_stat(pstrm, &stat_buf),
         };
         if (result != pd.SUCCESS) return error.Failure;
         copyStat(&stat_buf.sb, out);
     }
 
     pub fn truncate(self: *@This(), len: u64) !void {
-        const zstrm = castFrom(@This(), self);
+        const pstrm: *pd.php_stream = @ptrCast(self);
         const result = switch (@hasDecl(pd, "_php_stream_truncate_set_size")) {
-            false => pi.php_stream_truncate_set_size(zstrm, @intCast(len)), // 8.6
-            true => pi._php_stream_truncate_set_size(zstrm, @intCast(len)),
+            false => pi.php_stream_truncate_set_size(pstrm, @intCast(len)), // 8.6
+            true => pi._php_stream_truncate_set_size(pstrm, @intCast(len)),
         };
         if (result != 0) return error.Failure;
     }
 
     pub fn setBlocking(self: *@This(), set: bool) !void {
-        const zstrm = castFrom(@This(), self);
         const id = pd.PHP_STREAM_OPTION_BLOCKING;
         const value: c_int = if (set) 1 else 0;
+        const pstrm: *pd.php_stream = @ptrCast(self);
         const result = switch (@hasDecl(pd, "_php_stream_set_option")) {
-            false => pi.php_stream_set_option(zstrm, id, value, null), // 8.6
-            true => pi._php_stream_set_option(zstrm, id, value, null),
+            false => pi.php_stream_set_option(pstrm, id, value, null), // 8.6
+            true => pi._php_stream_set_option(pstrm, id, value, null),
         };
         if (result < 0) return error.Failure;
     }
 
     pub fn setLock(self: *@This(), lock_type: c_int) !void {
-        const zstrm = castFrom(@This(), self);
         const id = pd.PHP_STREAM_OPTION_LOCKING;
+        const pstrm: *pd.php_stream = @ptrCast(self);
         const result = switch (@hasDecl(c, "_php_stream_set_option")) {
-            false => pi.php_stream_set_option(zstrm, id, lock_type, null), // 8.6
-            true => pi._php_stream_set_option(zstrm, id, lock_type, null),
+            false => pi.php_stream_set_option(pstrm, id, lock_type, null), // 8.6
+            true => pi._php_stream_set_option(pstrm, id, lock_type, null),
         };
         if (result != pd.SUCCESS) return error.Failure;
     }

@@ -392,7 +392,7 @@ pub const CallDispatcher = struct {
         try self.function_list.append(php_al, .{
             .id = fn_id,
             .class = class,
-            .callable = callable.reuse(),
+            .callable = callable.retain(),
             .cache = cache,
             .buffer = buffer,
         });
@@ -769,7 +769,7 @@ pub const CallDispatcher = struct {
         const entry = try self.stream_list.addOne(php_al);
         entry.* = .{
             .fd = fd,
-            .path = path.reuse(),
+            .path = path.retain(),
             .stream = strm,
             .fd_stat = stat.*,
         };
@@ -867,7 +867,7 @@ pub const CallDispatcher = struct {
         const path = value.getString() catch {
             return failure.report("stream wrapper's 'path' property is not a string", .{});
         };
-        return path.reuse();
+        return path.retain();
     }
 
     pub fn getStreamStat(strm: *Stream, is_dir: bool) std.os.wasi.fdstat_t {
@@ -910,7 +910,7 @@ pub const CallDispatcher = struct {
                 self.redirecting_root = false;
             }
             if (Function.CallCache.init(arg) catch null) |cache| {
-                self.redirection_cb = arg.reuse();
+                self.redirection_cb = arg.retain();
                 self.redirection_cache = cache;
                 self.redirecting_root = true;
                 self.closeDescriptor(fd) catch {};
@@ -1033,7 +1033,7 @@ pub const CallDispatcher = struct {
                     defer retval.release();
                     switch (retval.kind()) {
                         .null => return null,
-                        .string => break :find retval.string().reuse(),
+                        .string => break :find retval.string().retain(),
                         .resource => {
                             const strm = try retval.getStream();
                             const strm_path = try getStreamPath(strm);
@@ -1261,7 +1261,7 @@ pub const CallDispatcher = struct {
             if (@hasField(@TypeOf(args.*), "fd")) {
                 const entry = self.findStreamEntry(args.fd) catch return .BADF;
                 break :get .{
-                    .url = entry.path.reuse(),
+                    .url = entry.path.retain(),
                     .context = entry.stream.getContext(),
                 };
             } else {

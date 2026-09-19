@@ -124,7 +124,7 @@ pub const ByteBuffer = struct {
         }
         self.bytes = @constCast(str.slice());
         self.source_type = .string;
-        self.source = .{ .string = str.reuse() };
+        self.source = .{ .string = str.retain() };
         if (read_only) self.flags.read_only = true;
     }
 

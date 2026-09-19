@@ -1,11 +1,6 @@
 pub const std = @import("std");
 
 const Array = @import("array.zig").Array;
-const c = @import("c.zig");
-const pd = c.declarations;
-const pi = c.imports;
-const castTo = c.castTo;
-const castFrom = c.castFrom;
 const Object = @import("object.zig").Object;
 const String = @import("string.zig").String;
 const Value = @import("value.zig").Value;

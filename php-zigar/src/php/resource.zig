@@ -5,7 +5,7 @@ const pd = c.declarations;
 const pi = c.imports;
 
 pub const Resource = struct {
-    pub fn reuse(self: *@This()) *@This() {
+    pub fn retain(self: *@This()) *@This() {
         self.addRef();
         return self;
     }

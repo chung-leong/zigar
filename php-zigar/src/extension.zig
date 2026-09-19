@@ -20,8 +20,6 @@ const Array = php_ng.Array;
 const Callable = php_ng.Callable;
 const Dictionary = php_ng.Dictionary;
 const Function = php_ng.Function;
-const castTo = php_ng.castTo;
-const castFrom = php_ng.castFrom;
 const Value = php_ng.Value;
 const structure = @import("structure.zig");
 const system = @import("system.zig");
@@ -129,8 +127,8 @@ const functions = struct {
         pub const variadic = true;
 
         pub fn run(ed: *ExecuteDataOG, retval_og: *ValueOG) !void {
-            const retval = castTo(Value, retval_og);
-            var arg_iter = castTo(Function.Arguments, ed).iterate();
+            const retval: *Value = @ptrCast(retval_og);
+            var arg_iter = @as(*const Function.Arguments, @ptrCast(ed)).iterate();
             const args = try arg_iter.extract(struct {
                 src_path: []const u8,
                 mod_path: ?[]const u8,
@@ -157,8 +155,8 @@ const functions = struct {
         pub const variadic = true;
 
         pub fn run(ed: *ExecuteDataOG, retval_og: *ValueOG) !void {
-            const retval = castTo(Value, retval_og);
-            var arg_iter = castTo(Function.Arguments, ed).iterate();
+            const retval: *Value = @ptrCast(retval_og);
+            var arg_iter = @as(*const Function.Arguments, @ptrCast(ed)).iterate();
             const args = try arg_iter.extract(struct {
                 src_path: []const u8,
                 params: ?Dictionary,
@@ -181,8 +179,8 @@ const functions = struct {
             }
             const so_path = try getSharedLibraryPath(php.allocator, mod_path, .this, .this);
             defer php.allocator.free(so_path);
-            const result = try ModuleHost.load(so_path);
-            retval.* = castTo(Value, &result).*;
+            var result = try ModuleHost.load(so_path);
+            retval.* = @as(*Value, @ptrCast(&result)).*;
         }
     };
     pub const zigar_import = struct {
@@ -191,8 +189,8 @@ const functions = struct {
         pub const variadic = true;
 
         pub fn run(ed: *ExecuteDataOG, retval_og: *ValueOG) !void {
-            const retval = castTo(Value, retval_og);
-            var arg_iter = castTo(Function.Arguments, ed).iterate();
+            const retval: *Value = @ptrCast(retval_og);
+            var arg_iter = @as(*const Function.Arguments, @ptrCast(ed)).iterate();
             const args = try arg_iter.extract(struct {
                 src_path: []const u8,
                 callback: ?Callable,

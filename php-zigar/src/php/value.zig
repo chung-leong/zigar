@@ -4,8 +4,6 @@ const Array = @import("array.zig").Array;
 const c = @import("c.zig");
 const pd = c.declarations;
 const pi = c.imports;
-const castTo = c.castTo;
-const castFrom = c.castFrom;
 const Callable = @import("callable.zig").Callable;
 const Dictionary = @import("dictionary.zig").Dictionary;
 const Object = @import("object.zig").Object;
@@ -44,22 +42,22 @@ pub const Value = struct {
     }
 
     pub fn string(self: *const @This()) *String {
-        return castTo(String, self.impl.value.str);
+        return @ptrCast(self.impl.value.str);
     }
 
     pub fn array(self: *const @This()) *Array {
-        return castTo(Array, self.impl.value.arr);
+        return @ptrCast(self.impl.value.arr);
     }
 
     pub fn object(self: *const @This()) *Object {
-        return castTo(Object, self.impl.value.obj);
+        return @ptrCast(self.impl.value.obj);
     }
 
     pub fn resource(self: *const @This()) *Resource {
-        return castTo(Resource, self.impl.value.res);
+        return @ptrCast(self.impl.value.res);
     }
 
-    pub fn reuse(self: *const @This()) @This() {
+    pub fn retain(self: *const @This()) @This() {
         self.addRef();
         return self.*;
     }
@@ -292,7 +290,7 @@ pub const Value = struct {
                         true => pd.IS_STRING,
                     },
                 },
-                .value = .{ .str = @constCast(castFrom(String, s)) },
+                .value = .{ .str = @ptrCast(@constCast(s)) },
             },
         };
     }
@@ -301,7 +299,7 @@ pub const Value = struct {
         return .{
             .impl = .{
                 .u1 = .{ .type_info = pd.IS_ARRAY_EX },
-                .value = .{ .arr = @constCast(castFrom(Array, a)) },
+                .value = .{ .arr = @ptrCast(@constCast(a)) },
             },
         };
     }
@@ -310,7 +308,7 @@ pub const Value = struct {
         return .{
             .impl = .{
                 .u1 = .{ .type_info = pd.IS_OBJECT_EX },
-                .value = .{ .obj = @constCast(castFrom(Object, o)) },
+                .value = .{ .obj = @ptrCast(@constCast(o)) },
             },
         };
     }
@@ -319,7 +317,7 @@ pub const Value = struct {
         return .{
             .impl = .{
                 .u1 = .{ .type_info = pd.IS_RESOURCE },
-                .value = .{ .res = @constCast(castFrom(Resource, r)) },
+                .value = .{ .res = @ptrCast(@constCast(r)) },
             },
         };
     }

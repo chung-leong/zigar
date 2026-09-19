@@ -5,8 +5,6 @@ const c = @import("c.zig");
 const pd = c.declarations;
 const pi = c.imports;
 const deref = c.deref;
-const castTo = c.castTo;
-const castFrom = c.castFrom;
 const ClassEntry = @import("class-entry.zig").ClassEntry;
 const efree = @import("allocator.zig").efree;
 const failure = @import("failure.zig");
@@ -17,9 +15,8 @@ const Value = @import("value.zig").Value;
 
 pub const Object = struct {
     pub fn create(ce: *const ClassEntry, params: []const Value) !*@This() {
-        const zce = castFrom(ClassEntry, ce);
         var zval: pd.zval = undefined;
-        const result = pi.object_init_ex(&zval, zce);
+        const result = pi.object_init_ex(&zval, @ptrCast(ce));
         if (result != c.SUCCESS) return error.CannotCreateObject;
         const zobj = zval.value.obj.?;
         const handlers = zobj.handlers.?;
@@ -48,10 +45,10 @@ pub const Object = struct {
                 ),
             }
         }
-        return castTo(Object, zobj);
+        return @ptrCast(zobj);
     }
 
-    pub fn reuse(self: *@This()) *@This() {
+    pub fn retain(self: *@This()) *@This() {
         self.addRef();
         return self;
     }
@@ -84,8 +81,7 @@ pub const Object = struct {
         if (std_handlers.read_dimension == handler) {
             if (zobj.ce.*.arrayaccess_funcs_ptr == null) return error.NoArrayAccess;
         }
-        const zk = castFrom(Value, &k.value);
-        const rv = handler(zobj, zk, pd.BP_VAR_IS, &value);
+        const rv = handler(zobj, @ptrCast(k.value), pd.BP_VAR_IS, &value);
         return rv != null;
     }
 
@@ -100,7 +96,7 @@ pub const Object = struct {
         if (std_handlers.read_dimension == handler) {
             if (zobj.ce.*.arrayaccess_funcs_ptr == null) return error.NoArrayAccess;
         }
-        const zk = castFrom(Value, &k.value);
+        const zk: *pd.zval = @ptrCast(&k.value);
         const rv = handler(zobj, zk, pd.BP_VAR_R, &value);
         if (rv == null) return error.Missing;
         return rv.*;
@@ -111,7 +107,7 @@ pub const Object = struct {
         const n: *String = .createFromAny(name);
         defer n.release();
         var value: Value = undefined;
-        const zn = castFrom(String, n);
+        const zn: *pd.zend_string = @ptrCast(n);
         const zval: *pd.zval = @ptrCast(&value);
         const result = pi.zend_read_property_ex(zobj.ce, zobj, zn, true, zval);
         if (result != pd.SUCCESS) return error.Missing;
@@ -120,9 +116,9 @@ pub const Object = struct {
 
     pub fn getProperties(self: *const @This()) *Array {
         var value = self.toValue();
-        const zval = castFrom(Value, &value);
+        const zval: *pd.zval = @ptrCast(&value);
         const ht = pi.zend_get_properties_for(zval, pd.ZEND_PROP_PURPOSE_ARRAY_CAST).?;
-        return castTo(Array, ht);
+        return @ptrCast(ht);
     }
 
     pub fn standardHandlers() *const Handlers {

@@ -4,8 +4,6 @@ const Array = @import("array.zig").Array;
 const c = @import("c.zig");
 const pd = c.declarations;
 const pi = c.imports;
-const castTo = c.castTo;
-const castFrom = c.castFrom;
 const Callable = @import("callable.zig").Callable;
 const Dictionary = @import("dictionary.zig").Dictionary;
 const efree = @import("allocator.zig").efree;
@@ -19,21 +17,21 @@ const Value = @import("value.zig").Value;
 pub const Function = struct {
     pub fn getName(self: *const @This()) ?*String {
         const zstr = self.impl.common.function_name orelse return null;
-        return castTo(String, zstr);
+        return @ptrCast(zstr);
     }
 
     pub const Arguments = struct {
         pub fn this(self: *const @This()) Value {
-            return castTo(Value, &self.impl.This).*;
+            return @as(*Value, @ptrCast(@constCast(&self.impl.This))).*;
         }
 
         pub fn getExtraNamed(self: *const @This()) ?*Array {
             const zarr = self.impl.extra_named_params orelse return null;
-            return castTo(Array, zarr);
+            return @ptrCast(zarr);
         }
 
         pub fn callee(self: *const @This()) *Function {
-            return castTo(Function, self.impl.func);
+            return @ptrCast(self.impl.func);
         }
 
         pub fn iterate(self: *const @This()) Iterator {
@@ -383,8 +381,7 @@ pub const Function = struct {
             fci.param_count = 0;
             fci.params = null;
             var err_msg: [*c]u8 = undefined;
-            const zcbl = @constCast(castFrom(Value, &callable));
-            const result = pi.zend_fcall_info_init(zcbl, 0, &fci, &fcc, null, &err_msg);
+            const result = pi.zend_fcall_info_init(@ptrCast(@constCast(&callable)), 0, &fci, &fcc, null, &err_msg);
             if (result != pd.SUCCESS) {
                 if (err_msg != null) {
                     defer efree(err_msg, @src());
@@ -414,11 +411,10 @@ pub const Function = struct {
             pi.zend_fcall_info_argp(&self.fci, @truncate(zargs.len), @constCast(zargs.ptr));
             defer pi.zend_fcall_info_args_clear(&self.fci, false);
             defer self.fci.named_params = null;
-            var zretval: pd.zval = undefined;
-            self.fci.retval = &zretval;
+            var retval: Value = undefined;
+            self.fci.retval = @ptrCast(&retval);
             const result = pi.zend_call_function(&self.fci, &self.fcc);
             if (result != pd.SUCCESS) return error.Failure;
-            const retval = castTo(Value, &zretval).*;
             if (retval.kind() == .undefined) {
                 const eg = c.globals("executor");
                 if (eg.exception != null) return error.ExceptionThrown;

@@ -34,39 +34,24 @@ pub inline fn globals(comptime name: []const u8) *@field(pd, "zend_" ++ name ++ 
     }
 }
 
-// TODO: just use @ptrCast() once code is more or less done to reduce amount of comptime calculations
-pub fn castTo(comptime T: type, ptr: anytype) PtrWithSameConstAs(T, @TypeOf(ptr)) {
-    const pt = @typeInfo(@TypeOf(ptr)).pointer;
-    const Impl = ImplementationOf(T);
-    if (pt.child != Impl) @compileError("Pointer to '" ++ @typeName(Impl) ++ "' expected, received: " ++ @typeName(@TypeOf(ptr)));
+pub fn zendCast(ptr: anytype) ZendTypePointer(@TypeOf(ptr)) {
     return @ptrCast(ptr);
 }
 
-pub fn castFrom(comptime T: type, ptr: anytype) PtrWithSameConstAs(ImplementationOf(T), @TypeOf(ptr)) {
-    const pt = @typeInfo(@TypeOf(ptr)).pointer;
-    if (pt.child != T) @compileError("Pointer to '" ++ @typeName(T) ++ "' expected, received: " ++ @typeName(@TypeOf(ptr)));
-    return @ptrCast(ptr);
-}
-
-fn ImplementationOf(comptime T: type) type {
-    return switch (@typeInfo(T)) {
-        .@"struct" => |st| get: {
-            if (st.field_types.len != 1) @compileError("Struct type with a single field expected, received: " ++ @typeName(T));
-            break :get st.field_types[0];
-        },
-        .@"opaque" => |op| @field(T, op.decl_names[op.decl_names.len - 1]),
-        else => @compileError("Struct type expected, received: " ++ @typeName(T)),
-    };
-}
-
-fn PtrWithSameConstAs(comptime NewChild: type, comptime Ptr: type) type {
-    return switch (@typeInfo(Ptr)) {
-        .pointer => |pt| switch (pt.attrs.@"const") {
-            true => *const NewChild,
-            false => *NewChild,
+fn ZendTypePointer(comptime Ptr: type) type {
+    switch (@typeInfo(Ptr)) {
+        .pointer => |pt| {
+            const Impl = switch (@typeInfo(pt.child)) {
+                .@"struct" => |st| get: {
+                    if (st.field_types.len != 1) @compileError("Pointer to struct type with a single field expected, received: " ++ @typeName(Ptr));
+                    break :get st.field_types[0];
+                },
+                else => @compileError("Pointer to struct type expected, received: " ++ @typeName(Ptr)),
+            };
+            return @Pointer(pt.size, pt.attrs, Impl, null);
         },
         else => @compileError("Pointer expected, received: " ++ @typeName(Ptr)),
-    };
+    }
 }
 
 pub fn argCount(comptime Func: type) usize {

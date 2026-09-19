@@ -3,8 +3,6 @@ pub const std = @import("std");
 const c = @import("c.zig");
 const pd = c.declarations;
 const pi = c.imports;
-const castTo = c.castTo;
-const castFrom = c.castFrom;
 const String = @import("string.zig").String;
 const unsupported = @import("failure.zig").unsupported;
 const Value = @import("value.zig").Value;
@@ -42,17 +40,17 @@ pub const Array = struct {
 
     pub fn create() *@This() {
         const ht = pi._zend_new_array_0();
-        return castTo(@This(), ht);
+        return @ptrCast(ht);
     }
 
     pub fn createNonDestructive() *@This() {
         const bytes = pi.emalloc(@sizeOf(pd.zend_array), @src());
         const ht: *pd.zend_array = @ptrCast(@alignCast(bytes));
         pi._zend_hash_init(ht, c.HT_MIN_SIZE, null, false);
-        return castTo(@This(), ht);
+        return @ptrCast(ht);
     }
 
-    pub fn reuse(self: *@This()) *@This() {
+    pub fn retain(self: *@This()) *@This() {
         self.addRef();
         return self;
     }
@@ -86,12 +84,12 @@ pub const Array = struct {
             .string => |s| pi.zend_hash_find(ht, s),
             .slice => |s| pi.zend_hash_str_find(ht, s.ptr, s.len),
         } orelse return error.Missing;
-        return castTo(Value, zval);
+        return @ptrCast(zval);
     }
 
     pub fn set(self: *@This(), key: anytype, value: *const Value) void {
         const ht = &self.impl;
-        const zval = @constCast(castFrom(Value, value));
+        const zval: *pd.zval = @ptrCast(@constCast(value));
         _ = switch (Key.fromAny(key)) {
             .integer => |i| pi.zend_hash_index_update(ht, i, zval),
             .string => |s| pi.zend_hash_update(ht, s, zval),
@@ -116,9 +114,8 @@ pub const Array = struct {
 
     pub fn append(self: *@This(), value: *const Value) void {
         const ht = &self.impl;
-        const zval = @constCast(castFrom(Value, value));
         ht.*.u.flags |= pd.HASH_FLAG_ALLOW_COW_VIOLATION;
-        _ = pi.zend_hash_next_index_insert(ht, zval);
+        _ = pi.zend_hash_next_index_insert(ht, @ptrCast(value));
         value.addRef();
     }
 
@@ -175,14 +172,13 @@ pub const Array = struct {
             }
             self.key_value = null;
             const zval = pi.zend_hash_get_current_data_ex(self.ht, &self.pos) orelse return null;
-            return castTo(Value, zval).*;
+            return @as(*const Value, @ptrCast(zval)).*;
         }
 
         pub fn key(self: *@This()) Value {
             if (self.key_value == null) {
                 var key_value: Value = undefined;
-                const zval = castFrom(Value, &key_value);
-                pi.zend_hash_get_current_key_zval_ex(self.ht, zval, &self.pos);
+                pi.zend_hash_get_current_key_zval_ex(self.ht, @ptrCast(&key_value), &self.pos);
                 self.key_value = key_value;
                 // don't increment the key's refcount
                 if (key_value.kind() == .string) key_value.release();

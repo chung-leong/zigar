@@ -4,7 +4,6 @@ const c = @import("c.zig");
 const pd = c.declarations;
 const pi = c.imports;
 const deref = c.deref;
-const castTo = c.castTo;
 const emalloc = @import("allocator.zig").emalloc;
 const unsupported = @import("failure.zig").unsupported;
 const Value = @import("value.zig").Value;
@@ -30,8 +29,8 @@ pub const String = struct {
 
     pub fn create(s: []const u8) *@This() {
         return switch (s.len) {
-            0 => castTo(@This(), deref(pi.zend_empty_string)),
-            1 => castTo(@This(), deref(pi.zend_one_char_string)[s[0]]),
+            0 => @ptrCast(deref(pi.zend_empty_string)),
+            1 => @ptrCast(deref(pi.zend_one_char_string)[s[0]]),
             else => create: {
                 const ns = createUnitialized(s.len);
                 if (s.len > 0) {
@@ -45,7 +44,7 @@ pub const String = struct {
 
     pub fn createUnitialized(len: usize) *@This() {
         return switch (len) {
-            0 => castTo(@This(), deref(pi.zend_empty_string)),
+            0 => @ptrCast(deref(pi.zend_empty_string)),
             else => create: {
                 const struct_size = @offsetOf(pd.zend_string, "val") + len + 1;
                 const aligned_size = std.mem.alignForward(usize, struct_size, pd.ZEND_MM_ALIGNMENT);
@@ -66,14 +65,14 @@ pub const String = struct {
     pub fn createInterned(s: []const u8) !*String {
         const zend_string_init_interned = deref(pi.zend_string_init_interned);
         const zstr = zend_string_init_interned.?(s.ptr, s.len, false);
-        return castTo(@This(), zstr);
+        return @ptrCast(zstr);
     }
 
     pub fn createFromAny(arg: anytype) *@This() {
         const AT = @TypeOf(arg);
         return switch (@typeInfo(AT)) {
             .pointer => |pt| switch (pt.child) {
-                String => arg.reuse(),
+                String => arg.retain(),
                 u8 => switch (pt.size) {
                     .slice => create(arg),
                     .c, .many => create(std.mem.sliceTo(arg, 0)),
@@ -94,7 +93,7 @@ pub const String = struct {
         };
     }
 
-    pub fn reuse(self: *@This()) *@This() {
+    pub fn retain(self: *@This()) *@This() {
         self.addRef();
         return self;
     }
