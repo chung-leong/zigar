@@ -7,6 +7,7 @@ const accessor = @import("../accessor.zig");
 const AllocatorStatic = @import("../allocator.zig").AllocatorStatic;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
+const extension = @import("../extension.zig");
 const failure = @import("../failure.zig");
 const Error = failure.Error;
 const GarbageCollectionBuffer = @import("../gc.zig").GarbageCollectionBuffer;
@@ -14,7 +15,6 @@ const gd = @import("../gd.zig");
 const Generator = @import("../generator.zig").Generator;
 const GeneratorStatic = @import("../generator.zig").GeneratorStatic;
 const iterator = @import("../iterator.zig");
-const extension = @import("../main.zig");
 const interface = @import("../module/native/interface.zig");
 const ZigObject = @import("../object.zig").ZigObject;
 const getObjectBuffer = @import("../object.zig").getObjectBuffer;
@@ -163,7 +163,7 @@ pub const Struct = struct {
             var call_cache: FunctionCallCache = if (callback) |cb| try .init(cb) else undefined;
             defer call_cache.deinit();
             // add a callback so we can remove the imports prior to request shutdown
-            try extension.addRequestShutdownCallback(self, onRequestShutdown);
+            try extension.shutdown_callbacks.add(self, onRequestShutdown);
             // bump the refcount of the class object so exported items don't get gc'ed
             const class = ZigClassEntry.fromStatic(self);
             php.addRef(class.object);
@@ -272,7 +272,7 @@ pub const Struct = struct {
             // remove reference on class object added by exportSymbolsToGlobalNamespace()
             const class = ZigClassEntry.fromStatic(self);
             php.release(class.object);
-            extension.removeRequestShutdownCallback(self, onRequestShutdown);
+            extension.shutdown_callbacks.remove(self, onRequestShutdown);
         }
 
         fn onRequestShutdown(ptr: *anyopaque) void {

@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const AbortSignal = @import("abort-signal.zig").AbortSignal;
-const extension = @import("main.zig");
+const extension = @import("extension.zig");
 const failure = @import("failure.zig");
 const io = @import("system.zig").io;
 const php = @import("php.zig");
@@ -297,7 +297,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
             self.ready = true;
             php.addRef(&self.stream);
             // register a shutdown function for the purpose of shutting down the loop
-            try extension.addRequestShutdownCallback(self, handleShutdown);
+            try extension.shutdown_callbacks.add(self, handleShutdown);
         }
 
         fn initImpl(self: *@This()) !void {
@@ -309,7 +309,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
         pub fn deinit(self: *@This()) void {
             if (!self.ready) return;
             self.ready = false;
-            extension.removeRequestShutdownCallback(self, handleShutdown);
+            extension.shutdown_callbacks.remove(self, handleShutdown);
             self.deinitImpl();
             php.release(&self.stream);
         }

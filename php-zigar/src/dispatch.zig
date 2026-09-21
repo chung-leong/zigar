@@ -6,7 +6,7 @@ const builtin = @import("builtin");
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const DynLib = @import("dyn-lib.zig").DynLib;
 const EventLoop = @import("event-loop.zig").EventLoop;
-const extension = @import("main.zig");
+const extension = @import("extension.zig");
 const failure = @import("failure.zig");
 const io = @import("system.zig").io;
 const interface = @import("module/native/interface.zig");
@@ -278,7 +278,7 @@ pub const CallDispatcher = struct {
         const self = try php_al.create(@This());
         errdefer php_al.destroy(self);
         self.* = .{ .host = host, .pipe_ptr = &pipes };
-        try extension.addRequestShutdownCallback(self, onRequestShutdown);
+        try extension.shutdown_callbacks.add(self, onRequestShutdown);
         return self;
     }
 
@@ -291,7 +291,7 @@ pub const CallDispatcher = struct {
             }
             redirection_controller.uninstallSyscallTrap();
         }
-        extension.removeRequestShutdownCallback(self, onRequestShutdown);
+        extension.shutdown_callbacks.remove(self, onRequestShutdown);
         self.releaseResources();
         if (self.env_variable_list) |list| c_allocator.free(list);
         if (self.env_variable_bytes) |bytes| c_allocator.free(bytes);

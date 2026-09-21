@@ -1,7 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const fn_transform = @import("../zigft/fn-transform.zig");
 const php = @import("root.zig");
 const Array = php.Array;
 const c = php.c;
@@ -44,12 +43,9 @@ pub const Function = struct {
         },
         else => StdHandler,
     };
+    const HandlerType = enum { handler, raw_handler, method_handler, raw_method_handler };
 
-    fn getHandlerType(comptime F: type, comptime class: ?type) enum {
-        handler,
-        rawhandler,
-        method,
-    } {
+    pub fn getHandlerType(comptime F: type, comptime class: ?type) ?HandlerType {
         const info = @typeInfo(F);
         if (info != .@"fn") @compileError("Function expected, received: " ++ @typeName(F));
         const AT = info.@"fn".param_types;
@@ -58,30 +54,78 @@ pub const Function = struct {
             .error_union => |eu| eu.payload,
             else => RT,
         };
-        if (AT[0] == *Arguments and AT[1] == *Value and PT == void) return .rawhandler;
+        if (AT.len == 2 and AT[0] == *Arguments and AT[1] == *Value and PT == void) return .raw_handler;
         if (AT.len == 1 and @typeInfo(AT[0].?) == .@"struct") return .handler;
         if (class) |C| {
-            if (AT.len == 2 and @typeInfo(AT[1].?) == .@"struct") {
-                // see if the first argument is a .one pointer
-                switch (@typeInfo(AT[0].?)) {
-                    .pointer => |pt| if (pt.size == .one and pt.child == C) {
-                        return .method;
-                    },
-                    else => {},
-                }
+            // see if the first argument is a .one pointer
+            const has_this_ptr = switch (@typeInfo(AT[0].?)) {
+                .pointer => |pt| pt.size == .one and pt.child == C,
+                else => false,
+            };
+            if (has_this_ptr) {
+                if (AT.len == 3 and AT[1] == *Arguments and AT[2] == *Value and PT == void) return .raw_method_handler;
+                if (AT.len == 2 and @typeInfo(AT[1].?) == .@"struct") return .method_handler;
             }
         }
-        @compileError("Improper function: " ++ @typeName(F));
+        return null;
+    }
+
+    pub fn getHandlerInfo(comptime func: anytype, comptime class: ?type) HandlerInfo {
+        const F = @TypeOf(func);
+        const handler_type = getHandlerType(F, class) orelse unrecognized(F, class);
+        const arg_names, const arg_types, const is_raw = switch (handler_type) {
+            .raw_handler, .raw_method_handler => .{
+                &.{}, &.{}, true,
+            },
+            .handler, .method_handler => init: {
+                const f = @typeInfo(F).@"fn";
+                const AT = f.param_types;
+                const offset = if (handler_type == .method_handler) 1 else 0;
+                const Struct = AT[offset].?;
+                const st = @typeInfo(Struct).@"struct";
+                break :init .{ st.field_names, st.field_types, false };
+            },
+        };
+        const is_variadic = is_raw or check: {
+            if (arg_types.len > 0) {
+                // see if last argument is a dictionary
+                const LT = arg_types[arg_types.len - 1];
+                break :check LT == Dictionary or LT == ?Dictionary;
+            }
+            break :check false;
+        };
+        const arguments, const required_count = init: {
+            var arguments: [arg_types.len]ArgumentInfo = undefined;
+            var required_count: usize = 0;
+            inline for (arg_names, 0..) |arg_name, i| {
+                const required = switch (@typeInfo(arg_types[i])) {
+                    .optional => false,
+                    else => true,
+                };
+                if (required) required_count += 1;
+                arguments[i] = .{
+                    .name = arg_name,
+                    .required = required,
+                };
+            }
+            break :init .{ &arguments, required_count };
+        };
+        return .{
+            .type = handler_type,
+            .arguments = arguments,
+            .required_count = required_count,
+            .is_variadic = is_variadic,
+        };
     }
 
     pub fn handler(comptime func: anytype, comptime class: ?type) Handler {
         const F = @TypeOf(func);
-        const handler_type = getHandlerType(F, class);
+        const handler_type = getHandlerType(F, class) orelse unrecognized(F, class);
         const f = @typeInfo(F).@"fn";
         const AT = f.param_types;
         const returning_error = @typeInfo(f.return_type.?) == .error_union;
         const ns = struct {
-            pub fn rawhandler(zed: [*c]c.zend_execute_data, zretval: [*c]c.zval) callconv(.c) void {
+            pub fn raw_handler(zed: [*c]c.zend_execute_data, zretval: [*c]c.zval) callconv(.c) void {
                 const args: *Arguments = @ptrCast(zed);
                 const retval: *Value = @ptrCast(zretval);
                 switch (returning_error) {
@@ -252,7 +296,7 @@ pub const Function = struct {
                 };
                 try self.verifyCount(min, max);
                 var set: T = undefined;
-                var mismatch: ?ArgumentMismatch = null;
+                var mismatch: ?Mismatch = null;
                 var required_remaining = min;
                 inline for (@typeInfo(T).@"struct".field_names, 0..) |arg_name, i| {
                     const FT = @TypeOf(@field(set, arg_name));
@@ -304,7 +348,7 @@ pub const Function = struct {
                 };
                 if (!valid) @compileError("Struct type expected, received: " ++ @typeName(T));
                 var set: T = undefined;
-                var mismatch: ?ArgumentMismatch = null;
+                var mismatch: ?Mismatch = null;
                 inline for (@typeInfo(T).@"struct".field_names) |arg_name| {
                     const FT = @TypeOf(@field(set, arg_name));
                     const VT, const optional = switch (@typeInfo(FT)) {
@@ -430,7 +474,7 @@ pub const Function = struct {
                 };
             }
 
-            const ArgumentMismatch = struct {
+            const Mismatch = struct {
                 fn_name: ?*String = null,
                 arg_name: []const u8,
                 value_type: []const u8,
@@ -491,6 +535,16 @@ pub const Function = struct {
 
         impl: c.zend_execute_data,
     };
+    pub const HandlerInfo = struct {
+        type: HandlerType,
+        arguments: []ArgumentInfo,
+        required_count: usize,
+        is_variadic: bool,
+    };
+    pub const ArgumentInfo = struct {
+        name: [:0]const u8,
+        required: bool,
+    };
     pub const CallCache = struct {
         pub fn init(callable: Value) !@This() {
             var fci: c.zend_fcall_info = undefined;
@@ -543,6 +597,13 @@ pub const Function = struct {
         fci: c.zend_fcall_info,
         fcc: c.zend_fcall_info_cache,
     };
+
+    fn unrecognized(comptime F: type, comptime class: ?type) noreturn {
+        if (class) |_|
+            @compileError("Improper method handler: " ++ @typeName(F))
+        else
+            @compileError("Improper function handler: " ++ @typeName(F));
+    }
 
     impl: c.zend_function,
 };

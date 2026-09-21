@@ -14,7 +14,9 @@ pub const emalloc = @import("allocator.zig").emalloc;
 pub const failure = @import("failure.zig");
 pub const free = @import("allocator.zig").efree;
 pub const Function = @import("function.zig").Function;
+pub const InfoTable = @import("info-table.zig").InfoTable;
 pub const malloc = @import("allocator.zig").emalloc;
+pub const Module = @import("module.zig").Module;
 pub const Object = @import("object.zig").Object;
 pub const Reference = @import("reference.zig").Reference;
 pub const Resource = @import("resource.zig").Resource;
@@ -22,7 +24,17 @@ pub const Stream = @import("stream.zig").Stream;
 pub const String = @import("string.zig").String;
 pub const Value = @import("value.zig").Value;
 
+pub const api_no = c.ZEND_MODULE_API_NO + 0;
+pub const build_id = std.fmt.comptimePrint("API{d}{s}{s}{s}{s}", .{
+    c.ZEND_MODULE_API_NO,
+    c.ZEND_BUILD_TS,
+    c.ZEND_BUILD_DEBUG,
+    c.ZEND_BUILD_SYSTEM,
+    c.ZEND_BUILD_EXTRA,
+});
+pub const debug = c.ZEND_DEBUG != 0;
 pub const use_tsrm = @hasDecl(c, "ZTS");
+
 pub const imports = switch (builtin.target.os.tag) {
     // on Windows, we link symbols in PHP DLL manually
     .windows => @import("win32-imports.zig"),
