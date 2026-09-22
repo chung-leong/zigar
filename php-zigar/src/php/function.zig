@@ -24,28 +24,30 @@ pub const Function = struct {
         return @ptrCast(zstr);
     }
 
-    // pub fn fromAny(comptime func: anytype) @This() {
-    //     const handler
-    // }
-
-    const StdHandler = fn ([*c]c.zend_execute_data, [*c]c.zval) callconv(.c) void;
-    const Handler = switch (builtin.target.os.tag) {
-        .windows => init: {
-            // handler uses fastcall
-            const f = @typeInfo(StdHandler).@"fn";
-            break :init @Fn(f.param_types, f.param_attrs, f.return_type.?, .{
-                .@"callconv" = switch (builtin.target.cpu.arch) {
-                    .x86_64 => .{ .x86_64_vectorcall = .{} },
-                    .x86 => .{ .x86_vectorcall = .{} },
-                    else => .c,
+    pub fn fromHandler(comptime func: anytype, comptime this_type: ?type) @This() {
+        const handler_info = comptime getHandlerInfo(func, this_type);
+        const arg_info = emptyArgInfo(handler_info.arguments.len, handler_info.is_variadic);
+        const flags = c.ZEND_ACC_PUBLIC | switch (handler_info.is_variadic) {
+            true => c.ZEND_ACC_VARIADIC,
+            false => 0,
+        };
+        const name = String.static(extractName(func));
+        return .{
+            .impl = .{
+                .internal_function = .{
+                    .type = c.ZEND_INTERNAL_FUNCTION,
+                    .function_name = @ptrCast(name),
+                    .handler = &handler(func, this_type),
+                    .num_args = handler_info.arguments.len,
+                    .required_num_args = handler_info.required_count,
+                    .arg_info = @constCast(arg_info.ptr),
+                    .fn_flags = flags,
                 },
-            });
-        },
-        else => StdHandler,
-    };
-    const HandlerType = enum { handler, raw_handler, method_handler, raw_method_handler };
+            },
+        };
+    }
 
-    pub fn getHandlerType(comptime F: type, comptime class: ?type) ?HandlerType {
+    pub fn getHandlerType(comptime F: type, comptime this_type: ?type) ?HandlerType {
         const info = @typeInfo(F);
         if (info != .@"fn") @compileError("Function expected, received: " ++ @typeName(F));
         const AT = info.@"fn".param_types;
@@ -54,33 +56,23 @@ pub const Function = struct {
             .error_union => |eu| eu.payload,
             else => RT,
         };
-        if (AT.len == 2 and AT[0] == *Arguments and AT[1] == *Value and PT == void) return .raw_handler;
+        if (AT.len == 2 and AT[0] == *Arguments and AT[1] == *Value and PT == void) return .raw;
         if (AT.len == 1 and @typeInfo(AT[0].?) == .@"struct") return .handler;
-        if (class) |C| {
-            // see if the first argument is a .one pointer
-            const has_this_ptr = switch (@typeInfo(AT[0].?)) {
-                .pointer => |pt| pt.size == .one and pt.child == C,
-                else => false,
-            };
-            if (has_this_ptr) {
-                if (AT.len == 3 and AT[1] == *Arguments and AT[2] == *Value and PT == void) return .raw_method_handler;
-                if (AT.len == 2 and @typeInfo(AT[1].?) == .@"struct") return .method_handler;
-            }
+        if (this_type) |This| {
+            if (AT[0] == This and AT.len == 2 and @typeInfo(AT[1].?) == .@"struct") return .method;
         }
         return null;
     }
 
-    pub fn getHandlerInfo(comptime func: anytype, comptime class: ?type) HandlerInfo {
+    pub fn getHandlerInfo(comptime func: anytype, comptime this_type: ?type) HandlerInfo {
         const F = @TypeOf(func);
-        const handler_type = getHandlerType(F, class) orelse unrecognized(F, class);
+        const handler_type = getHandlerType(F, this_type) orelse unrecognized(F, this_type);
         const arg_names, const arg_types, const is_raw = switch (handler_type) {
-            .raw_handler, .raw_method_handler => .{
-                &.{}, &.{}, true,
-            },
-            .handler, .method_handler => init: {
+            .raw => .{ &.{}, &.{}, true },
+            .handler, .method => init: {
                 const f = @typeInfo(F).@"fn";
                 const AT = f.param_types;
-                const offset = if (handler_type == .method_handler) 1 else 0;
+                const offset = if (handler_type == .method) 1 else 0;
                 const Struct = AT[offset].?;
                 const st = @typeInfo(Struct).@"struct";
                 break :init .{ st.field_names, st.field_types, false };
@@ -118,22 +110,13 @@ pub const Function = struct {
         };
     }
 
-    pub fn handler(comptime func: anytype, comptime class: ?type) Handler {
+    pub fn handler(comptime func: anytype, comptime this_type: ?type) Handler {
         const F = @TypeOf(func);
-        const handler_type = getHandlerType(F, class) orelse unrecognized(F, class);
+        const handler_type = getHandlerType(F, this_type) orelse unrecognized(F, this_type);
         const f = @typeInfo(F).@"fn";
         const AT = f.param_types;
         const returning_error = @typeInfo(f.return_type.?) == .error_union;
         const ns = struct {
-            pub fn raw_handler(zed: [*c]c.zend_execute_data, zretval: [*c]c.zval) callconv(.c) void {
-                const args: *Arguments = @ptrCast(zed);
-                const retval: *Value = @ptrCast(zretval);
-                switch (returning_error) {
-                    true => func(args, retval) catch |err| return throw(err),
-                    false => func(args, retval),
-                }
-            }
-
             pub fn handler(zed: [*c]c.zend_execute_data, zretval: [*c]c.zval) callconv(.c) void {
                 const args: *Arguments = @ptrCast(zed);
                 const retval: *Value = @ptrCast(zretval);
@@ -151,10 +134,24 @@ pub const Function = struct {
                 const php_args: *Arguments = @ptrCast(zed);
                 const retval: *Value = @ptrCast(zretval);
                 var iter = php_args.iterate();
-                const this_obj = php_args.this.getObject() catch |err| return throw(err);
-                const this_obj_addr: usize = @intFromPtr(this_obj);
-                const offset = this_obj.impl.handlers.offset;
-                const arg0: AT[0].? = @ptrFromInt(this_obj_addr - offset);
+                // use this variable as the first argument (i.e. self), which is going
+                // a custom object
+                const Self = AT[0].?;
+                const arg0: Self = switch (Self) {
+                    Value => iter.this,
+                    *Object => iter.this.getObject() catch |err| return throw(err),
+                    else => switch (iter.this.kind()) {
+                        .object => get: {
+                            const this_obj = php_args.this.object();
+                            const this_obj_addr: usize = @intFromPtr(this_obj);
+                            const offset = this_obj.impl.handlers.offset;
+                            // TODO: check class entry
+                            const struct_addr = this_obj_addr - offset;
+                            break :get @ptrFromInt(struct_addr);
+                        },
+                        .pointer => @ptrCast(php_args.this.pointer()),
+                    },
+                };
                 if (iter.extract(AT[1].?)) |arg1| {
                     const result = switch (returning_error) {
                         true => func(arg0, arg1) catch |err| return throw(err),
@@ -162,6 +159,15 @@ pub const Function = struct {
                     };
                     retval.* = .fromAny(result);
                 } else |err| throw(err);
+            }
+
+            pub fn raw(zed: [*c]c.zend_execute_data, zretval: [*c]c.zval) callconv(.c) void {
+                const args: *Arguments = @ptrCast(zed);
+                const retval: *Value = @ptrCast(zretval);
+                switch (returning_error) {
+                    true => func(args, retval) catch |err| return throw(err),
+                    false => func(args, retval),
+                }
             }
 
             fn throw(err: anytype) void {
@@ -300,21 +306,18 @@ pub const Function = struct {
                 var required_remaining = min;
                 inline for (@typeInfo(T).@"struct".field_names, 0..) |arg_name, i| {
                     const FT = @TypeOf(@field(set, arg_name));
-                    const VT, const optional = switch (@typeInfo(FT)) {
-                        .optional => |opt| .{ opt.child, true },
-                        else => .{ FT, false },
-                    };
+                    const optional = comptime isFieldOptional(T, i);
                     // take value for optional argument only when there're enough left to satistfy
                     // remaining required ones
                     if (!optional or i + required_remaining < self.len) {
                         const arg = self.next().?;
-                        const value = arg.convertTo(VT) catch |err| report: {
+                        const value = arg.convertTo(FT) catch |err| report: {
                             if (mismatch == null) {
                                 // remember the first mismatch
                                 mismatch = .{
                                     .fn_name = self.callee.getName(),
                                     .arg_name = arg_name,
-                                    .value_type = valueTypeName(VT),
+                                    .value_type = valueTypeName(FT),
                                     .index = i,
                                     .value = arg,
                                     .err = err,
@@ -323,12 +326,12 @@ pub const Function = struct {
                             self.index -= 1;
                             // break out of for loop if argument is required
                             if (!optional) break;
-                            break :report null;
+                            break :report fieldDefaultValue(T, i);
                         };
                         @field(set, arg_name) = value;
                         if (!optional) required_remaining -= 1;
                     } else {
-                        @field(set, arg_name) = null;
+                        @field(set, arg_name) = fieldDefaultValue(T, i);
                     }
                 }
                 if (mismatch) |m| {
@@ -349,7 +352,7 @@ pub const Function = struct {
                 if (!valid) @compileError("Struct type expected, received: " ++ @typeName(T));
                 var set: T = undefined;
                 var mismatch: ?Mismatch = null;
-                inline for (@typeInfo(T).@"struct".field_names) |arg_name| {
+                inline for (@typeInfo(T).@"struct".field_names, 0..) |arg_name, i| {
                     const FT = @TypeOf(@field(set, arg_name));
                     const VT, const optional = switch (@typeInfo(FT)) {
                         .optional => |opt| .{ opt.child, true },
@@ -376,7 +379,7 @@ pub const Function = struct {
                         @field(set, arg_name) = value;
                     } else {
                         if (optional) {
-                            @field(set, arg_name) = null;
+                            @field(set, arg_name) = fieldDefaultValue(T, i);
                         } else {
                             mismatch = .{
                                 .fn_name = self.callee.getName(),
@@ -456,17 +459,18 @@ pub const Function = struct {
                                 combined_name_len += name.len;
                                 if (i != len - 1) combined_name_len += 1;
                             }
-                            var combined_name: [combined_name_len]u8 = undefined;
+                            var buffer: [combined_name_len]u8 = undefined;
                             var offset: usize = 0;
                             for (0..len) |i| {
                                 const name = names[i];
-                                @memcpy(combined_name[offset .. offset + name.len], name);
+                                @memcpy(buffer[offset .. offset + name.len], name);
                                 offset += name.len;
                                 if (offset < combined_name_len) {
-                                    combined_name[offset] = '|';
+                                    buffer[offset] = '|';
                                     offset += 1;
                                 }
                             }
+                            const combined_name = buffer;
                             break :format &combined_name;
                         },
                     },
@@ -565,6 +569,10 @@ pub const Function = struct {
             return .{ .fci = fci, .fcc = fcc };
         }
 
+        pub fn initFromName(name: *const String) !@This() {
+            return try init(.fromString(name));
+        }
+
         pub fn deinit(self: *@This()) void {
             pi.zend_fcall_info_args_clear(&self.fci, true);
         }
@@ -597,9 +605,49 @@ pub const Function = struct {
         fci: c.zend_fcall_info,
         fcc: c.zend_fcall_info_cache,
     };
+    pub const HandlerType = enum { handler, raw, method };
 
-    fn unrecognized(comptime F: type, comptime class: ?type) noreturn {
-        if (class) |_|
+    fn emptyArgInfo(comptime count: usize, comptime is_variadic: bool) []const c.zend_internal_arg_info {
+        const len = count + if (is_variadic) 1 else 0;
+        const rem = @rem(len, 8);
+        if (rem > 0) {
+            // reuse the same list if the number of arguments is less than 8
+            const larger = emptyArgInfo(len + (8 - rem), false);
+            return larger[0..len];
+        } else {
+            const ns = struct {
+                const array = init: {
+                    var buffer: [len]c.zend_internal_arg_info = undefined;
+                    if (c.zend_internal_function == c.zend_arg_info) {
+                        for (&buffer) |*ptr| ptr.* = .{ .name = String.static("") }; // 8.6
+                    } else {
+                        for (&buffer) |*ptr| ptr.* = .{ .name = "" };
+                    }
+                    break :init buffer;
+                };
+            };
+            return &ns.array;
+        }
+    }
+
+    const StdHandler = fn ([*c]c.zend_execute_data, [*c]c.zval) callconv(.c) void;
+    const Handler = switch (builtin.target.os.tag) {
+        .windows => init: {
+            // handler uses fastcall
+            const f = @typeInfo(StdHandler).@"fn";
+            break :init @Fn(f.param_types, f.param_attrs, f.return_type.?, .{
+                .@"callconv" = switch (builtin.target.cpu.arch) {
+                    .x86_64 => .{ .x86_64_vectorcall = .{} },
+                    .x86 => .{ .x86_vectorcall = .{} },
+                    else => .c,
+                },
+            });
+        },
+        else => StdHandler,
+    };
+
+    fn unrecognized(comptime F: type, comptime this_type: ?type) noreturn {
+        if (this_type) |_|
             @compileError("Improper method handler: " ++ @typeName(F))
         else
             @compileError("Improper function handler: " ++ @typeName(F));
@@ -607,3 +655,35 @@ pub const Function = struct {
 
     impl: c.zend_function,
 };
+
+pub fn extractName(comptime func: anytype) []const u8 {
+    const ns = struct {
+        pub fn Dummy(comptime arg: anytype) type {
+            return struct {
+                comptime x: @TypeOf(arg) = arg,
+            };
+        }
+    };
+    const name = @typeName(ns.Dummy(func));
+    const si = std.mem.indexOfScalar(u8, name, '\'').?;
+    const ei = std.mem.lastIndexOfScalar(u8, name, '\'').?;
+    return name[si + 1 .. ei];
+}
+
+fn isFieldOptional(comptime T: type, comptime index: usize) bool {
+    const st = @typeInfo(T).@"struct";
+    const FT = st.field_types[index];
+    return switch (@typeInfo(FT)) {
+        .optional => true,
+        else => st.field_attrs[index].default_value_ptr != null,
+    };
+}
+
+fn fieldDefaultValue(comptime T: type, comptime index: usize) @typeInfo(T).@"struct".field_types[index] {
+    const st = @typeInfo(T).@"struct";
+    const FT = st.field_types[index];
+    const field_attrs = st.field_attrs[index];
+    const opaque_ptr = field_attrs.default_value_ptr orelse return null;
+    const default_value_ptr: *const FT = @ptrCast(@alignCast(opaque_ptr));
+    return default_value_ptr.*;
+}

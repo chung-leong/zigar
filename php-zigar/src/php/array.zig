@@ -87,13 +87,13 @@ pub const Array = struct {
         return @ptrCast(zval);
     }
 
-    pub fn set(self: *@This(), key: anytype, value: *const Value) void {
+    pub fn set(self: *@This(), key: anytype, value: Value) void {
         const ht = &self.impl;
-        const zval: *c.zval = @ptrCast(@constCast(value));
+        const zval: *c.zval = @ptrCast(@constCast(&value));
         _ = switch (Key.fromAny(key)) {
             .integer => |i| pi.zend_hash_index_update(ht, i, zval),
-            .string => |s| pi.zend_hash_update(ht, s, zval),
-            .slice => |s| pi.zend_hash_str_update(ht, s.ptr, s.len, zval),
+            .string => |str| pi.zend_hash_update(ht, @ptrCast(str), zval),
+            .slice => |slice| pi.zend_hash_str_update(ht, slice.ptr, slice.len, zval),
         };
         value.addRef();
     }
@@ -190,7 +190,11 @@ pub const Array = struct {
         pub fn fromAny(arg: anytype) @This() {
             const KT = @TypeOf(arg);
             return switch (@typeInfo(KT)) {
-                .int, .comptime_int => .{ .integer = @intCast(arg) },
+                .int => |int| switch (int.signedness) {
+                    .signed => @bitCast(@as(c_long, arg)),
+                    .unsigned => .{ .integer = arg },
+                },
+                .comptime_int => .{ .integer = arg },
                 .pointer => |pt| switch (pt.child) {
                     String => .{ .string = @constCast(arg) },
                     u8 => switch (pt.size) {
@@ -210,7 +214,7 @@ pub const Array = struct {
             };
         }
 
-        integer: c_long,
+        integer: c_ulong,
         string: *String,
         slice: []const u8,
     };

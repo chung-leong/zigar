@@ -268,7 +268,7 @@ pub fn Class(comptime S: type) type {
             if (src_class.type != .@"struct" or src_class.purpose != .allocator) {
                 return error.NotAllocator;
             }
-            return ExternalAllocator.fromObject(src_obj);
+            return ExternalAllocator.fromObject(@ptrCast(src_obj));
         }
 
         pub const visitPointers = Super.Super.visitPointers;

@@ -67,6 +67,17 @@ pub inline fn globals(comptime name: []const u8) *@field(c, "zend_" ++ name ++ "
     }
 }
 
+pub fn throwException(obj: *Object) error{ExceptionThrown} {
+    const value: Value = .fromObject(obj);
+    imports.zend_throw_exception_object(@ptrCast(@constCast(&value)));
+    return error.ExceptionThrown;
+}
+
+pub fn exceptionThrown() bool {
+    const eg = globals("executor");
+    return eg.exception != null;
+}
+
 pub fn zendCast(ptr: anytype) ZendTypePointer(@TypeOf(ptr)) {
     return @ptrCast(ptr);
 }

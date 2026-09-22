@@ -16,36 +16,26 @@ const Value = php.Value;
 pub const Object = struct {
     pub fn create(ce: *const ClassEntry, params: []const Value) !*@This() {
         var zval: c.zval = undefined;
-        const result = pi.object_init_ex(&zval, @ptrCast(ce));
+        const result = pi.object_init_ex(&zval, @ptrCast(@constCast(ce)));
         if (result != c.SUCCESS) return error.CannotCreateObject;
-        const zobj = zval.value.obj.?;
-        const handlers = zobj.handlers.?;
-        const handler = handlers.get_constructor.?;
-        const ctor = handler(zobj);
+        const zobj = zval.value.obj;
+        const handlers = zobj.*.handlers;
+        const handler = handlers.*.get_constructor;
+        const ctor = handler.?(zobj);
         if (ctor) |f| {
+            const zparams: [*]c.zval = @ptrCast(@constCast(params.ptr));
+            const len: u32 = @truncate(params.len);
             switch (@hasDecl(c, "zend_call_known_function_ex")) {
-                true => pi.zend_call_known_function_ex(
-                    f,
-                    zobj,
-                    zobj.ce,
-                    null,
-                    @intCast(params.len),
-                    @constCast(params.ptr),
-                    null,
-                    0,
-                ),
-                false => pi.zend_call_known_function(
-                    f,
-                    zobj,
-                    zobj.ce,
-                    null,
-                    @intCast(params.len),
-                    @constCast(params.ptr),
-                    null,
-                ),
+                true => pi.zend_call_known_function_ex(f, zobj, zobj.*.ce, null, len, zparams, null, 0),
+                false => pi.zend_call_known_function(f, zobj, zobj.*.ce, null, len, zparams, null),
             }
         }
         return @ptrCast(zobj);
+    }
+
+    pub fn createFromName(name: anytype, params: []const Value) !*@This() {
+        const ce = ClassEntry.find(name) orelse return error.ClassNotFound;
+        return .create(ce, params);
     }
 
     pub fn retain(self: *@This()) *@This() {
@@ -68,6 +58,16 @@ pub const Object = struct {
 
     pub fn toValue(self: *const @This()) Value {
         return .fromObject(self);
+    }
+
+    pub fn isInstanceOf(self: *const @This(), ce: *const ClassEntry) bool {
+        const zobj = &self.impl;
+        const zce: *const c.zend_class_entry = @ptrCast(ce);
+        return (zobj.ce == zce) or pi.instanceof_function_slow(zobj.ce, zce);
+    }
+
+    pub fn hasStandardInterface(self: *const @This(), iface: ClassEntry.StandardInterface) bool {
+        return self.isInstanceOf(iface.get());
     }
 
     pub fn hasElement(self: *const @This(), key: anytype) !bool {
@@ -138,7 +138,7 @@ pub const Object = struct {
             break :init @Struct(.auto, null, &field_names, &field_types, &field_attrs);
         };
         return struct {
-            pub fn init(context: *const Value) !@This() {
+            pub fn init(context: Value) !@This() {
                 var entries: Entries = undefined;
                 const field_names = comptime std.meta.fieldNames(Entries);
                 var init_count: usize = 0;
@@ -148,14 +148,13 @@ pub const Object = struct {
                         @field(entries, field_names[i]).deinit();
                     }
                 }
-                var arr = .init(null);
-                defer arr.deinit();
+                var arr: *Array = .create();
+                defer arr.release();
                 arr.set(0, context);
-                const callable = arr.toValue();
                 inline for (field_names) |field_name| {
-                    const name: Value = .fromStaticString(field_name);
-                    arr.set(1, &name);
-                    @field(entries, field_name) = try .init(&callable);
+                    const name: Value = .fromString(.static(field_name));
+                    arr.set(1, name);
+                    @field(entries, field_name) = try .init(arr.toValue());
                     init_count += 1;
                 }
                 return .{ .method = entries };

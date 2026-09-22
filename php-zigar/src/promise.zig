@@ -5,16 +5,14 @@ const Transform = accessor.Transform;
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
 const php = @import("php.zig");
-const ArgumentIterator = php.ArgumentIterator;
-const ExecuteData = php.ExecuteData;
-const Fiber = php.Fiber;
-const Function = php.Function;
-const FunctionCallCache = php.FunctionCallCache;
-const HashTable = php.HashTable;
-const N = php.getStaticString;
-const Object = php.Object;
-const String = php.String;
-const Value = php.Value;
+const php_ng = @import("php/root.zig");
+const Array = php_ng.Array;
+const Function = php_ng.Function;
+const Closure = php_ng.Closure;
+const Object = php_ng.Object;
+const String = php_ng.String;
+const N = String.static;
+const Value = php_ng.Value;
 const structure = @import("structure.zig");
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 
@@ -23,10 +21,10 @@ pub const Promise = struct {
     fiber: Value,
     result: Value,
     callback: ?Value,
-    callback_cache: FunctionCallCache,
+    callback_cache: Function.CallCache,
     transform: ?Transform = null,
     buffer: *ByteBuffer,
-    arguments: ?*HashTable = null,
+    arguments: ?*Array = null,
 
     pub fn create(callback: ?Value) !*@This() {
         const alignment: std.mem.Alignment = .fromByteUnits(@alignOf(@This()));
@@ -35,10 +33,10 @@ pub const Promise = struct {
         const self: *@This() = @ptrCast(@alignCast(buf.bytes.ptr));
         self.* = .{
             .buffer = buf,
-            .result = php.createValueNull(),
-            .fiber = php.createValueNull(),
-            .callback_cache = if (callback) |*cb| try .init(cb) else undefined,
-            .callback = if (callback) |*cb| php.reuse(cb).* else null,
+            .result = .fromNull(),
+            .fiber = .fromNull(),
+            .callback_cache = if (callback) |cb| try .init(cb) else undefined,
+            .callback = if (callback) |cb| cb.retain() else null,
         };
         return self;
     }
@@ -50,21 +48,19 @@ pub const Promise = struct {
             return;
         }
         if (self.buffer.ref_count == 1) {
-            if (self.callback) |*cb| {
-                php.release(cb);
+            if (self.callback) |cb| {
+                cb.release();
                 self.callback_cache.deinit();
             }
-            php.release(&self.result);
-            php.release(&self.fiber);
-            if (self.arguments) |args| {
-                php.release(args);
-            }
+            self.result.release();
+            self.fiber.release();
+            if (self.arguments) |args| args.release();
         }
         // this needs to happen last, since self points to the memory in the buffer
         self.buffer.release();
     }
 
-    pub fn retain(self: *@This(), args: *HashTable) void {
+    pub fn retain(self: *@This(), args: *Array) void {
         self.arguments = args;
     }
 
@@ -77,58 +73,59 @@ pub const Promise = struct {
     pub fn await(self: *@This()) !Value {
         // std.debug.print("Promise.await() called\n", .{});
         if (self.status == .unused) {
-            php.release(&self.fiber);
+            self.fiber.release();
             self.fiber = try CallDispatcher.event_loop.getFiber();
             self.status = .waiting;
-            try CallDispatcher.event_loop.suspendFiber(&self.fiber);
+            try CallDispatcher.event_loop.suspendFiber(self.fiber);
         }
         // throw if the callback received an exception
-        if (php.getValueObject(&self.result) catch null) |obj| {
-            if (php.instanceOf(obj, php.getInterface(.throwable))) {
-                return php.throwException(obj);
+        if (self.result.kind() == .object) {
+            const obj = self.result.object();
+            if (obj.hasStandardInterface(.throwable)) {
+                return php_ng.throwException(obj);
             }
         }
         // it's up to the caller to dispose of the result
-        return php.reuse(&self.result).*;
+        return self.result.retain();
     }
 
-    pub fn resolve(self: *@This(), value: *Value) !void {
+    pub fn resolve(self: *@This(), value: Value) !void {
         switch (self.status) {
             .released => {
                 self.status = .resolved;
                 self.release();
                 return;
             },
-            .waiting => CallDispatcher.event_loop.resumeFiberAfterward(&self.fiber),
+            .waiting => CallDispatcher.event_loop.resumeFiberAfterward(self.fiber),
             else => {},
         }
-        self.result = php.reuse(value).*;
-        if (self.transform) |tm| try tm.apply(&self.result);
+        self.result = value.retain();
+        if (self.transform) |tm| try tm.apply(@ptrCast(&self.result));
         if (self.status == .detached) {
             defer self.release();
-            const args: []Value = @ptrCast(&self.result);
-            const retval = try self.callback_cache.invoke(args);
-            php.release(&retval);
+            const retval = try self.callback_cache.invoke(&.{self.result});
+            retval.release();
         } else {
             self.status = .resolved;
         }
     }
 
     pub fn createHandler() Value {
-        var func = php.createTransformedFunction(handleResolve, "resolve", 2, false);
-        return php.createValueClosure(&func, null, null, null);
+        var func: Function = .fromHandler(onResolve, null);
+        const closure: Closure = .create(&func, null, null, null);
+        return closure.toValue();
     }
 
-    pub fn handleResolve(ed: *ExecuteData, return_value: *Value) !void {
-        var arg_iter: ArgumentIterator = .init(ed);
-        const ptr = arg_iter.next() orelse return error.Unexpected;
-        const ptr_struct = try structure.Pointer.fromValue(ptr);
-        const target = try ptr_struct.getValue(.none);
-        defer php.release(&target);
-        const self = try accessor.getOpaqueTarget(@This(), &target);
-        const result = arg_iter.next() orelse return error.Unexpected;
-        try self.resolve(result);
-        return_value.* = php.createValueNull();
+    pub fn onResolve(args: struct {
+        pointer: *Object,
+        result: Value,
+    }) !void {
+        const ptr_struct = structure.Pointer.fromObject(@ptrCast(args.pointer));
+        const target_og = try ptr_struct.getValue(.none);
+        const target: Value = .fromZval(target_og);
+        defer target.release();
+        const self = try accessor.getOpaqueTarget(@This(), @ptrCast(&target));
+        try self.resolve(args.result);
     }
 };
 
@@ -143,20 +140,23 @@ pub const PromiseStatic = struct {
         allocator: ?*std.mem.Allocator,
         argument_class: *ZigClassEntry,
         pointer: Value,
-        call_cache: FunctionCallCache,
+        call_cache: Function.CallCache,
 
-        pub fn init(generator: *const Value, extern_allocator: ?*std.mem.Allocator) !@This() {
-            const generator_struct = try structure.Struct.fromValue(generator);
-            const callback_value = try generator_struct.getProperty(N("callback"), null);
-            defer php.release(&callback_value);
-            const callback_struct = try structure.Pointer.fromValue(&callback_value);
-            const fn_value = try callback_struct.getValue(.none);
-            defer php.release(&fn_value);
-            const arg_class = try structure.Function.getArgumentClass(&fn_value, N("1"));
-            const ptr_value = try generator_struct.getProperty(N("ptr"), null);
-            errdefer php.release(&ptr_value);
+        pub fn init(promise_obj: *Object, extern_allocator: ?*std.mem.Allocator) !@This() {
+            const promise_struct = structure.Struct.fromObject(@ptrCast(promise_obj));
+            const callback_value_og = try promise_struct.getProperty(@ptrCast(N("callback")), null);
+            const callback_value: Value = .fromZval(callback_value_og);
+            defer callback_value.release();
+            const callback_struct = try structure.Pointer.fromValue(@ptrCast(&callback_value));
+            const fn_value_og = try callback_struct.getValue(.none);
+            const fn_value: Value = .fromZval(fn_value_og);
+            defer fn_value.release();
+            const arg_class = try structure.Function.getArgumentClass(@ptrCast(&fn_value), @ptrCast(N("1")));
+            const ptr_value_og = try promise_struct.getProperty(@ptrCast(N("ptr")), null);
+            const ptr_value: Value = .fromZval(ptr_value_og);
+            errdefer ptr_value.release();
             return .{
-                .call_cache = try .init(&fn_value),
+                .call_cache = try .init(fn_value),
                 .allocator = extern_allocator,
                 .argument_class = arg_class,
                 .pointer = ptr_value,
@@ -165,17 +165,18 @@ pub const PromiseStatic = struct {
 
         pub fn deinit(self: *@This()) void {
             self.call_cache.deinit();
-            php.release(&self.pointer);
+            self.pointer.release();
         }
 
-        pub fn send(self: *@This(), value: *const Value) !void {
+        pub fn send(self: *@This(), value: Value) !void {
             if (self.allocator) |a| {
-                const converted_value = try structure.Function.allocateArgument(a, value, self.argument_class);
-                defer php.release(&converted_value);
+                const converted_value_og = try structure.Function.allocateArgument(a, @ptrCast(&value), self.argument_class);
+                const converted_value: Value = .fromZval(converted_value_og);
+                defer converted_value.release();
                 _ = try self.call_cache.invoke(&.{ self.pointer, converted_value });
-                try structure.Function.externalizeArgument(a, &converted_value);
+                try structure.Function.externalizeArgument(a, @ptrCast(&converted_value));
             } else {
-                _ = try self.call_cache.invoke(&.{ self.pointer, value.* });
+                _ = try self.call_cache.invoke(&.{ self.pointer, value });
             }
         }
     };
@@ -183,44 +184,44 @@ pub const PromiseStatic = struct {
     pub fn init(self: *@This()) !void {
         self.* = .{
             .methods = .{
-                .resolve = php.createTransformedFunction(handleResolve, "resolve", 1, false),
+                .resolve = .fromHandler(onResolve, *Object),
             },
         };
     }
 
     pub fn deinit(self: *@This()) void {
-        if (self.callback) |cb| php.release(cb);
+        if (self.callback) |cb| cb.release();
     }
 
     pub fn getCallback(self: *@This(), class: *ZigClassEntry) !*Object {
         return self.callback orelse create: {
             const closure = Promise.createHandler();
-            defer php.release(&closure);
+            defer closure.release();
             const cb_member = try class.getMember(.instance, "callback");
-            const cb_obj = try cb_member.class.createObject(null, &closure, false);
-            self.callback = cb_obj;
-            break :create cb_obj;
+            const cb_obj = try cb_member.class.createObject(null, @ptrCast(&closure), false);
+            self.callback = @ptrCast(cb_obj);
+            break :create @ptrCast(cb_obj);
         };
     }
 
     pub fn findMethod(self: *@This(), name: *String) ?*php.Function {
-        return inline for (comptime std.meta.fieldNames(Methods)) |field_name| {
-            if (php.matchString(name, field_name)) break &@field(self.methods, field_name);
+        const fn_ng = inline for (comptime std.meta.fieldNames(Methods)) |field_name| {
+            if (name.matchSlice(field_name)) break &@field(self.methods, field_name);
         } else return null;
+        return @ptrCast(fn_ng);
     }
 
-    pub fn handleResolve(ed: *ExecuteData, _: *Value) !void {
-        var arg_iter: ArgumentIterator = .init(ed);
-        try arg_iter.verifyCount(1, 1, "resolve");
-        const value = arg_iter.next().?;
+    pub fn onResolve(promise_obj: *Object, args: struct {
+        result: Value,
+    }) !void {
         // see if there's an allocator stashed in the buffer
-        const promise_struct = try structure.Struct.fromValue(arg_iter.this);
+        const promise_struct = structure.Struct.fromObject(@ptrCast(promise_obj));
         const allocator = promise_struct.buffer.getAllocator();
-        try resolve(arg_iter.this, value, allocator);
+        try resolve(promise_obj, args.result, allocator);
     }
 
-    pub fn resolve(promise: *const Value, value: *const Value, extern_allocator: ?*std.mem.Allocator) !void {
-        var cb_context: CallbackContext = try .init(promise, extern_allocator);
+    pub fn resolve(promise_obj: *Object, value: Value, extern_allocator: ?*std.mem.Allocator) !void {
+        var cb_context: CallbackContext = try .init(promise_obj, extern_allocator);
         defer cb_context.deinit();
         try cb_context.send(value);
     }

@@ -233,7 +233,7 @@ pub const GeneratorIterator = struct {
 
     pub fn getCurrentData(iter: *ObjectIterator) !*Value {
         const self = fromIter(iter);
-        return &self.generator.result;
+        return @ptrCast(&self.generator.result);
     }
 
     pub fn getCurrentKey(iter: *ObjectIterator, key_ptr: *Value) void {

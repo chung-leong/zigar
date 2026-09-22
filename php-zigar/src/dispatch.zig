@@ -622,8 +622,7 @@ pub const CallDispatcher = struct {
             }
             const strm_value = strm.toValue();
             defer strm_value.release();
-            const strm_value_og: *const c.zval = @ptrCast(&strm_value);
-            try event_loop.init(strm_value_og);
+            try event_loop.init(strm_value);
         } else {
             return error.NotInMainThread;
         }

@@ -3,11 +3,11 @@ const std = @import("std");
 const AbortSignal = @import("../abort-signal.zig").AbortSignal;
 const accessor = @import("../accessor.zig");
 const Transform = accessor.Transform;
+const ExternalAllocator = @import("../allocator.zig").ExternalAllocator;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const failure = @import("../failure.zig");
 const Error = failure.Error;
-const ExternalAllocator = @import("../allocator.zig").ExternalAllocator;
 const Generator = @import("../generator.zig").Generator;
 const GeneratorStatic = @import("../generator.zig").GeneratorStatic;
 const ZigObject = @import("../object.zig").ZigObject;
@@ -206,7 +206,8 @@ pub const ArgStruct = struct {
         const static = class.getStaticData(@This());
         const promise = try static.promise.?.accessors.get(self);
         defer php.release(&promise);
-        return PromiseStatic.resolve(&promise, value, allocator);
+        const promise_obj = try php.getValueObject(&promise);
+        return PromiseStatic.resolve(@ptrCast(promise_obj), .fromZval(value.*), allocator);
     }
 
     pub fn pipeFromGenerator(self: *@This(), value: *const Value, allocator: ?*std.mem.Allocator) !void {
@@ -214,7 +215,8 @@ pub const ArgStruct = struct {
         const static = class.getStaticData(@This());
         const generator = try static.generator.?.accessors.get(self);
         defer php.release(&generator);
-        return GeneratorStatic.pipe(&generator, value, allocator);
+        const generator_obj = try php.getValueObject(&generator);
+        return GeneratorStatic.pipe(@ptrCast(generator_obj), .fromZval(value.*), allocator);
     }
 
     pub fn getArgumentCount(self: *@This()) usize {

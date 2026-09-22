@@ -275,13 +275,14 @@ pub const Function = struct {
                         promise.transform = self.transform;
                         if (promise.callback == null) {
                             // wait for promise to resolve when there's no callback function
-                            break :get try promise.await();
+                            const result_ng = try promise.await();
+                            break :get result_ng.toZval();
                         } else {
                             if (!CallDispatcher.event_loop.isProper()) {
                                 return failure.report("callback functions cannot be used without a proper event loop", .{});
                             }
                             // hang onto function arguments until promise is released
-                            promise.retain(arg_iter.createList());
+                            promise.retain(@ptrCast(arg_iter.createList()));
                             // bump ref count and instruct the promise to release itself when the callback is invoked
                             promise.detach();
                             break :get php.createValueNull();
@@ -290,7 +291,7 @@ pub const Function = struct {
                         const generator_struct = try arg_struct.getSpecialArgument(Generator);
                         const generator = try generator_struct.getSpecialContext(Generator);
                         // hang onto function arguments until generator is released
-                        generator.retain(arg_iter.createList());
+                        generator.retain(@ptrCast(arg_iter.createList()));
                         generator.transform = self.transform;
                         if (generator.callback == null) {
                             // return generator

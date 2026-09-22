@@ -62,6 +62,10 @@ pub const Value = struct {
         return @ptrCast(self.impl.value.ref);
     }
 
+    pub fn pointer(self: *const @This()) *anyopaque {
+        return @ptrCast(self.impl.value.ptr);
+    }
+
     pub fn retain(self: *const @This()) @This() {
         self.addRef();
         return self.*;
@@ -190,6 +194,13 @@ pub const Value = struct {
         return error.NotStream;
     }
 
+    pub fn getPointer(self: *const @This()) !*anyopaque {
+        return switch (self.kind()) {
+            .pointer => self.pointer(),
+            else => error.NotPointer,
+        };
+    }
+
     pub fn getDictionary(self: *const @This()) !Dictionary {
         return switch (self.kind()) {
             .array => get: {
@@ -214,6 +225,7 @@ pub const Value = struct {
     }
 
     pub fn convertTo(self: *const @This(), comptime T: type) !T {
+        if (T == @This()) return self.*;
         return switch (@typeInfo(T)) {
             .bool => try self.getBoolean(),
             .int => |int| get: {
@@ -242,7 +254,7 @@ pub const Value = struct {
                 },
                 else => unsupported(T),
             },
-            .optional => |opt| if (self.isNull()) null else try self.convertValue(opt.child),
+            .optional => |opt| if (self.isNull()) null else try self.convertTo(opt.child),
             .@"struct" => switch (T) {
                 Callable => try self.getCallable(),
                 // TODO: handle packed struct
@@ -252,11 +264,19 @@ pub const Value = struct {
                 Dictionary => try self.getDictionary(),
                 else => inline for (un.field_types, 0..) |FT, i| {
                     if (self.convertTo(FT)) |nv| break @unionInit(T, un.field_names[i], nv) else |_| {}
-                },
+                } else error.NoMatch,
             },
 
             else => unsupported(T),
         };
+    }
+
+    pub fn toZval(self: *const @This()) c.zval {
+        return @as(*const c.zval, @ptrCast(&self)).*;
+    }
+
+    pub fn fromZval(val: c.zval) @This() {
+        return @as(*const @This(), @ptrCast(&val)).*;
     }
 
     pub fn fromNull() @This() {
@@ -271,11 +291,11 @@ pub const Value = struct {
         };
     }
 
-    pub fn fromInteger(l: c_long) @This() {
+    pub fn fromInteger(lval: c_long) @This() {
         return .{
             .impl = .{
                 .u1 = .{ .type_info = c.IS_LONG },
-                .value = .{ .lval = l },
+                .value = .{ .lval = lval },
             },
         };
     }
@@ -284,65 +304,74 @@ pub const Value = struct {
         return fromInteger(@intCast(ul));
     }
 
-    pub fn fromFloat(d: f64) @This() {
+    pub fn fromFloat(dval: f64) @This() {
         return .{
             .impl = .{
                 .u1 = .{ .type_info = c.IS_DOUBLE },
-                .value = .{ .dval = d },
+                .value = .{ .dval = dval },
             },
         };
     }
 
-    pub fn fromString(s: *const String) @This() {
+    pub fn fromString(str: *const String) @This() {
         return .{
             .impl = .{
                 .u1 = .{
-                    .type_info = switch (s.isInterned()) {
+                    .type_info = switch (str.isInterned()) {
                         false => c.IS_STRING_EX, // with gc flag
                         true => c.IS_STRING,
                     },
                 },
-                .value = .{ .str = @ptrCast(@constCast(s)) },
+                .value = .{ .str = @ptrCast(@constCast(str)) },
             },
         };
     }
 
-    pub fn fromArray(a: *const Array) @This() {
+    pub fn fromArray(arr: *const Array) @This() {
         return .{
             .impl = .{
                 .u1 = .{ .type_info = c.IS_ARRAY_EX },
-                .value = .{ .arr = @ptrCast(@constCast(a)) },
+                .value = .{ .arr = @ptrCast(@constCast(arr)) },
             },
         };
     }
 
-    pub fn fromObject(o: *const Object) @This() {
+    pub fn fromObject(obj: *const Object) @This() {
         return .{
             .impl = .{
                 .u1 = .{ .type_info = c.IS_OBJECT_EX },
-                .value = .{ .obj = @ptrCast(@constCast(o)) },
+                .value = .{ .obj = @ptrCast(@constCast(obj)) },
             },
         };
     }
 
-    pub fn fromResource(r: *const Resource) @This() {
+    pub fn fromResource(res: *const Resource) @This() {
         return .{
             .impl = .{
                 .u1 = .{ .type_info = c.IS_RESOURCE },
-                .value = .{ .res = @ptrCast(@constCast(r)) },
+                .value = .{ .res = @ptrCast(@constCast(res)) },
             },
         };
     }
 
-    pub fn fromStream(s: *const Stream) @This() {
-        return s.toValue();
+    pub fn fromStream(strm: *const Stream) @This() {
+        return strm.toValue();
     }
 
-    pub fn fromReference(r: *const Reference) @This() {
+    pub fn fromReference(ref: *const Reference) @This() {
         return .{
             .impl = .{
-                .u1 = .{ .type_info = c.IS_REFERENCE },
-                .value = .{ .ref = @ptrCast(@constCast(r)) },
+                .u1 = .{ .type_info = c.IS_REFERENCE_EX },
+                .value = .{ .ref = @ptrCast(@constCast(ref)) },
+            },
+        };
+    }
+
+    pub fn fromPointer(ptr: *const anyopaque) @This() {
+        return .{
+            .impl = .{
+                .u1 = .{ .type_info = c.IS_PTR },
+                .value = .{ .ptr = @constCast(ptr) },
             },
         };
     }

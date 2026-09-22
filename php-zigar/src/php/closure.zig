@@ -7,21 +7,21 @@ const ClassEntry = php.ClassEntry;
 const Function = php.Function;
 const Value = php.Value;
 
-const Closure = struct {
-    pub fn create(func: *const Function, scope: ?*ClassEntry, called_scope: ?*ClassEntry, this: ?Value) Value {
+pub const Closure = struct {
+    pub fn create(func: *const Function, scope: ?*ClassEntry, called_scope: ?*ClassEntry, this: ?Value) @This() {
         var result: Value = undefined;
         const CreateClosureFn = @TypeOf(c.zend_create_closure);
         const Arg4 = @typeInfo(CreateClosureFn).@"fn".param_types[4].?;
-        const zfn: *c.zend_function = @ptrCast(func);
+        const zfunc: *c.zend_function = @ptrCast(@constCast(&func));
         const zcls: ?*c.zend_class_entry = if (scope) |cls| @ptrCast(cls) else null;
         const zccls: ?*c.zend_class_entry = if (called_scope) |cls| @ptrCast(cls) else null;
         if (Arg4 == [*c]c.zend_object) { // 8.6
-            var obj = if (this) |v| v.object() catch null;
-            pi.zend_create_closure(&result, zfn, zcls, zccls, @ptrCast(&obj));
+            const obj = if (this) |tv| tv.object() catch null;
+            pi.zend_create_closure(@ptrCast(&result), zfunc, zcls, zccls, @ptrCast(obj));
         } else {
-            pi.zend_create_closure(&result, zfn, zcls, zccls, @ptrCast(@constCast(&this)));
+            pi.zend_create_closure(@ptrCast(&result), zfunc, zcls, zccls, @ptrCast(@constCast(&this)));
         }
-        return result;
+        return .{ .value = result };
     }
 
     pub fn addRef(self: *const @This()) void {
@@ -34,6 +34,14 @@ const Closure = struct {
 
     pub fn subtractRef(self: *const @This()) void {
         self.value.subtractRef();
+    }
+
+    pub fn fromValue(value: Value) @This() {
+        return .{ .value = value };
+    }
+
+    pub fn toValue(self: *const @This()) Value {
+        return self.value;
     }
 
     value: Value,

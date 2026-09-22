@@ -32,6 +32,7 @@ const Stream = php.Stream;
 const String = php.String;
 const FunctionCallCache = php.FunctionCallCache;
 const Value = php.Value;
+const php_ng = @import("../php/root.zig");
 const Promise = @import("../promise.zig").Promise;
 const PromiseStatic = @import("../promise.zig").PromiseStatic;
 const SpecialExports = @import("../special-exports.zig").SpecialExports;
@@ -493,11 +494,11 @@ pub const Struct = struct {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         return switch (class.purpose) {
-            .allocator => static.special_static.allocator.findMethod(name),
-            .promise => static.special_static.promise.findMethod(name),
-            .generator => static.special_static.generator.findMethod(name),
-            .abort_signal => static.special_static.abort_signal.findMethod(name),
-            else => try Super.findMethod(self, name),
+            .allocator => static.special_static.allocator.findMethod(@ptrCast(name)),
+            .promise => static.special_static.promise.findMethod(@ptrCast(name)),
+            .generator => static.special_static.generator.findMethod(@ptrCast(name)),
+            .abort_signal => static.special_static.abort_signal.findMethod(@ptrCast(name)),
+            else => try Super.findMethod(self, @ptrCast(name)),
         };
     }
 
@@ -539,7 +540,7 @@ pub const Struct = struct {
                 }
             },
             Promise, Generator => {
-                const ctx = try T.create(args.callback);
+                const ctx = try T.create(if (args.callback) |cb| .fromZval(cb) else null);
                 const ptr_value = php.createValuePointer(ctx.buffer.bytes.ptr);
                 try self.setProperty(N("ptr"), &ptr_value, null);
                 const ss = switch (T) {
@@ -548,7 +549,7 @@ pub const Struct = struct {
                     else => unreachable,
                 };
                 const callback = try ss.getCallback(class);
-                const callback_value = php.createValueObject(callback);
+                const callback_value = php.createValueObject(@ptrCast(callback));
                 try self.setProperty(N("callback"), &callback_value, null);
                 if (class.getMember(.instance, N("allocator")) catch null) |m| {
                     const allocator = try m.accessors.get(self);

@@ -4,15 +4,14 @@ const AbortSignal = @import("abort-signal.zig").AbortSignal;
 const extension = @import("extension.zig");
 const failure = @import("failure.zig");
 const io = @import("system.zig").io;
-const php = @import("php.zig");
-const FunctionCallCache = php.FunctionCallCache;
-const MethodCallCaches = php.MethodCallCaches;
-const N = php.getStaticString;
-const Long = php.Long;
-const String = php.String;
-const ExecuteData = php.ExecuteData;
-const Value = php.Value;
-const ArgumentIterator = php.ArgumentIterator;
+const php_ng = @import("php/root.zig");
+const Array = php_ng.Array;
+const Closure = php_ng.Closure;
+const Function = php_ng.Function;
+const Object = php_ng.Object;
+const String = php_ng.String;
+const Value = php_ng.Value;
+const N = String.static;
 
 pub const LoopType = enum {
     temporary,
@@ -22,9 +21,9 @@ pub const LoopType = enum {
 pub fn EventLoop(comptime cb: fn () void) type {
     const Temporary = struct {
         fiber: Value,
-        fiber_cache: MethodCallCaches(.{ .start, .@"resume" }),
-        fiber_class_cache: MethodCallCaches(.{.@"suspend"}),
-        stream: *const Value,
+        fiber_cache: Object.MethodCallCache(.{ .start, .@"resume" }),
+        fiber_class_cache: Object.MethodCallCache(.{.@"suspend"}),
+        stream: Value,
         in_loop: bool,
         terminated: bool,
         deinit_deferred: bool,
@@ -35,18 +34,20 @@ pub fn EventLoop(comptime cb: fn () void) type {
             signal: *AbortSignal,
         };
 
-        pub fn init(self: *@This(), stream: *const Value) !void {
+        pub fn init(self: *@This(), stream: Value) !void {
             // create closure for loop fiber
-            var func = php.createTransformedFunction(handleLoop, "loop", 0, false);
-            func.internal_function.reserved[0] = self;
-            const closure = php.createValueClosure(&func, null, null, null);
-            defer php.release(&closure);
+            var func: Function = .fromHandler(onLoopRun, null);
+            // TODO: use this value instead
+            func.impl.internal_function.reserved[0] = self;
+            const closure: Closure = .create(&func, null, null, null);
+            defer closure.release();
             // create the fiber used for handling the command stream
-            self.fiber = try php.createValueNewObject(N("Fiber"), &.{closure});
-            errdefer php.release(&self.fiber);
-            self.fiber_cache = try .init(&self.fiber);
-            const class_name_value = php.createValueString(N("Fiber"));
-            self.fiber_class_cache = try .init(&class_name_value);
+            const fiber_obj = try Object.createFromName(N("Fiber"), &.{closure.toValue()});
+            errdefer fiber_obj.release();
+            self.fiber = .fromObject(fiber_obj);
+            self.fiber_cache = try .init(self.fiber);
+            const class_name_value: Value = .fromString(N("Fiber"));
+            self.fiber_class_cache = try .init(class_name_value);
             errdefer self.fiber_class_cache.deinit();
             self.stream = stream;
             self.terminated = false;
@@ -65,7 +66,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
                     // jump into the loop fiber so the loop would terminate
                     _ = self.fiber_cache.method.@"resume".invoke(&.{}) catch {};
                 }
-                php.release(&self.fiber);
+                self.fiber.release();
                 self.fiber_cache.deinit();
                 self.fiber_class_cache.deinit();
             } else {
@@ -77,15 +78,15 @@ pub fn EventLoop(comptime cb: fn () void) type {
         pub fn getFiber(_: *@This()) !Value {
             // the temporary loop is used in the absence of an event loop
             // just return a null value since we'd only be suspending the main fiber
-            return php.createValueNull();
+            return .fromNull();
         }
 
-        pub fn suspendFiber(self: *@This(), _: *const Value) !void {
+        pub fn suspendFiber(self: *@This(), _: Value) !void {
             // suspend fiber by switching into loop fiber
             try self.resumeLoop();
         }
 
-        pub fn resumeFiber(self: *@This(), _: *const Value) !void {
+        pub fn resumeFiber(self: *@This(), _: Value) !void {
             // return to original fiber by suspending loop fiber
             try self.suspendLoop();
         }
@@ -137,44 +138,42 @@ pub fn EventLoop(comptime cb: fn () void) type {
                 }
             }
             if (pause) |us| {
-                const s_u64 = @min(std.math.maxInt(Long), @divFloor(us, 1_000_000));
-                const s: Long = @intCast(s_u64);
-                const us_remainder: Long = @intCast(us - s_u64 * 1_000_000);
-                return .{ php.createValueLong(s), php.createValueLong(us_remainder) };
+                const s_u64 = @min(std.math.maxInt(c_long), @divFloor(us, 1_000_000));
+                const s: c_long = @intCast(s_u64);
+                const us_remainder: c_long = @intCast(us - s_u64 * 1_000_000);
+                return .{ .fromInteger(s), .fromInteger(us_remainder) };
             } else {
-                return .{ php.createValueNull(), php.createValueNull() };
+                return .{ .fromNull(), .fromNull() };
             }
         }
 
-        pub fn handleLoop(ed: *ExecuteData, _: *Value) void {
-            // workaround for https://codeberg.org/ziglang/zig/issues/31888
-            const f: *php.Function = @ptrCast(ed.func);
-            const ptr = f.internal_function.reserved[0].?;
+        pub fn onLoopRun(arguments: *Function.Arguments, _: *Value) !void {
+            const func = arguments.callee();
+            const ptr = func.impl.internal_function.reserved[0].?;
             const self: *@This() = @ptrCast(@alignCast(ptr));
-            const read_fds = php.createValueReference(&php.createValueArray(null));
-            defer php.release(&read_fds);
-            const write_fds = php.createValueReference(&php.createValueNull());
-            defer php.release(&write_fds);
-            const except_fds = php.createValueReference(&php.createValueNull());
-            defer php.release(&except_fds);
+            const array_value: Value = .fromArray(.create());
+            const null_value: Value = .fromNull();
+            const read_fds: Value = .fromReference(.create(array_value));
+            defer read_fds.release();
+            const write_fds: Value = .fromReference(.create(null_value));
+            defer write_fds.release();
+            const except_fds: Value = .fromReference(.create(null_value));
+            defer except_fds.release();
             // wait for activation by main fiber
             self.suspendLoop() catch {
                 // main fiber has exited already
                 self.terminated = true;
                 return;
             };
-            const stream_select_name = php.createValueString(N("stream_select"));
-            var stream_select_cache = FunctionCallCache.init(&stream_select_name) catch {
-                @panic("stream_select() is not available");
-            };
+            var stream_select_cache: Function.CallCache = try .initFromName(N("stream_select"));
             defer stream_select_cache.deinit();
             while (!self.terminated) {
                 // update or update timeouts and get the duration to the closest one
                 const timeout_s, const timeout_us = self.updateTimouts();
                 // halt thread until stream is ready to be read
-                const fd_array_ref = php.getValueReference(&read_fds) catch unreachable;
-                const fd_array = php.getValueArray(&fd_array_ref.val) catch unreachable;
-                php.setHashEntryRef(fd_array, 0, self.stream);
+                const fd_array_ref = read_fds.reference();
+                const fd_array = fd_array_ref.target().array();
+                fd_array.set(0, self.stream);
                 const result = stream_select_cache.invoke(&.{
                     read_fds,
                     write_fds,
@@ -183,10 +182,9 @@ pub fn EventLoop(comptime cb: fn () void) type {
                     timeout_us,
                 }) catch @panic("Unable to run stream_select()");
                 // invoke the callback if the stream is ready
-                const count = php.getValueLong(&result) catch 0;
-                if (count == 1) {
+                if (result.integer() == 1) {
                     cb();
-                    if (php.exceptionThrown()) {
+                    if (php_ng.exceptionThrown()) {
                         // when the main fiber exits, the loop fiber receive a GracefulExit exception
                         self.terminated = true;
                     }
@@ -195,26 +193,26 @@ pub fn EventLoop(comptime cb: fn () void) type {
         }
     };
     const Revolt = struct {
-        revolt_class_cache: MethodCallCaches(.{
+        revolt_class_cache: Object.MethodCallCache(.{
             .cancel,
             .getSuspension,
             .onReadable,
         }),
         handler_id: Value,
 
-        pub fn init(self: *@This(), stream: *const Value) !void {
-            var func = php.createTransformedFunction(handleOnReadable, "onReadable", 2, false);
-            const closure = php.createValueClosure(&func, null, null, null);
-            defer php.release(&closure);
-            const class = php.createValueString(N("Revolt\\EventLoop"));
-            self.revolt_class_cache = try .init(&class);
+        pub fn init(self: *@This(), stream: Value) !void {
+            var func: Function = .fromHandler(onReadable, null);
+            const closure: Closure = .create(&func, null, null, null);
+            defer closure.release();
+            const class: Value = .fromString(N("Revolt\\EventLoop"));
+            self.revolt_class_cache = try .init(class);
             errdefer self.revolt_class_cache.deinit();
-            self.handler_id = try self.revolt_class_cache.method.onReadable.invoke(&.{ stream.*, closure });
+            self.handler_id = try self.revolt_class_cache.method.onReadable.invoke(&.{ stream, closure.toValue() });
         }
 
         pub fn deinit(self: *@This()) void {
             _ = self.revolt_class_cache.method.cancel.invoke(&.{self.handler_id}) catch {};
-            php.release(&self.handler_id);
+            self.handler_id.release();
             self.revolt_class_cache.deinit();
         }
 
@@ -222,32 +220,35 @@ pub fn EventLoop(comptime cb: fn () void) type {
             return try self.revolt_class_cache.method.getSuspension.invoke(&.{});
         }
 
-        pub fn suspendFiber(_: *@This(), fiber: *const Value) !void {
-            var fiber_cache: MethodCallCaches(.{.@"suspend"}) = try .init(fiber);
+        pub fn suspendFiber(_: *@This(), fiber: Value) !void {
+            var fiber_cache: Object.MethodCallCache(.{.@"suspend"}) = try .init(fiber);
             _ = try fiber_cache.method.@"suspend".invoke(&.{});
         }
 
-        pub fn resumeFiber(_: *@This(), fiber: *const Value) !void {
-            var fiber_cache: MethodCallCaches(.{.@"resume"}) = try .init(fiber);
+        pub fn resumeFiber(_: *@This(), fiber: Value) !void {
+            var fiber_cache: Object.MethodCallCache(.{.@"resume"}) = try .init(fiber);
             _ = try fiber_cache.method.@"resume".invoke(&.{});
         }
 
         pub fn addTimeout(self: *@This(), seconds: f64, signal: *AbortSignal) !void {
-            var func = php.createTransformedFunction(onDelayFinished, "onDelayFinished", 0, false);
-            var signal_value = php.createValueObject(signal.object());
-            const closure = php.createValueClosure(&func, null, null, &signal_value);
-            defer php.release(&closure);
-            const timeout = php.createValueDouble(seconds);
-            self.handler_id = try self.revolt_class_cache.method.onReadable.invoke(&.{ timeout, closure });
+            var func: Function = .fromHandler(onDelayFinished, null);
+            const signal_value: Value = .fromObject(@ptrCast(signal.object()));
+            const closure: Closure = .create(&func, null, null, signal_value);
+            defer closure.release();
+            self.handler_id = try self.revolt_class_cache.method.onReadable.invoke(&.{
+                .fromFloat(seconds),
+                closure.toValue(),
+            });
         }
 
-        pub fn handleOnReadable(_: *ExecuteData, _: *Value) void {
+        pub fn onReadable(_: *Function.Arguments, _: *Value) void {
             cb();
         }
 
-        pub fn onDelayFinished(ed: *ExecuteData, _: *Value) !void {
-            const obj = try php.getValueObject(&ed.This);
-            const signal = AbortSignal.fromObject(obj);
+        pub fn onDelayFinished(args: *Function.Arguments, _: *Value) !void {
+            const obj = try args.this().getObject();
+            const obj_og: *php_ng.c.zend_object = @ptrCast(obj);
+            const signal = AbortSignal.fromObject(obj_og);
             signal.abort();
         }
     };
@@ -255,7 +256,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
         loop: Loop = .{ .temporary = undefined },
         stream: Value = undefined,
         ready: bool = false,
-        pendingFiber: ?*const Value = null,
+        pendingFiber: ?Value = null,
 
         const Loop = union(LoopType) {
             temporary: Temporary,
@@ -290,28 +291,27 @@ pub fn EventLoop(comptime cb: fn () void) type {
             }
         }
 
-        pub fn init(self: *@This(), stream: *const Value) !void {
+        pub fn init(self: *@This(), stream: Value) !void {
             if (self.ready) return;
-            self.stream = stream.*;
+            self.stream = stream.retain();
             try self.initImpl();
             self.ready = true;
-            php.addRef(&self.stream);
             // register a shutdown function for the purpose of shutting down the loop
-            try extension.shutdown_callbacks.add(self, handleShutdown);
+            try extension.shutdown_callbacks.add(self, onShutdown);
         }
 
         fn initImpl(self: *@This()) !void {
             switch (self.loop) {
-                inline else => |*impl| try impl.init(&self.stream),
+                inline else => |*impl| try impl.init(self.stream),
             }
         }
 
         pub fn deinit(self: *@This()) void {
             if (!self.ready) return;
             self.ready = false;
-            extension.shutdown_callbacks.remove(self, handleShutdown);
+            extension.shutdown_callbacks.remove(self, onShutdown);
             self.deinitImpl();
-            php.release(&self.stream);
+            self.stream.release();
         }
 
         fn deinitImpl(self: *@This()) void {
@@ -334,21 +334,21 @@ pub fn EventLoop(comptime cb: fn () void) type {
             };
         }
 
-        pub fn suspendFiber(self: *@This(), fiber: *const Value) !void {
+        pub fn suspendFiber(self: *@This(), fiber: Value) !void {
             if (!self.ready) return error.NoEventLoop;
             switch (self.loop) {
                 inline else => |*impl| try impl.suspendFiber(fiber),
             }
         }
 
-        pub fn resumeFiber(self: *@This(), fiber: *const Value) void {
+        pub fn resumeFiber(self: *@This(), fiber: Value) void {
             if (!self.ready) @panic("No event loop");
             switch (self.loop) {
                 inline else => |*impl| impl.resumeFiber(fiber) catch {},
             }
         }
 
-        pub fn resumeFiberAfterward(self: *@This(), fiber: *const Value) void {
+        pub fn resumeFiberAfterward(self: *@This(), fiber: Value) void {
             self.pendingFiber = fiber;
         }
 
@@ -365,7 +365,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
             }
         }
 
-        pub fn handleShutdown(ptr: *anyopaque) void {
+        pub fn onShutdown(ptr: *anyopaque) void {
             const self: *@This() = @ptrCast(@alignCast(ptr));
             self.deinit();
         }
