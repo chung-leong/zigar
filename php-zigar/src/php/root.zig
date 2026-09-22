@@ -3,25 +3,24 @@ const builtin = @import("builtin");
 
 pub const c = @import("c");
 
-pub const allocator = @import("Allocator.zig").allocator;
-pub const Array = @import("Array.zig").Array;
-pub const Callable = @import("Callable.zig").Callable;
-pub const ClassEntry = @import("ClassEntry.zig").ClassEntry;
-pub const Dictionary = @import("Dictionary.zig").Dictionary;
-pub const efree = @import("Allocator.zig").efree;
-pub const emalloc = @import("Allocator.zig").emalloc;
+pub const Allocator = @import("Allocator.zig");
+pub const efree = Allocator.efree;
+pub const emalloc = Allocator.emalloc;
+pub const malloc = Allocator.malloc;
+pub const Array = @import("Array.zig");
+pub const Callable = @import("Callable.zig");
+pub const ClassEntry = @import("ClassEntry.zig");
+pub const Dictionary = @import("Dictionary.zig").@"union";
 pub const failure = @import("failure.zig");
-pub const free = @import("Allocator.zig").efree;
-pub const Function = @import("Function.zig").Function;
-pub const InfoTable = @import("InfoTable.zig").InfoTable;
-pub const malloc = @import("Allocator.zig").emalloc;
-pub const Module = @import("Module.zig").Module;
-pub const Object = @import("Object.zig").Object;
-pub const Reference = @import("Reference.zig").Reference;
-pub const Resource = @import("Resource.zig").Resource;
-pub const Stream = @import("Stream.zig").Stream;
-pub const String = @import("String.zig").String;
-pub const Value = @import("Value.zig").Value;
+pub const Function = @import("Function.zig");
+pub const InfoTable = @import("InfoTable.zig");
+pub const Module = @import("Module.zig");
+pub const Object = @import("Object.zig");
+pub const Reference = @import("Reference.zig");
+pub const Resource = @import("Resource.zig");
+pub const Stream = @import("Stream.zig");
+pub const String = @import("String.zig");
+pub const Value = @import("Value.zig");
 
 pub const api_no = c.ZEND_MODULE_API_NO + 0;
 pub const build_id = std.fmt.comptimePrint("API{d}{s}{s}{s}{s}", .{
@@ -33,6 +32,8 @@ pub const build_id = std.fmt.comptimePrint("API{d}{s}{s}{s}{s}", .{
 });
 pub const debug = c.ZEND_DEBUG != 0;
 pub const use_tsrm = @hasDecl(c, "ZTS");
+
+pub const allocator: std.mem.Allocator = .{ .ptr = undefined, .vtable = &Allocator.vtable };
 
 pub const imports = switch (builtin.target.os.tag) {
     // on Windows, we link symbols in PHP DLL manually

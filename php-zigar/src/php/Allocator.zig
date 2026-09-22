@@ -2,53 +2,46 @@ const std = @import("std");
 
 const php = @import("root.zig");
 const argCount = php.argCount;
-const c = php.c;
 const pi = php.imports;
 
-pub const allocator: std.mem.Allocator = .{
-    .ptr = undefined,
-    .vtable = &allocator_impl.vtable,
+pub const vtable: std.mem.Allocator.VTable = .{
+    .alloc = alloc,
+    .resize = resize,
+    .remap = remap,
+    .free = @This().free,
 };
-const allocator_impl = struct {
-    const vtable: std.mem.Allocator.VTable = .{
-        .alloc = alloc,
-        .resize = resize,
-        .remap = remap,
-        .free = @This().free,
-    };
 
-    fn alloc(_: *anyopaque, len: usize, alignment: std.mem.Alignment, return_address: usize) ?[*]u8 {
-        _ = return_address;
-        _ = alignment;
-        std.debug.assert(len > 0);
-        const ptr = emalloc(len, @src());
-        return @ptrCast(ptr);
-    }
+fn alloc(_: *anyopaque, len: usize, alignment: std.mem.Alignment, return_address: usize) ?[*]u8 {
+    _ = return_address;
+    _ = alignment;
+    std.debug.assert(len > 0);
+    const ptr = emalloc(len, @src());
+    return @ptrCast(ptr);
+}
 
-    fn resize(_: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, return_address: usize) bool {
-        _ = alignment;
-        _ = return_address;
-        std.debug.assert(new_len > 0);
-        if (new_len <= memory.len) {
-            return true; // in-place shrink always works
-        }
-        return false;
+fn resize(_: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, return_address: usize) bool {
+    _ = alignment;
+    _ = return_address;
+    std.debug.assert(new_len > 0);
+    if (new_len <= memory.len) {
+        return true; // in-place shrink always works
     }
+    return false;
+}
 
-    fn remap(ctx: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, return_address: usize) ?[*]u8 {
-        std.debug.assert(new_len > 0);
-        if (resize(ctx, memory, alignment, new_len, return_address)) {
-            return memory.ptr;
-        }
-        return null;
+fn remap(ctx: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, return_address: usize) ?[*]u8 {
+    std.debug.assert(new_len > 0);
+    if (resize(ctx, memory, alignment, new_len, return_address)) {
+        return memory.ptr;
     }
+    return null;
+}
 
-    fn free(_: *anyopaque, memory: []u8, alignment: std.mem.Alignment, return_address: usize) void {
-        _ = return_address;
-        _ = alignment;
-        efree(memory.ptr, @src());
-    }
-};
+fn free(_: *anyopaque, memory: []u8, alignment: std.mem.Alignment, return_address: usize) void {
+    _ = return_address;
+    _ = alignment;
+    efree(memory.ptr, @src());
+}
 
 pub fn emalloc(size: usize, comptime src: std.builtin.SourceLocation) [*]u8 {
     const ptr = switch (comptime argCount(@TypeOf(pi._emalloc))) {
@@ -75,8 +68,4 @@ pub fn malloc(size: usize) [*]u8 {
         else => @compileError("Unexpected __zend_malloc argument count"),
     };
     return @ptrCast(ptr);
-}
-
-pub fn free(ptr: ?*anyopaque) void {
-    c.free(ptr);
 }
