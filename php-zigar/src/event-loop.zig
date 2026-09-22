@@ -6,7 +6,6 @@ const failure = @import("failure.zig");
 const io = @import("system.zig").io;
 const php_ng = @import("php/root.zig");
 const Array = php_ng.Array;
-const Closure = php_ng.Closure;
 const Function = php_ng.Function;
 const Object = php_ng.Object;
 const String = php_ng.String;
@@ -39,7 +38,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
             var func: Function = .fromHandler(onLoopRun, null);
             // TODO: use this value instead
             func.impl.internal_function.reserved[0] = self;
-            const closure: Closure = .create(&func, null, null, null);
+            const closure = func.createClosure(null, null, null);
             defer closure.release();
             // create the fiber used for handling the command stream
             const fiber_obj = try Object.createFromName(N("Fiber"), &.{closure.toValue()});
@@ -202,7 +201,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
 
         pub fn init(self: *@This(), stream: Value) !void {
             var func: Function = .fromHandler(onReadable, null);
-            const closure: Closure = .create(&func, null, null, null);
+            const closure = func.createClosure(null, null, null);
             defer closure.release();
             const class: Value = .fromString(N("Revolt\\EventLoop"));
             self.revolt_class_cache = try .init(class);
@@ -233,7 +232,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
         pub fn addTimeout(self: *@This(), seconds: f64, signal: *AbortSignal) !void {
             var func: Function = .fromHandler(onDelayFinished, null);
             const signal_value: Value = .fromObject(@ptrCast(signal.object()));
-            const closure: Closure = .create(&func, null, null, signal_value);
+            const closure = func.createClosure(null, null, signal_value);
             defer closure.release();
             self.handler_id = try self.revolt_class_cache.method.onReadable.invoke(&.{
                 .fromFloat(seconds),

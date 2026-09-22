@@ -16,6 +16,14 @@ pub const ClassEntry = struct {
         return @ptrCast(zce);
     }
 
+    pub fn getStandardClass(ctype: StandardClass) *ClassEntry {
+        const ptr = switch (ctype) {
+            .standard => deref(pi.zend_standard_class_def),
+            .exception => deref(pi.zend_ce_exception),
+        };
+        return @ptrCast(ptr);
+    }
+
     pub fn getStandardInterface(itype: StandardInterface) *const ClassEntry {
         const ptr = switch (itype) {
             .aggregate => deref(pi.zend_ce_aggregate),
@@ -30,6 +38,14 @@ pub const ClassEntry = struct {
         return @ptrCast(ptr);
     }
 
+    pub const StandardClass = enum {
+        standard,
+        exception,
+
+        pub fn get(self: @This()) *const ClassEntry {
+            return .getStandardClass(self);
+        }
+    };
     pub const StandardInterface = enum {
         aggregate,
         array_access,

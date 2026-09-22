@@ -12,7 +12,6 @@ const php_ng = @import("php/root.zig");
 const Function = php_ng.Function;
 const Array = php_ng.Array;
 const ClassEntry = php_ng.ClassEntry;
-const Closure = php_ng.Closure;
 const Object = php_ng.Object;
 const String = php_ng.String;
 const N = String.static;
@@ -98,7 +97,7 @@ pub const Generator = struct {
 
     pub fn createHandler() Value {
         var func = Function.fromHandler(onResolve, null);
-        const closure: Closure = .create(&func, null, null, null);
+        const closure = func.createClosure(null, null, null);
         return closure.toValue();
     }
 

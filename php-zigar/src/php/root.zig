@@ -7,7 +7,6 @@ pub const allocator = @import("allocator.zig").allocator;
 pub const Array = @import("array.zig").Array;
 pub const Callable = @import("callable.zig").Callable;
 pub const ClassEntry = @import("class-entry.zig").ClassEntry;
-pub const Closure = @import("closure.zig").Closure;
 pub const Dictionary = @import("dictionary.zig").Dictionary;
 pub const efree = @import("allocator.zig").efree;
 pub const emalloc = @import("allocator.zig").emalloc;
