@@ -1,6 +1,5 @@
 const std = @import("std");
 
-const Array = @import("array.zig").Array;
 const php = @import("root.zig");
 const c = php.c;
 const pi = php.imports;
@@ -12,6 +11,7 @@ const Resource = php.Resource;
 const Stream = php.Stream;
 const String = php.String;
 const unsupported = php.failure.unsupported;
+const Array = php.Array;
 
 pub const Value = struct {
     pub fn kind(self: *const @This()) Kind {
