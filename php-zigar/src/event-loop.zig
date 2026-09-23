@@ -20,8 +20,8 @@ pub const LoopType = enum {
 pub fn EventLoop(comptime cb: fn () void) type {
     const Temporary = struct {
         fiber: Value,
-        fiber_cache: Object.MethodCallCache(.{ .start, .@"resume" }),
-        fiber_class_cache: Object.MethodCallCache(.{.@"suspend"}),
+        fiber_cache: Object.MethodSet(.{ .start, .@"resume" }).CallCache,
+        fiber_class_cache: Object.MethodSet(.{.@"suspend"}).CallCache,
         stream: Value,
         in_loop: bool,
         terminated: bool,
@@ -35,10 +35,9 @@ pub fn EventLoop(comptime cb: fn () void) type {
 
         pub fn init(self: *@This(), stream: Value) !void {
             // create closure for loop fiber
-            var func: Function = .fromHandler(onLoopRun, null);
-            // TODO: use this value instead
-            func.impl.internal_function.reserved[0] = self;
-            const closure = func.createClosure(null, null, null);
+            var func: Function = .fromHandler(@"call run", .{ .this = @This() });
+            const this: Value = .fromPointer(self);
+            const closure = func.createClosure(null, null, this);
             defer closure.release();
             // create the fiber used for handling the command stream
             const fiber_obj = try Object.createFromName(N("Fiber"), &.{closure.toValue()});
@@ -55,7 +54,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
             self.timeouts = .empty;
             // start the loop fiber
             self.in_loop = true;
-            _ = try self.fiber_cache.method.start.invoke(&.{});
+            _ = try self.fiber_cache.invoke(.start, &.{});
         }
 
         pub fn deinit(self: *@This()) void {
@@ -63,7 +62,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
                 if (!self.terminated) {
                     self.terminated = true;
                     // jump into the loop fiber so the loop would terminate
-                    _ = self.fiber_cache.method.@"resume".invoke(&.{}) catch {};
+                    _ = self.fiber_cache.invoke(.@"resume", &.{}) catch {};
                 }
                 self.fiber.release();
                 self.fiber_cache.deinit();
@@ -92,7 +91,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
 
         pub fn suspendLoop(self: *@This()) !void {
             self.in_loop = false;
-            _ = try self.fiber_class_cache.method.@"suspend".invoke(&.{});
+            _ = try self.fiber_class_cache.invoke(.@"suspend", &.{});
         }
 
         pub fn resumeLoop(self: *@This()) !void {
@@ -100,7 +99,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
                 return failure.report("cannot call async functions when the event loop 'temporary' is used", .{});
             }
             self.in_loop = true;
-            _ = try self.fiber_cache.method.@"resume".invoke(&.{});
+            _ = try self.fiber_cache.invoke(.@"resume", &.{});
             if (self.deinit_deferred) {
                 self.deinit();
             }
@@ -146,10 +145,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
             }
         }
 
-        pub fn onLoopRun(arguments: *Function.Arguments, _: *Value) !void {
-            const func = arguments.callee();
-            const ptr = func.impl.internal_function.reserved[0].?;
-            const self: *@This() = @ptrCast(@alignCast(ptr));
+        pub fn @"call run"(self: *@This(), _: struct {}) !void {
             const array_value: Value = .fromArray(.create());
             const null_value: Value = .fromNull();
             const read_fds: Value = .fromReference(.create(array_value));
@@ -192,60 +188,55 @@ pub fn EventLoop(comptime cb: fn () void) type {
         }
     };
     const Revolt = struct {
-        revolt_class_cache: Object.MethodCallCache(.{
-            .cancel,
-            .getSuspension,
-            .onReadable,
-        }),
+        revolt_class_cache: Object.MethodSet(.{ .cancel, .getSuspension, .onReadable }).CallCache,
         handler_id: Value,
 
         pub fn init(self: *@This(), stream: Value) !void {
-            var func: Function = .fromHandler(onReadable, null);
+            var func: Function = .fromHandler(@"call read", .{ .none = {} });
             const closure = func.createClosure(null, null, null);
             defer closure.release();
             const class: Value = .fromString(N("Revolt\\EventLoop"));
             self.revolt_class_cache = try .init(class);
             errdefer self.revolt_class_cache.deinit();
-            self.handler_id = try self.revolt_class_cache.method.onReadable.invoke(&.{ stream, closure.toValue() });
+            self.handler_id = try self.revolt_class_cache.invoke(.onReadable, &.{ stream, closure.toValue() });
         }
 
         pub fn deinit(self: *@This()) void {
-            _ = self.revolt_class_cache.method.cancel.invoke(&.{self.handler_id}) catch {};
+            _ = self.revolt_class_cache.invoke(.cancel, &.{self.handler_id}) catch {};
             self.handler_id.release();
             self.revolt_class_cache.deinit();
         }
 
         pub fn getFiber(self: *@This()) !Value {
-            return try self.revolt_class_cache.method.getSuspension.invoke(&.{});
+            return try self.revolt_class_cache.invoke(.getSuspension, &.{});
         }
 
         pub fn suspendFiber(_: *@This(), fiber: Value) !void {
-            var fiber_cache: Object.MethodCallCache(.{.@"suspend"}) = try .init(fiber);
-            _ = try fiber_cache.method.@"suspend".invoke(&.{});
+            var fiber_cache: Object.MethodSet(.{.@"suspend"}).CallCache = try .init(fiber);
+            _ = try fiber_cache.invoke(.@"suspend", &.{});
         }
 
         pub fn resumeFiber(_: *@This(), fiber: Value) !void {
-            var fiber_cache: Object.MethodCallCache(.{.@"resume"}) = try .init(fiber);
-            _ = try fiber_cache.method.@"resume".invoke(&.{});
+            var fiber_cache: Object.MethodSet(.{.@"resume"}).CallCache = try .init(fiber);
+            _ = try fiber_cache.invoke(.@"resume", &.{});
         }
 
         pub fn addTimeout(self: *@This(), seconds: f64, signal: *AbortSignal) !void {
-            var func: Function = .fromHandler(onDelayFinished, null);
+            var func: Function = .fromHandler(@"call abort", .{ .this = Object });
             const signal_value: Value = .fromObject(@ptrCast(signal.object()));
             const closure = func.createClosure(null, null, signal_value);
             defer closure.release();
-            self.handler_id = try self.revolt_class_cache.method.onReadable.invoke(&.{
+            self.handler_id = try self.revolt_class_cache.invoke(.onReadable, &.{
                 .fromFloat(seconds),
                 closure.toValue(),
             });
         }
 
-        pub fn onReadable(_: *Function.Arguments, _: *Value) void {
+        pub fn @"call read"(_: struct {}) void {
             cb();
         }
 
-        pub fn onDelayFinished(args: *Function.Arguments, _: *Value) !void {
-            const obj = try args.this().getObject();
+        pub fn @"call abort"(obj: *Object, _: struct {}) !void {
             const obj_og: *php_ng.c.zend_object = @ptrCast(obj);
             const signal = AbortSignal.fromObject(obj_og);
             signal.abort();

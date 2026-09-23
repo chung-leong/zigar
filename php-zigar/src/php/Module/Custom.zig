@@ -5,21 +5,10 @@ const c = php.c;
 const Function = php.Function;
 const Module = php.Module;
 
-pub fn @"fn"(comptime ns: type) type {
-    if (@typeInfo(ns) != .@"struct") @compileError("Expected struct, received: " ++ @typeName(ns));
+pub fn @"fn"(comptime T: type) type {
+    if (@typeInfo(T) != .@"struct") @compileError("Expected struct, received: " ++ @typeName(T));
     return struct {
-        pub fn register(comptime options: Options) void {
-            const Self = @This();
-            const export_ns = struct {
-                var module: Self = .init(options);
-                pub fn getModule() callconv(.c) *c.zend_module_entry {
-                    return @ptrCast(&module.entry);
-                }
-            };
-            @export(&export_ns.getModule, .{ .name = "get_module" });
-        }
-
-        fn init(comptime options: Options) @This() {
+        pub fn init(comptime options: Options) @This() {
             return .{
                 .entry = .fromZendModuleEntry(.{
                     .size = @sizeOf(@This()),
@@ -53,36 +42,38 @@ pub fn @"fn"(comptime ns: type) type {
             };
         }
 
-        pub const Options = struct {
-            name: [:0]const u8,
-            version: [:0]const u8,
-            dependency: ?[]const Module.Dependency = null,
-        };
+        pub fn register(comptime self: *@This()) void {
+            const export_ns = struct {
+                pub fn getModule() callconv(.c) *c.zend_module_entry {
+                    return @ptrCast(&self.entry);
+                }
+            };
+            @export(&export_ns.getModule, .{ .name = "get_module" });
+        }
+
+        pub const Options = @import("Custom/Options.zig");
 
         fn functionEntries() [*]const c.zend_function_entry {
-            const decl_names = @typeInfo(ns).@"struct".decl_names;
+            const decl_names = @typeInfo(T).@"struct".decl_names;
             const entries = init: {
                 // count available functions
-                var len: usize = 0;
+                var count: usize = 0;
                 inline for (decl_names) |decl_name| {
-                    const F = @TypeOf(@field(ns, decl_name));
-                    if (@typeInfo(F) != .@"fn") continue;
-                    if (@hasField(HandlerName, decl_name)) continue;
-                    len += 1;
+                    if (getMethodName(decl_name) != null) count += 1;
+                    count += 1;
                 }
-                // create entries for them
-                var entries: [len + 1]c.zend_function_entry = undefined;
+                // create entries for them (extra entry for sentinel)
+                var entries: [count + 1]c.zend_function_entry = undefined;
                 var i: usize = 0;
                 for (decl_names) |decl_name| {
-                    const F = @TypeOf(@field(ns, decl_name));
-                    if (@typeInfo(F) != .@"fn") continue;
-                    if (@hasField(HandlerName, decl_name)) continue;
-                    const func = @field(ns, decl_name);
-                    const handler = Function.handler(func, null);
-                    const handler_info = Function.getHandlerInfo(func, null);
+                    const name = getMethodName(decl_name) orelse continue;
+                    const func = @field(T, decl_name);
+                    const self_src: Function.SelfSource = .{ .singleton = T };
+                    const handler = Function.zendInternalFunction(func, self_src);
+                    const handler_info = Function.handlerInfo(func, self_src);
                     const zarg_info = arg_info_init: {
-                        const count = 1 + handler_info.arguments.len + if (handler_info.is_variadic) 1 else 0;
-                        var arg_entries: [count]c.zend_internal_arg_info = undefined;
+                        const arg_count = 1 + handler_info.arguments.len + if (handler_info.is_variadic) 1 else 0;
+                        var arg_entries: [arg_count]c.zend_internal_arg_info = undefined;
                         // the first array entry is used to store a zend_internal_function_info
                         const fn_info_ptr: *c.zend_internal_function_info = @ptrCast(&arg_entries[0]);
                         fn_info_ptr.* = .{ .required_num_args = handler_info.required_count };
@@ -101,7 +92,7 @@ pub fn @"fn"(comptime ns: type) type {
                         false => 0,
                     };
                     entries[i] = .{
-                        .fname = decl_name,
+                        .fname = name,
                         .handler = &handler,
                         .arg_info = &zarg_info,
                         .num_args = handler_info.arguments.len,
@@ -109,6 +100,7 @@ pub fn @"fn"(comptime ns: type) type {
                     };
                     i += 1;
                 }
+                // list is terminated by an empty entry
                 entries[i] = std.mem.zeroes(c.zend_function_entry);
                 break :init entries;
             };
@@ -119,9 +111,9 @@ pub fn @"fn"(comptime ns: type) type {
             .life_cycle => ModuleFunction,
             .info => InfoFunction,
         } {
-            if (@typeInfo(ns) != .@"struct") @compileError("Expected struct, received: " ++ @typeName(ns));
-            const func = switch (@hasDecl(ns, @tagName(handle_name))) {
-                true => @field(ns, @tagName(handle_name)),
+            if (@typeInfo(T) != .@"struct") @compileError("Expected struct, received: " ++ @typeName(T));
+            const func = switch (@hasDecl(T, @tagName(handle_name))) {
+                true => @field(T, @tagName(handle_name)),
                 false => void,
             };
             const F = @TypeOf(func);
@@ -167,6 +159,14 @@ pub fn @"fn"(comptime ns: type) type {
                 }
             };
             return @field(module_fn_ns, @tagName(purpose));
+        }
+
+        fn getMethodName(decl_name: [:0]const u8) ?[:0]const u8 {
+            const F = @TypeOf(@field(T, decl_name));
+            if (@typeInfo(F) == .@"fn") {
+                if (std.mem.eql(u8, decl_name[0..5], "call ")) return decl_name[5..];
+            }
+            return null;
         }
 
         const HandlerName = enum {

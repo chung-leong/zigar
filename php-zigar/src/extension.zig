@@ -23,7 +23,7 @@ const io = system.io;
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 const ZigCompiler = @import("compilation.zig").ZigCompiler;
 
-pub fn zigar_compile(args: struct {
+pub fn @"call zigar_compile"(args: struct {
     src_path: []const u8,
     mod_path: ?[]const u8,
     params: ?Dictionary,
@@ -40,7 +40,7 @@ pub fn zigar_compile(args: struct {
     return true;
 }
 
-pub fn zigar_use(args: struct {
+pub fn @"call zigar_use"(args: struct {
     src_path: []const u8,
     params: ?Dictionary,
 }) !Value {
@@ -66,7 +66,7 @@ pub fn zigar_use(args: struct {
     return @as(*Value, @ptrCast(&result)).*;
 }
 
-pub fn zigar_import(args: struct {
+pub fn @"call zigar_import"(args: struct {
     src_path: []const u8,
     callback: ?Callable,
     params: ?Dictionary,

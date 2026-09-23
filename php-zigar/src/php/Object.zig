@@ -1,12 +1,13 @@
 pub const std = @import("std");
 
-pub const MethodCallCache = @import("Object/MethodCallCache.zig").@"fn";
+pub const Custom = @import("Object/Custom.zig").@"fn";
+pub const MethodSet = @import("Object/MethodSet.zig").@"fn";
 const php = @import("root.zig");
 const Array = php.Array;
 const c = php.c;
 const pi = php.imports;
 const deref = php.deref;
-const ClassEntry = php.ClassEntry;
+const Class = php.Class;
 const efree = php.efree;
 const failure = php.failure;
 const unsupported = failure.unsupported;
@@ -15,7 +16,7 @@ const String = php.String;
 const Value = php.Value;
 pub const Handlers = c.zend_object_handlers;
 
-pub fn create(ce: *const ClassEntry, params: []const Value) !*@This() {
+pub fn create(ce: *const Class, params: []const Value) !*@This() {
     var zval: c.zval = undefined;
     const result = pi.object_init_ex(&zval, @ptrCast(@constCast(ce)));
     if (result != c.SUCCESS) return error.CannotCreateObject;
@@ -35,7 +36,7 @@ pub fn create(ce: *const ClassEntry, params: []const Value) !*@This() {
 }
 
 pub fn createFromName(name: anytype, params: []const Value) !*@This() {
-    const ce = ClassEntry.find(name) orelse return error.ClassNotFound;
+    const ce = Class.find(name) orelse return error.ClassNotFound;
     return .create(ce, params);
 }
 
@@ -61,13 +62,13 @@ pub fn toValue(self: *const @This()) Value {
     return .fromObject(self);
 }
 
-pub fn isInstanceOf(self: *const @This(), ce: *const ClassEntry) bool {
+pub fn isInstanceOf(self: *const @This(), ce: *const Class) bool {
     const zobj = &self.impl;
     const zce: *const c.zend_class_entry = @ptrCast(ce);
     return (zobj.ce == zce) or pi.instanceof_function_slow(zobj.ce, zce);
 }
 
-pub fn hasStandardInterface(self: *const @This(), iface: ClassEntry.StandardInterface) bool {
+pub fn hasInterface(self: *const @This(), iface: Class.InterfaceId) bool {
     return self.isInstanceOf(iface.get());
 }
 
@@ -120,6 +121,14 @@ pub fn getProperties(self: *const @This()) *Array {
     const zval: *c.zval = @ptrCast(&value);
     const ht = pi.zend_get_properties_for(zval, c.ZEND_PROP_PURPOSE_ARRAY_CAST).?;
     return @ptrCast(ht);
+}
+
+pub fn toCustom(self: *const @This(), comptime T: type) *T {
+    const offset: usize = @intCast(self.impl.handlers.*.offset);
+    const self_addr: usize = @intFromPtr(self);
+    // TODO: check class entry
+    const custom_type_addr = self_addr - offset;
+    return @ptrFromInt(custom_type_addr);
 }
 
 pub fn standardHandlers() *const Handlers {

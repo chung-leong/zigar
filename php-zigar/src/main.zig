@@ -4,11 +4,12 @@ const builtin = @import("builtin");
 const php_ng = @import("php/root.zig");
 const Module = php_ng.Module;
 
+var module: Module.Custom(@import("extension.zig")) = .init(.{
+    .name = "zigar",
+    .version = "0.17.0",
+});
 comptime {
-    Module.Custom(@import("extension.zig")).register(.{
-        .name = "zigar",
-        .version = "0.17.0",
-    });
+    module.register();
 }
 
 pub fn DllMain(

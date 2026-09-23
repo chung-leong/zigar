@@ -4,11 +4,11 @@ const builtin = @import("builtin");
 const php = @import("../root.zig");
 const c = php.c;
 const pi = php.imports;
-const ClassEntry = php.ClassEntry;
+const Class = php.Class;
 const Function = php.Function;
 const Value = php.Value;
 
-pub fn create(func: *const Function, scope: ?*ClassEntry, called_scope: ?*ClassEntry, this: ?Value) @This() {
+pub fn create(func: *const Function, scope: ?*Class, called_scope: ?*Class, this: ?Value) @This() {
     var result: Value = undefined;
     const CreateClosureFn = @TypeOf(c.zend_create_closure);
     const Arg4 = @typeInfo(CreateClosureFn).@"fn".param_types[4].?;

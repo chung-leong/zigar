@@ -9,13 +9,14 @@ const Array = php.Array;
 const c = php.c;
 const pi = php.imports;
 const Callable = php.Callable;
-const ClassEntry = php.ClassEntry;
+const Class = php.Class;
 const Dictionary = php.Dictionary;
 const efree = php.efree;
 const failure = php.failure;
 const unsupported = failure.unsupported;
 const Object = php.Object;
 const Resource = php.Resource;
+const Singleton = php.Singleton;
 const String = php.String;
 const Value = php.Value;
 
@@ -24,12 +25,12 @@ pub fn getName(self: *const @This()) ?*String {
     return @ptrCast(zstr);
 }
 
-pub fn createClosure(self: *const @This(), scope: ?*ClassEntry, called_scope: ?*ClassEntry, this: ?Value) Closure {
+pub fn createClosure(self: *const @This(), scope: ?*Class, called_scope: ?*Class, this: ?Value) Closure {
     return .create(self, scope, called_scope, this);
 }
 
-pub fn fromHandler(comptime func: anytype, comptime this_type: ?type) @This() {
-    const handler_info = comptime getHandlerInfo(func, this_type);
+pub fn fromHandler(comptime func: anytype, comptime self_src: SelfSource) @This() {
+    const handler_info = comptime handlerInfo(func, self_src);
     const arg_info = emptyArgInfo(handler_info.arguments.len, handler_info.is_variadic);
     const flags = c.ZEND_ACC_PUBLIC | switch (handler_info.is_variadic) {
         true => c.ZEND_ACC_VARIADIC,
@@ -41,7 +42,7 @@ pub fn fromHandler(comptime func: anytype, comptime this_type: ?type) @This() {
             .internal_function = .{
                 .type = c.ZEND_INTERNAL_FUNCTION,
                 .function_name = @ptrCast(name),
-                .handler = &handler(func, this_type),
+                .handler = &zendInternalFunction(func, self_src),
                 .num_args = handler_info.arguments.len,
                 .required_num_args = handler_info.required_count,
                 .arg_info = @constCast(arg_info.ptr),
@@ -51,7 +52,7 @@ pub fn fromHandler(comptime func: anytype, comptime this_type: ?type) @This() {
     };
 }
 
-pub fn getHandlerType(comptime F: type, comptime this_type: ?type) ?HandlerType {
+pub fn handlerType(comptime F: type, comptime self_src: SelfSource) HandlerType {
     const info = @typeInfo(F);
     if (info != .@"fn") @compileError("Function expected, received: " ++ @typeName(F));
     const AT = info.@"fn".param_types;
@@ -62,15 +63,16 @@ pub fn getHandlerType(comptime F: type, comptime this_type: ?type) ?HandlerType 
     };
     if (AT.len == 2 and AT[0] == *Arguments and AT[1] == *Value and PT == void) return .raw;
     if (AT.len == 1 and @typeInfo(AT[0].?) == .@"struct") return .handler;
-    if (this_type) |This| {
-        if (AT[0] == This and AT.len == 2 and @typeInfo(AT[1].?) == .@"struct") return .method;
+    if (AT.len == 2 and self_src.match(AT[0].?)) {
+        if (@typeInfo(AT[1].?) == .@"struct") return .method;
+        @compileError("Improper method handler: " ++ @typeName(F));
     }
-    return null;
+    @compileError("Improper function handler: " ++ @typeName(F));
 }
 
-pub fn getHandlerInfo(comptime func: anytype, comptime this_type: ?type) HandlerInfo {
+pub fn handlerInfo(comptime func: anytype, comptime self_src: SelfSource) HandlerInfo {
     const F = @TypeOf(func);
-    const handler_type = getHandlerType(F, this_type) orelse unrecognized(F, this_type);
+    const handler_type = handlerType(F, self_src);
     const arg_names, const arg_types, const is_raw = switch (handler_type) {
         .raw => .{ &.{}, &.{}, true },
         .handler, .method => init: {
@@ -114,9 +116,9 @@ pub fn getHandlerInfo(comptime func: anytype, comptime this_type: ?type) Handler
     };
 }
 
-pub fn handler(comptime func: anytype, comptime this_type: ?type) Handler {
+pub fn zendInternalFunction(comptime func: anytype, comptime self_src: SelfSource) Handler {
     const F = @TypeOf(func);
-    const handler_type = getHandlerType(F, this_type) orelse unrecognized(F, this_type);
+    const handler_type = handlerType(F, self_src);
     const f = @typeInfo(F).@"fn";
     const AT = f.param_types;
     const returning_error = @typeInfo(f.return_type.?) == .error_union;
@@ -140,21 +142,25 @@ pub fn handler(comptime func: anytype, comptime this_type: ?type) Handler {
             var iter = php_args.iterate();
             // use this variable as the first argument (i.e. self), which is going
             // a custom object
-            const Self = AT[0].?;
-            const arg0: Self = switch (Self) {
-                Value => iter.this,
-                *Object => iter.this.getObject() catch |err| return throw(err),
-                else => switch (iter.this.kind()) {
-                    .object => get: {
-                        const this_obj = php_args.this.object();
-                        const this_obj_addr: usize = @intFromPtr(this_obj);
-                        const offset = this_obj.impl.handlers.offset;
-                        // TODO: check class entry
-                        const struct_addr = this_obj_addr - offset;
-                        break :get @ptrFromInt(struct_addr);
-                    },
-                    .pointer => @ptrCast(php_args.this.pointer()),
+            const arg0 = switch (self_src) {
+                .singleton => |T| Singleton(T).get(),
+                .this => |T| get: {
+                    switch (iter.this.kind()) {
+                        .object => {
+                            const this_obj = iter.this.object();
+                            switch (T) {
+                                Object => break :get this_obj,
+                                else => break :get this_obj.toCustom(T),
+                            }
+                        },
+                        .pointer => {
+                            const ptr = iter.this.pointer();
+                            break :get @as(*T, @ptrCast(@alignCast(ptr)));
+                        },
+                        else => return throw(error.NotObject),
+                    }
                 },
+                .none => unreachable,
             };
             if (iter.extract(AT[1].?)) |arg1| {
                 const result = switch (returning_error) {
@@ -217,6 +223,27 @@ pub const ArgumentInfo = struct {
     required: bool,
 };
 pub const HandlerType = enum { handler, raw, method };
+pub const SelfSource = union(enum) {
+    this: type,
+    singleton: type,
+    none: void,
+
+    pub fn match(self: @This(), Arg0: type) bool {
+        return switch (self) {
+            inline .this, .singleton => |T| match: {
+                if (@typeInfo(T) == .pointer) @compileError("Unexpected pointer");
+                switch (@typeInfo(Arg0)) {
+                    .pointer => |pt| break :match pt.child == T,
+                    else => {
+                        if (Arg0 == T) @compileError("self should be a pointer");
+                        break :match false;
+                    },
+                }
+            },
+            .none => false,
+        };
+    }
+};
 
 pub var exception_prefix: [:0]const u8 = "";
 pub var exception_suffix: [:0]const u8 = "";
@@ -242,13 +269,6 @@ fn emptyArgInfo(comptime count: usize, comptime is_variadic: bool) []const c.zen
         };
         return &ns.array;
     }
-}
-
-fn unrecognized(comptime F: type, comptime this_type: ?type) noreturn {
-    if (this_type) |_|
-        @compileError("Improper method handler: " ++ @typeName(F))
-    else
-        @compileError("Improper function handler: " ++ @typeName(F));
 }
 
 const StdHandler = fn ([*c]c.zend_execute_data, [*c]c.zval) callconv(.c) void;

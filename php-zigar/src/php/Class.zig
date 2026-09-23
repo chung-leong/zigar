@@ -15,7 +15,7 @@ pub fn find(name: anytype) ?*@This() {
     return @ptrCast(zce);
 }
 
-pub fn getStandardClass(ctype: StandardClass) *const @This() {
+pub fn getBuiltin(ctype: Builtin) *const @This() {
     const ptr = switch (ctype) {
         .standard => deref(pi.zend_standard_class_def),
         .exception => deref(pi.zend_ce_exception),
@@ -23,7 +23,7 @@ pub fn getStandardClass(ctype: StandardClass) *const @This() {
     return @ptrCast(ptr);
 }
 
-pub fn getStandardInterface(itype: StandardInterface) *const @This() {
+pub fn getInterface(itype: InterfaceId) *const @This() {
     const ptr = switch (itype) {
         .aggregate => deref(pi.zend_ce_aggregate),
         .array_access => deref(pi.zend_ce_arrayaccess),
@@ -37,15 +37,15 @@ pub fn getStandardInterface(itype: StandardInterface) *const @This() {
     return @ptrCast(ptr);
 }
 
-pub const StandardClass = enum {
+pub const Builtin = enum {
     standard,
     exception,
 
-    pub fn get(self: @This()) *const ClassEntry {
-        return .getStandardClass(self);
+    pub fn get(self: @This()) *const Class {
+        return .getBuiltin(self);
     }
 };
-pub const StandardInterface = enum {
+pub const InterfaceId = enum {
     aggregate,
     array_access,
     countable,
@@ -55,10 +55,10 @@ pub const StandardInterface = enum {
     traversable,
     throwable,
 
-    pub fn get(self: @This()) *const ClassEntry {
-        return .getStandardInterface(self);
+    pub fn get(self: @This()) *const Class {
+        return .getInterface(self);
     }
 };
-const ClassEntry = @This();
+const Class = @This();
 
 impl: c.zend_class_entry,

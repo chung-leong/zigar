@@ -22,10 +22,11 @@ pub const AllocatorStatic = struct {
     methods: Methods = undefined,
 
     pub fn init(self: *@This()) !void {
+        const self_src: Function.SelfSource = .{ .this = Object };
         self.methods = .{
-            .alloc = .fromHandler(onAlloc, *Object),
-            .free = .fromHandler(onFree, *Object),
-            .dupe = .fromHandler(onDupe, *Object),
+            .alloc = .fromHandler(@"call alloc", self_src),
+            .free = .fromHandler(@"call free", self_src),
+            .dupe = .fromHandler(@"call dupe", self_src),
         };
     }
 
@@ -44,7 +45,7 @@ pub const AllocatorStatic = struct {
         return @ptrCast(fn_ng);
     }
 
-    pub fn onAlloc(allocator_obj: *Object, args: struct {
+    pub fn @"call alloc"(allocator_obj: *Object, args: struct {
         len: usize,
         alignment: usize = 1,
     }) !*Object {
@@ -60,7 +61,7 @@ pub const AllocatorStatic = struct {
         return @ptrCast(ab);
     }
 
-    pub fn onFree(allocator_obj: *Object, args: struct {
+    pub fn @"call free"(allocator_obj: *Object, args: struct {
         object: *Object,
     }) !void {
         var obj_og: *c.zend_object = @ptrCast(args.object);
@@ -104,7 +105,7 @@ pub const AllocatorStatic = struct {
         allocator_class.host.object_map.free(buf);
     }
 
-    pub fn onDupe(allocator_obj: *Object, args: struct {
+    pub fn @"call dupe"(allocator_obj: *Object, args: struct {
         source: union(enum) {
             string: *String,
             object: *Object,

@@ -80,7 +80,7 @@ pub const Promise = struct {
         // throw if the callback received an exception
         if (self.result.kind() == .object) {
             const obj = self.result.object();
-            if (obj.hasStandardInterface(.throwable)) {
+            if (obj.hasInterface(.throwable)) {
                 return php_ng.throwException(obj);
             }
         }
@@ -110,12 +110,12 @@ pub const Promise = struct {
     }
 
     pub fn createHandler() Value {
-        var func: Function = .fromHandler(onResolve, null);
+        var func: Function = .fromHandler(@"call resolve", .{ .none = {} });
         const closure = func.createClosure(null, null, null);
         return closure.toValue();
     }
 
-    pub fn onResolve(args: struct {
+    pub fn @"call resolve"(args: struct {
         pointer: *Object,
         result: Value,
     }) !void {
@@ -183,7 +183,7 @@ pub const PromiseStatic = struct {
     pub fn init(self: *@This()) !void {
         self.* = .{
             .methods = .{
-                .resolve = .fromHandler(onResolve, *Object),
+                .resolve = .fromHandler(@"call resolve", .{ .this = Object }),
             },
         };
     }
@@ -210,18 +210,18 @@ pub const PromiseStatic = struct {
         return @ptrCast(fn_ng);
     }
 
-    pub fn onResolve(promise_obj: *Object, args: struct {
+    pub fn resolve(promise_obj: *Object, value: Value, extern_allocator: ?*std.mem.Allocator) !void {
+        var cb_context: CallbackContext = try .init(promise_obj, extern_allocator);
+        defer cb_context.deinit();
+        try cb_context.send(value);
+    }
+
+    pub fn @"call resolve"(promise_obj: *Object, args: struct {
         result: Value,
     }) !void {
         // see if there's an allocator stashed in the buffer
         const promise_struct = structure.Struct.fromObject(@ptrCast(promise_obj));
         const allocator = promise_struct.buffer.getAllocator();
         try resolve(promise_obj, args.result, allocator);
-    }
-
-    pub fn resolve(promise_obj: *Object, value: Value, extern_allocator: ?*std.mem.Allocator) !void {
-        var cb_context: CallbackContext = try .init(promise_obj, extern_allocator);
-        defer cb_context.deinit();
-        try cb_context.send(value);
     }
 };

@@ -96,7 +96,7 @@ pub const Generator = struct {
     }
 
     pub fn createHandler() Value {
-        var func = Function.fromHandler(onResolve, null);
+        var func = Function.fromHandler(@"call resolve", .{ .this = @This() });
         const closure = func.createClosure(null, null, null);
         return closure.toValue();
     }
@@ -132,7 +132,7 @@ pub const Generator = struct {
         }
     }
 
-    pub fn onResolve(args: struct { ptr: Value, result: Value }) !bool {
+    pub fn @"call resolve"(args: struct { ptr: Value, result: Value }) !bool {
         const ptr_struct = try structure.Pointer.fromValue(@ptrCast(&args.ptr));
         const target = try ptr_struct.getValue(.none);
         php.release(&target);
@@ -212,15 +212,15 @@ pub const GeneratorStatic = struct {
         }
 
         pub fn sendAll(self: *@This(), source: Value) !void {
-            var src_cache: Object.MethodCallCache(.{ .current, .next }) = try .init(source);
+            var src_cache: Object.MethodSet(.{ .current, .next }).CallCache = try .init(source);
             defer src_cache.deinit();
             while (true) {
-                const value = try src_cache.method.current.invoke(&.{});
+                const value = try src_cache.invoke(.current, &.{});
                 defer value.release();
                 const result = try self.send(value);
                 const cont = try result.getBoolean();
                 if (!cont or value.isNull()) break;
-                _ = try src_cache.method.next.invoke(&.{});
+                _ = try src_cache.invoke(.next, &.{});
             }
         }
     };
@@ -228,7 +228,7 @@ pub const GeneratorStatic = struct {
     pub fn init(self: *@This()) !void {
         self.* = .{
             .methods = .{
-                .yield = .fromHandler(onYield, *Object),
+                .yield = .fromHandler(@"call yield", .{ .this = Object }),
             },
         };
     }
@@ -256,14 +256,6 @@ pub const GeneratorStatic = struct {
         return @ptrCast(fn_ng);
     }
 
-    pub fn onYield(generator_obj: *Object, args: struct {
-        value: Value,
-    }) !bool {
-        const generator_struct = structure.Struct.fromObject(@ptrCast(generator_obj));
-        const allocator = generator_struct.buffer.getAllocator();
-        return try yield(generator_obj, args.value, allocator);
-    }
-
     pub fn yield(generator_obj: *Object, value: Value, extern_allocator: ?*std.mem.Allocator) !bool {
         var cb_context: CallbackContext = try .init(generator_obj, extern_allocator);
         defer cb_context.deinit();
@@ -276,7 +268,7 @@ pub const GeneratorStatic = struct {
 
     pub fn pipe(generator_obj: *Object, source: Value, extern_allocator: ?*std.mem.Allocator) !void {
         const iterator_obj = source.getObject() catch return error.NotIterator;
-        if (!iterator_obj.hasStandardInterface(.iterator)) return error.NotIterator;
+        if (!iterator_obj.hasInterface(.iterator)) return error.NotIterator;
         var cb_context: CallbackContext = try .init(generator_obj, extern_allocator);
         defer cb_context.deinit();
         cb_context.sendAll(source) catch |err| {
@@ -293,5 +285,13 @@ pub const GeneratorStatic = struct {
                 return php.throwException(php.reuse(ex));
             };
         };
+    }
+
+    pub fn @"call yield"(generator_obj: *Object, args: struct {
+        value: Value,
+    }) !bool {
+        const generator_struct = structure.Struct.fromObject(@ptrCast(generator_obj));
+        const allocator = generator_struct.buffer.getAllocator();
+        return try yield(generator_obj, args.value, allocator);
     }
 };

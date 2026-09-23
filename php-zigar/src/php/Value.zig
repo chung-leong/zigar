@@ -429,8 +429,15 @@ pub const Kind = enum(u8) {
     resource = c.IS_RESOURCE, // 9
     reference = c.IS_REFERENCE, // 10
     constant_ast = c.IS_CONSTANT_AST, // 11
-    callable = c.IS_CALLABLE, // 12
+
+    // internal types
+    indirect = c.IS_INDIRECT, // 12
     pointer = c.IS_PTR, // 13
+    alias_pointer = c.IS_ALIAS_PTR, // 14
+    @"error" = c._IS_ERROR, // 15
+
+    // used for cast
+    number = c._IS_NUMBER, // 19
     _,
 
     pub fn name(self: @This()) []const u8 {
@@ -439,6 +446,21 @@ pub const Kind = enum(u8) {
             else => @tagName(self),
         };
     }
+
+    pub fn fromZvalType(zval_type: c_int) @This() {
+        return switch (zval_type) {
+            c._IS_BOOL => .boolean,
+            else => @enumFromInt(zval_type),
+        };
+    }
+};
+pub const Access = enum(c_int) {
+    read = c.BP_VAR_R,
+    write = c.BP_VAR_W,
+    read_write = c.BP_VAR_RW,
+    isset = c.BP_VAR_IS,
+    argument = c.BP_VAR_FUNC_ARG,
+    unset = c.BP_VAR_UNSET,
 };
 
 fn floatToInteger(value: f64) !c_long {
