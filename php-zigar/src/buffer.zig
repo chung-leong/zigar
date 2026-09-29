@@ -5,7 +5,6 @@ const memory_map = @import("memory-map.zig");
 const php_ng = @import("php/root.zig");
 const String = php_ng.String;
 const php_al = php_ng.allocator;
-const StringOG = @import("php.zig").String;
 
 pub const ByteBuffer = struct {
     bytes: []u8 = undefined,
@@ -108,9 +107,8 @@ pub const ByteBuffer = struct {
         }
     }
 
-    pub fn referenceString(self: *@This(), str_og: *StringOG, read_only: bool) void {
+    pub fn referenceString(self: *@This(), str: *String, read_only: bool) void {
         std.debug.assert(self.flags.uninitialized);
-        const str: *String = @ptrCast(str_og);
         defer self.flags.uninitialized = false;
         if (!read_only) {
             // separate the string if another variable is referencing it or if it's interned
@@ -199,6 +197,11 @@ pub const ByteBuffer = struct {
         @memset(dest, 0);
     }
 
+    pub fn retain(self: *@This()) *@This() {
+        self.addRef();
+        return self;
+    }
+
     pub fn addRef(self: *@This()) void {
         if (self.flags.temporary) return;
         self.ref_count += 1;
@@ -256,8 +259,7 @@ pub const ByteBuffer = struct {
         return .create(bytes);
     }
 
-    pub fn copyString(self: *@This(), str_og: *StringOG, encoding: ?Encoding) !void {
-        const str: *String = @ptrCast(str_og);
+    pub fn copyString(self: *@This(), str: *String, encoding: ?Encoding) !void {
         const bytes = try self.data(0, true);
         const sc = str.slice();
         if (encoding) |ec| {

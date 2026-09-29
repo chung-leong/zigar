@@ -4,191 +4,111 @@ const accessor = @import("accessor.zig");
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const cache = @import("cache.zig");
 const failure = @import("failure.zig");
-const php = @import("php.zig");
-const N = php.getStaticString;
-const ArgumentIterator = php.ArgumentIterator;
-const ClassEntry = php.ClassEntry;
-const ExecuteData = php.ExecuteData;
-const Function = php.Function;
-const HashTable = php.HashTable;
-const HashTableIterator = php.HashTableIterator;
-const Object = php.Object;
-const ObjectHandlers = php.ObjectHandlers;
-const ObjectIterator = php.ObjectIterator;
-const ObjectIteratorFunctions = php.ObjectIteratorFunctions;
-const String = php.String;
-const Value = php.Value;
+const php_ng = @import("php/root.zig");
+const pi = php_ng.imports;
+const Array = php_ng.Array;
+const c = php_ng.c;
+const Class = php_ng.Class;
+const Function = php_ng.Function;
+const Object = php_ng.Object;
+const PropertiesPurpose = Object.PropertiesPurpose;
+const PropertyStatus = Object.PropertyStatus;
+const String = php_ng.String;
+const N = String.static;
+const Value = php_ng.Value;
 
-pub const ArrayBuffer = struct {
-    buffer: *ByteBuffer,
-    flags: packed struct(usize) {
-        bytes_debug_output: bool = true,
-        _: u63 = 0,
-    } = .{},
-    php_portion: Object = undefined,
-
-    var class_entry: *ClassEntry = undefined;
-    var constructor: Function = undefined;
-    var handlers: ObjectHandlers = undefined;
-
-    pub const PropCache = cache.IdCache(.{ .byteLength, .detached, .readOnly }, "", .{});
-    pub const class_name = "ArrayBuffer";
-
-    pub inline fn object(self: *@This()) *Object {
-        return &self.php_portion;
+pub const ArrayBuffer = Object.Custom(struct {
+    pub fn init(args: struct { buffer: ?*ByteBuffer }) !@This() {
+        return .{ .buffer = args.buffer orelse try .create(.@"1") };
     }
 
-    pub inline fn fromObject(obj: *Object) *@This() {
-        return @fieldParentPtr("php_portion", obj);
+    pub fn @"call __construct"(self: *@This(), args: struct {
+        input: ?union(enum) {
+            integer: c_ulong,
+            string: *String,
+        },
+        read_only: bool = false,
+    }) !void {
+        if (args.input) |input| switch (input) {
+            .string => |str| self.buffer.referenceString(str, args.read_only),
+            .integer => |len| {
+                try self.buffer.allocate(null, len);
+                try self.buffer.clear();
+            },
+        } else {
+            self.buffer.referenceBytes(&.{}, null);
+        }
     }
 
-    pub inline fn entry() *ClassEntry {
-        return class_entry;
+    pub fn @"get byteLength"(self: *@This()) c_ulong {
+        return self.buffer.bytes.len;
     }
 
-    pub fn create(buffer: ?*ByteBuffer) !*Object {
-        const prop_size = php.getObjectPropertySize(class_entry);
-        const size: usize = @intCast(@sizeOf(@This()) + prop_size);
-        const mem = php.emalloc(size, @src()) orelse return error.OutOfMemory;
-        errdefer php.efree(mem, @src());
-        const self: *@This() = @ptrCast(@alignCast(mem));
-        self.* = .{
-            .buffer = if (buffer) |buf| use: {
-                buf.addRef();
-                break :use buf;
-            } else try .create(.@"1"),
-        };
-        // initialize the PHP portion
-        const obj = self.object();
-        php.initializeStandardObject(obj, class_entry);
-        // handlers need to be set after zend_object_std_init() due to change in PHP 8.3
-        obj.handlers = &handlers;
-        return obj;
+    pub fn @"get detached"(self: *@This()) bool {
+        return self.buffer.flags.uninitialized;
     }
 
-    pub fn getConstructor(_: *Object) *php.Function {
+    pub fn @"get readOnly"(self: *@This()) bool {
+        return self.buffer.flags.read_only;
+    }
+
+    pub fn getConstructor(self: *@This()) ?*const Function {
+        _ = self;
         return &constructor;
     }
 
-    pub fn freeObject(obj: *Object) void {
-        const self = fromObject(obj);
+    pub fn freeObject(self: *@This()) void {
         self.buffer.release();
     }
 
-    pub fn castObject(obj: *Object, retval: *Value, type_id: c_int) !c_int {
-        const desired_type = try php.ValueType.fromInt(type_id);
-        const self = fromObject(obj);
-        retval.* = switch (desired_type) {
+    pub fn castObject(self: *@This(), kind: Value.Kind) !Value {
+        return switch (kind) {
             .string => get: {
                 const str = try self.buffer.getString(null);
-                const str_og: *String = @ptrCast(str);
-                break :get php.createValueString(str_og);
+                break :get .fromString(str);
             },
-            .boolean => php.createValueBool(true),
-            else => return php.FAILURE,
-        };
-        return php.SUCCESS;
-    }
-
-    pub fn readProperty(obj: *Object, name: *String, _: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
-        const id_cache: PropCache = .{};
-        if (id_cache.idFromString(name, cache_slot)) |id| {
-            const self = fromObject(obj);
-            if (self.getProperty(id)) |value| {
-                retval.* = value;
-            } else |err| {
-                php.throwError(reportFieldError(name, .read, err));
-            }
-        } else {
-            php.throwError(reportFieldError(name, .read, error.Missing));
-            retval.* = php.createValueNull();
-        }
-        return retval;
-    }
-
-    fn getProperty(self: *@This(), id: PropCache.Id) !Value {
-        return switch (id) {
-            .byteLength => php.createValueAnyInt(self.buffer.bytes.len),
-            .detached => php.createValueBool(self.buffer.flags.uninitialized),
-            .readOnly => php.createValueBool(self.buffer.flags.read_only),
+            .boolean => .fromBoolean(true),
+            else => error.UnsupportedConversion,
         };
     }
 
-    pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
-        _ = obj;
-        _ = value;
-        const id_cache: PropCache = .{};
-        if (id_cache.idFromString(name, cache_slot)) |id| {
-            return switch (id) {
-                .byteLength,
-                .detached,
-                .readOnly,
-                => reportFieldError(name, .write, error.WriteProtected),
-            };
-        } else {
-            return reportFieldError(name, .write, error.Missing);
-        }
-    }
-
-    pub fn hasProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque) c_int {
-        _ = prop_type;
-        _ = obj;
-        const id_cache: PropCache = .{};
-        return if (id_cache.idFromString(name, cache_slot)) |_| 1 else 0;
-    }
-
-    pub fn getProperties(obj: *Object) !*HashTable {
-        const ht = try getPropertiesFor(obj, @intFromEnum(php.PropPurpose.array_cast));
-        ht.gc.refcount = 0;
-        return ht;
-    }
-
-    pub fn getPropertiesFor(obj: *Object, purpose_i: c_uint) !*HashTable {
-        const purpose: php.PropPurpose = @enumFromInt(purpose_i);
-        const self = fromObject(obj);
-        const ht = php.createArray();
+    pub fn getPropertiesFor(self: *@This(), purpose: PropertiesPurpose) !*Array {
         if (purpose == .debug) {
             if (self.flags.bytes_debug_output) {
+                const arr: *Array = .create();
                 if (self.buffer.data(0, false) catch null) |bytes| {
-                    const bytes_ht = php.createArray();
+                    const bytes_arr: *Array = .create();
                     for (bytes, 0..) |byte, index| {
                         if (index == 50) {
                             const left = bytes.len - index;
                             if (left >= 10) {
                                 var buffer: [128]u8 = undefined;
                                 const text = try std.fmt.bufPrint(&buffer, "... {d} more bytes", .{left});
-                                const text_value = php.createValueStringContent(text);
-                                _ = php.appendHashEntry(bytes_ht, &text_value);
+                                const text_value: Value = .fromString(.create(text));
+                                bytes_arr.append(text_value);
                                 break;
                             }
                         }
-                        const byte_value = php.createValueAnyInt(byte);
-                        _ = php.appendHashEntry(bytes_ht, &byte_value);
+                        const byte_value: Value = .fromInteger(byte);
+                        bytes_arr.append(byte_value);
                     }
-                    const bytes_value = php.createValueArray(bytes_ht);
-                    php.setHashEntry(ht, "[BYTES]", &bytes_value);
+                    const bytes_value: Value = .fromArray(bytes_arr);
+                    arr.set("[BYTES]", bytes_value);
                 }
+                return arr;
             } else {
                 // turn it back on
                 self.flags.bytes_debug_output = true;
             }
-            inline for (comptime std.meta.fieldNames(PropCache.Id)) |field_name| {
-                const id = @field(PropCache.Id, field_name);
-                const value = try self.getProperty(id);
-                php.setHashEntry(ht, field_name, &value);
-            }
         }
-        return ht;
     }
 
-    pub fn compare(a: *Value, b: *Value) c_int {
-        const obj_a = php.getValueObject(a) catch return -1;
-        const obj_b = php.getValueObject(b) catch return 1;
-        if (obj_a.ce != obj_b.ce) {
-            return if (@intFromPtr(obj_a.ce) < @intFromPtr(obj_b.ce)) -1 else 1;
+    pub fn compareWith(self: *@This(), value: Value) c_int {
+        const other_obj = value.getObject() catch return 1;
+        if (!other_obj.isInstanceOf(ArrayBuffer.class())) {
+            return ArrayBuffer.class().compareWith(other_obj.class());
         }
-        const self = fromObject(obj_a);
-        const other = fromObject(obj_b);
+        const other = other_obj.toCustom(ArrayBuffer);
         if (self.buffer == other.buffer) return 0;
         if (self.buffer.flags.uninitialized != other.buffer.flags.uninitialized) {
             return if (self.buffer.flags.uninitialized) 1 else -1;
@@ -200,76 +120,12 @@ pub const ArrayBuffer = struct {
         };
     }
 
-    pub fn getGarbageCollection(obj: *Object, table: *[*c]Value, n: *c_int) !?*HashTable {
-        _ = obj;
-        _ = table;
-        n.* = 0;
-        return null;
-    }
-
-    pub fn handleCreateObject(_: *ClassEntry) !*Object {
-        return try create(null);
-    }
-
-    pub fn handleConstructor(ed: *ExecuteData, _: *Value) !void {
-        var iter: ArgumentIterator = .init(ed);
-        const obj = try php.getValueObject(&ed.This);
-        const self = fromObject(obj);
-        if (iter.next()) |arg| {
-            switch (php.getValueType(arg)) {
-                .string => {
-                    const str = php.getValueString(arg) catch unreachable;
-                    const read_only = get: {
-                        const arg1 = iter.next() orelse break :get false;
-                        break :get try php.getValueBool(arg1);
-                    };
-                    self.buffer.referenceString(str, read_only);
-                },
-                .long, .double => {
-                    const size = try php.getValueUlong(arg);
-                    try self.buffer.allocate(null, size);
-                    try self.buffer.clear();
-                },
-                else => {
-                    const arg_d = php.createValueDebug(arg);
-                    defer php.release(&arg_d);
-                    return failure.report("{s} expects a string or a positive integer, recevied: {s}", .{
-                        class_name,
-                        php.getValueStringContent(&arg_d) catch unreachable,
-                    });
-                },
-            }
-        } else {
-            self.buffer.referenceBytes(&.{}, null);
-        }
-    }
-
-    pub fn handleGetIterator(_: *ClassEntry, _: *Value, _: c_int) !?*ObjectIterator {
-        return null;
-    }
-
-    pub fn registerClass() !void {
-        var ce: ClassEntry = .{
-            .name = N(class_name),
-        };
-        const parent_ce = php.getClassEntry(.standard);
-        class_entry = try php.registerInternalClass(&ce, parent_ce);
-        class_entry.unnamed_1.create_object = php.transform(handleCreateObject);
-        class_entry.get_iterator = php.transform(handleGetIterator);
-        constructor = php.createTransformedFunction(handleConstructor, "__construct", 0, true);
-        handlers = php.createHandlerTable(@This(), @offsetOf(@This(), "php_portion"));
-    }
-
-    pub fn unregisterClass() void {
-        php.unregisterInternalClass(class_entry);
-    }
-
     fn reportFieldError(name: *String, access: accessor.FieldAccess, err: anytype) error{FailureReported} {
         if (failure.match(err, error.FailureReported)) {
             return error.FailureReported;
         } else if (failure.match(err, error.Missing)) {
             return failure.report("no field named '{s}' in {s}", .{
-                php.getStringContent(name),
+                name.slice(),
                 class_name,
             });
         } else {
@@ -277,118 +133,75 @@ pub const ArrayBuffer = struct {
             defer failure.freeMessage(message);
             return failure.report("unable to {s} field '{s}' in {s}: {s}", .{
                 @tagName(access),
-                php.getStringContent(name),
+                name.slice(),
                 class_name,
                 message,
             });
         }
     }
 
-    comptime {
-        if (@offsetOf(@This(), "php_portion") + @sizeOf(Object) != @sizeOf(@This())) {
-            @compileError("PHP object is in the wrong position");
-        }
-    }
-};
+    pub const PropCache = cache.IdCache(.{ .byteLength, .detached, .readOnly }, "", .{});
+    pub const class_name = "ArrayBuffer";
+
+    const constructor: Function = .fromHandler(@"call __construct", .{ .this = @This() });
+
+    buffer: *ByteBuffer,
+    flags: packed struct(usize) {
+        bytes_debug_output: bool = true,
+        _: u63 = 0,
+    } = .{},
+});
 
 pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
-    return struct {
-        buffer: *ByteBuffer,
-        array_buffer: ?*Object = null,
-        php_portion: Object = undefined,
-
-        var class_entry: *ClassEntry = undefined;
-        var constructor: Function = undefined;
-        var handlers: ObjectHandlers = undefined;
-
-        pub const PropCache = cache.IdCache(.{ .buffer, .byteLength, .byteOffset, .length }, "", .{});
-        pub const class_name = switch (@typeInfo(T)) {
-            .int => |int| switch (int.signedness) {
-                .signed => std.fmt.comptimePrint("Int{d}Array", .{int.bits}),
-                .unsigned => switch (clamped) {
-                    false => std.fmt.comptimePrint("Uint{d}Array", .{int.bits}),
-                    true => std.fmt.comptimePrint("Uint{d}ClampedArray", .{int.bits}),
+    return Object.Custom(struct {
+        pub fn init(args: struct { buffer: ?*ByteBuffer }) @This() {
+            return .{
+                .buffer = if (args.buffer) |buf| buf.retain() else init: {
+                    var ptr: *ByteBuffer = undefined;
+                    @as(*usize, @ptrCast(&ptr)).* = 0;
+                    break :init ptr;
                 },
-            },
-            .float => |float| std.fmt.comptimePrint("Float{d}Array", .{float.bits}),
-            else => @compileError("Unexpected type: " ++ @typeName(T)),
-        };
-
-        pub inline fn object(self: *@This()) *Object {
-            return &self.php_portion;
+            };
         }
 
-        pub inline fn fromObject(obj: *Object) *@This() {
-            return @fieldParentPtr("php_portion", obj);
-        }
-
-        pub inline fn entry() *ClassEntry {
-            return class_entry;
-        }
-
-        pub fn create(buffer: ?*ByteBuffer) !*Object {
-            const prop_size = php.getObjectPropertySize(class_entry);
-            const size: usize = @intCast(@sizeOf(@This()) + prop_size);
-            const mem = php.emalloc(size, @src()) orelse return error.OutOfMemory;
-            errdefer php.efree(mem, @src());
-            const self: *@This() = @ptrCast(@alignCast(mem));
-            self.* = .{ .buffer = if (buffer) |buf| use: {
-                buf.addRef();
-                break :use buf;
-            } else init: {
-                var ptr: *ByteBuffer = undefined;
-                @as(*usize, @ptrCast(&ptr)).* = 0;
-                break :init ptr;
-            } };
-            // initialize the PHP portion
-            const obj = self.object();
-            php.initializeStandardObject(obj, class_entry);
-            // handlers need to be set after zend_object_std_init() due to change in PHP 8.3
-            obj.handlers = &handlers;
-            return obj;
-        }
-
-        pub fn getConstructor(_: *Object) *php.Function {
+        pub fn getConstructor(_: *@This()) ?*const Function {
             return &constructor;
         }
 
-        pub fn freeObject(obj: *Object) void {
-            const self = fromObject(obj);
+        pub fn freeObject(self: *@This()) void {
             if (@intFromPtr(self.buffer) != 0) self.buffer.release();
-            if (self.array_buffer) |ab| php.release(ab);
+            if (self.array_buffer) |ab| ab.release();
         }
 
-        pub fn castObject(obj: *Object, retval: *Value, type_id: c_int) !c_int {
-            const desired_type = try php.ValueType.fromInt(type_id);
-            const self = fromObject(obj);
-            retval.* = switch (desired_type) {
+        pub fn castObject(self: *@This(), kind: Value.Kind) !Value {
+            return switch (kind) {
                 .string => get: {
                     const str = try self.buffer.getString(null);
-                    const str_og: *String = @ptrCast(str);
-                    break :get php.createValueString(str_og);
+                    break :get .fromString(str);
                 },
-                .boolean => php.createValueBool(true),
-                else => return php.FAILURE,
+                .boolean => .fromBoolean(true),
+                else => return error.UnsupportedConversion,
             };
-            return php.SUCCESS;
         }
 
-        pub fn readElement(obj: *Object, key: *Value, _: c_int, retval: *Value) !*Value {
-            const self = fromObject(obj);
+        pub fn readElement(self: *@This(), key: *Value, access: Value.Access) !Value {
+            _ = access;
             const len = self.getLength();
             const index = try getIndex(key, len);
             const bytes = try self.buffer.data(index * @sizeOf(T), false);
             const ptr: [*]const T = @ptrCast(@alignCast(bytes.ptr));
-            retval.* = switch (@typeInfo(T)) {
-                .int => php.createValueAnyInt(ptr[index]),
-                .float => php.createValueDouble(ptr[index]),
+            const value = ptr[index];
+            return switch (@typeInfo(T)) {
+                .int => |int| switch (int.signedness) {
+                    .signed => .fromInteger(value),
+                    .unsigned => .fromUnsigned(value),
+                },
+                .float => .fromDouble(value),
                 else => unreachable,
             };
-            return retval;
         }
 
-        pub fn writeElement(obj: *Object, key: *Value, value: *Value) !void {
-            const self = fromObject(obj);
+        pub fn writeElement(self: *@This(), key: Value, value: Value) !void {
             const len = self.getLength();
             const index = try getIndex(key, len);
             const bytes = try self.buffer.data(index * @sizeOf(T), true);
@@ -396,131 +209,25 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
             ptr[index] = try extractValue(value);
         }
 
-        pub fn hasElement(obj: *Object, key: *Value, _: c_int) !c_int {
-            const self = fromObject(obj);
+        pub fn hasElement(self: *@This(), key: Value, status: Object.PropertyStatus) bool {
+            _ = status;
             const len = self.getLength();
-            return if (getIndex(key, len)) |_| 1 else |_| 0;
+            return getIndex(key, len) != null;
         }
 
-        pub fn countElements(obj: *Object, count: *php.Long) !c_int {
-            const self = fromObject(obj);
+        pub fn countElements(self: *@This()) !usize {
             const len = self.getLength();
-            if (len > std.math.maxInt(php.Long)) return error.TooLarge;
-            count.* = @intCast(len);
-            return php.SUCCESS;
+            if (len > std.math.maxInt(c_long)) return error.TooLarge;
+            return @intCast(len);
         }
 
-        fn getIndex(key: *Value, len: usize) !usize {
-            const key_long = try php.getValueLong(key);
-            if (key_long < 0) return error.NegativeIndex;
-            const index: usize = @intCast(key_long);
-            // need bound check needed even though the ByteBuffer performs bound check because
-            // element might be zero-bit
-            if (index >= len) return error.OutOfBound;
-            return index;
-        }
-
-        pub fn readProperty(obj: *Object, name: *String, _: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
-            const id_cache: PropCache = .{};
-            if (id_cache.idFromString(name, cache_slot)) |id| {
-                const self = fromObject(obj);
-                if (self.getProperty(id)) |value| {
-                    retval.* = value;
-                } else |err| {
-                    php.throwError(reportFieldError(name, .read, err));
-                }
-            } else {
-                php.throwError(reportFieldError(name, .read, error.Missing));
-                retval.* = php.createValueNull();
+        pub fn compareWith(self: *@This(), value: Value) c_int {
+            const other_obj = value.getObject() catch return 1;
+            const class = TypedArray.class();
+            if (other_obj.isInstanceOf(class)) {
+                return class.compareWith(other_obj.class());
             }
-            return retval;
-        }
-
-        pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
-            _ = obj;
-            _ = value;
-            const id_cache: PropCache = .{};
-            if (id_cache.idFromString(name, cache_slot)) |id| {
-                return switch (id) {
-                    else => reportFieldError(name, .write, error.WriteProtected),
-                };
-            } else {
-                return reportFieldError(name, .write, error.Missing);
-            }
-        }
-
-        pub fn hasProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque) c_int {
-            _ = prop_type;
-            _ = obj;
-            const id_cache: PropCache = .{};
-            return if (id_cache.idFromString(name, cache_slot)) |_| 1 else 0;
-        }
-
-        pub fn getProperties(obj: *Object) !*HashTable {
-            const ht = try getPropertiesFor(obj, @intFromEnum(php.PropPurpose.array_cast));
-            ht.gc.refcount = 0;
-            return ht;
-        }
-
-        pub fn getPropertiesFor(obj: *Object, purpose_i: c_uint) !*HashTable {
-            const purpose: php.PropPurpose = @enumFromInt(purpose_i);
-            const self = fromObject(obj);
-            const ptr: [*]const T, const len = init: {
-                const bytes = self.buffer.data(0, false) catch {
-                    break :init .{ &.{}, 0 };
-                };
-                break :init .{ @ptrCast(@alignCast(bytes.ptr)), self.getLength() };
-            };
-            const items = ptr[0..len];
-            const ht = php.createArray();
-            if (purpose == .debug) {
-                const items_ht = php.createArray();
-                for (items, 0..) |item, index| {
-                    if (purpose == .debug) {
-                        if (index == 50) {
-                            const left = items.len - index;
-                            if (left >= 10) {
-                                var buffer: [128]u8 = undefined;
-                                const text = try std.fmt.bufPrint(&buffer, "... {d} more items", .{left});
-                                const text_value = php.createValueStringContent(text);
-                                _ = php.appendHashEntry(items_ht, &text_value);
-                                break;
-                            }
-                        }
-                    }
-                    const value = createValue(item);
-                    _ = php.appendHashEntry(items_ht, &value);
-                }
-                const items_value = php.createValueArray(items_ht);
-                php.setHashEntry(ht, "[ITEMS]", &items_value);
-                inline for (comptime std.meta.fieldNames(PropCache.Id)) |field_name| {
-                    const id = @field(PropCache.Id, field_name);
-                    const value = try self.getProperty(id);
-                    php.setHashEntry(ht, field_name, &value);
-                }
-                // at this point, array_buffer will have been created by getProperty()
-                // if it was empty before
-                const ab_obj = self.array_buffer.?;
-                const ab = ArrayBuffer.fromObject(ab_obj);
-                ab.flags.bytes_debug_output = false;
-                // ArrayBuffer's getPropertiesFor() will reset the flag
-            } else {
-                for (items) |item| {
-                    const value = createValue(item);
-                    _ = php.appendHashEntry(ht, &value);
-                }
-            }
-            return ht;
-        }
-
-        pub fn compare(a: *Value, b: *Value) c_int {
-            const obj_a = php.getValueObject(a) catch return -1;
-            const obj_b = php.getValueObject(b) catch return 1;
-            if (obj_a.ce != obj_b.ce) {
-                return if (@intFromPtr(obj_a.ce) < @intFromPtr(obj_b.ce)) -1 else 1;
-            }
-            const self = fromObject(obj_a);
-            const other = fromObject(obj_b);
+            const other = other_obj.toCustom(TypedArray);
             if (self.buffer == other.buffer) return 0;
             if (self.buffer.flags.uninitialized or other.buffer.flags.uninitialized) {
                 return if (self.buffer.flags.uninitialized) 1 else -1;
@@ -538,179 +245,190 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
             };
         }
 
-        pub fn getGarbageCollection(obj: *Object, table: *[*c]Value, n: *c_int) !?*HashTable {
-            _ = obj;
-            _ = table;
-            n.* = 0;
+        pub fn getProperties(self: *@This(), purpose: PropertiesPurpose) !*Array {
+            const ptr: [*]const T, const len = init: {
+                const bytes = self.buffer.data(0, false) catch {
+                    break :init .{ &.{}, 0 };
+                };
+                break :init .{ @ptrCast(@alignCast(bytes.ptr)), self.getLength() };
+            };
+            const items = ptr[0..len];
+            if (purpose == .debug) {
+                const arr: *Array = .create();
+                const items_arr: *Array = .create();
+                for (items, 0..) |item, index| {
+                    if (purpose == .debug) {
+                        if (index == 50) {
+                            const left = items.len - index;
+                            if (left >= 10) {
+                                var buffer: [128]u8 = undefined;
+                                const text = try std.fmt.bufPrint(&buffer, "... {d} more items", .{left});
+                                const text_value: Value = .fromString(.create(text));
+                                items_arr.append(text_value);
+                                break;
+                            }
+                        }
+                    }
+                    const value = createValue(item);
+                    items_arr.append(value);
+                }
+                arr.set("[ITEMS]", .fromArray(items_arr));
+                // at this point, array_buffer will have been created by getProperty()
+                // if it was empty before
+                const ab_obj = self.array_buffer.?;
+                const ab = ab_obj.custom(ArrayBuffer);
+                ab.flags.bytes_debug_output = false;
+                // ArrayBuffer's getPropertiesFor() will reset the flag
+                return arr;
+            }
             return null;
         }
 
-        pub fn handleCreateObject(_: *ClassEntry) !*Object {
-            return try create(null);
+        pub fn getIterator(self: *@This()) ?*Object.Iterator {
+            const zig_iter: Iterator = .init(self);
+            const iter: Object.Iterator.Custom(Iterator) = .create(zig_iter);
+            return @ptrCast(iter);
         }
 
-        pub fn handleConstructor(ed: *ExecuteData, _: *Value) !void {
-            var iter: ArgumentIterator = .init(ed);
-            const obj = try php.getValueObject(&ed.This);
-            const self = fromObject(obj);
-            var buf: *ByteBuffer = undefined;
-            if (iter.next()) |arg| {
-                switch (php.getValueType(arg)) {
-                    .object => {
-                        const arg_obj = php.getValueObject(arg) catch unreachable;
-                        if (arg_obj.ce.? == ArrayBuffer.entry()) {
-                            const ab = ArrayBuffer.fromObject(arg_obj);
-                            const offset: usize = if (iter.next()) |arg1| get: {
-                                const i = try php.getValueUlong(arg1);
-                                if (i % @sizeOf(T) != 0) return error.InvalidOffset;
-                                break :get i;
-                            } else 0;
-                            const len: usize = if (iter.next()) |arg2| get: {
-                                const n = try php.getValueUlong(arg2);
-                                if (offset + n * @sizeOf(T) > ab.buffer.bytes.len) return error.InvalidLength;
-                                break :get n;
-                            } else calc: {
+        pub fn @"call __construct"(self: *@This(), args: struct {
+            input: ?union(enum) {
+                object: *Object,
+                array: *Array,
+                length: c_ulong,
+            },
+            offset: ?c_ulong,
+            len: ?c_ulong,
+        }) !void {
+            const buf = if (args.input) |input| get: {
+                switch (input) {
+                    .object => |obj| {
+                        if (obj.isInstanceOf(ArrayBuffer.class())) {
+                            const ab = obj.toCustom(ArrayBuffer);
+                            const offset: usize = args.offset orelse 0;
+                            if (offset % @sizeOf(T) != 0) return error.InvalidOffset;
+                            const len: usize = args.len orelse calc: {
                                 if (offset > ab.buffer.bytes.len) return error.InvalidOffset;
                                 const byte_len = ab.buffer.bytes.len - offset;
                                 const n = byte_len / @sizeOf(T);
                                 if (n * @sizeOf(T) != byte_len) return error.InvalidLength;
                                 break :calc n;
                             };
+                            if (offset + len * @sizeOf(T) > ab.buffer.bytes.len) return error.InvalidLength;
+                            self.array_buffer = obj.retain();
                             const byte_len = len * @sizeOf(T);
                             if (offset == 0 and ab.buffer.bytes.len == byte_len) {
-                                buf = ab.buffer;
-                                ab.buffer.addRef();
+                                break :get ab.buffer.retain();
                             } else {
-                                buf = try ab.buffer.slice(offset, byte_len, .@"1", 0);
+                                break :get try ab.buffer.slice(offset, byte_len, .@"1", 0);
                             }
-                            self.array_buffer = php.reuse(arg_obj);
-                        } else if (arg_obj.ce == class_entry) {
-                            const other = fromObject(arg_obj);
-                            buf = try .create(.@"1");
+                        } else if (obj.isInstanceOf(TypedArray.class())) {
+                            const other = obj.toCustom(TypedArray);
+                            const buf: *ByteBuffer = try .create(.@"1");
                             errdefer buf.release();
                             try buf.allocate(null, other.buffer.bytes.len);
                             try buf.copy(other.buffer);
+                            break :get buf;
                         } else {
-                            var tmp = arg.*;
-                            try php.convertValue(&tmp, .array);
-                            const ht = php.getValueArray(arg) catch unreachable;
-                            buf = try createBufferFromArray(ht);
+                            const value: Value = .fromObject(obj);
+                            const tmp = value.cast(.array);
+                            defer tmp.release();
+                            const buf = try createBufferFromArray(tmp.array());
+                            break :get buf;
                         }
                     },
-                    .array => {
-                        const ht = php.getValueArray(arg) catch unreachable;
-                        buf = try createBufferFromArray(ht);
+                    .array => |arr| {
+                        const buf = try createBufferFromArray(arr);
+                        break :get buf;
                     },
-                    .long, .double => {
-                        const len = try php.getValueUlong(arg);
-                        buf = try ByteBuffer.create(.@"1");
+                    .length => |len| {
+                        const buf = try ByteBuffer.create(.@"1");
                         errdefer buf.release();
                         try buf.allocate(null, len * @sizeOf(T));
                         try buf.clear();
-                    },
-                    else => {
-                        const arg_d = php.createValueDebug(arg);
-                        return failure.report("{s} expects an ArrayBuffer, array, or positive interger, received: {s}", .{
-                            class_name,
-                            php.getValueStringContent(&arg_d) catch unreachable,
-                        });
+                        break :get buf;
                     },
                 }
-            } else {
-                buf = try ByteBuffer.create(.@"1");
+            } else get: {
+                const buf = try ByteBuffer.create(.@"1");
                 buf.referenceBytes(&.{}, null);
-            }
+                break :get buf;
+            };
             self.buffer = buf;
         }
 
-        pub fn handleGetIterator(_: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
-            const obj = try php.getValueObject(this);
-            return try Iterator.create(obj);
-        }
-
-        pub fn registerClass() !void {
-            const interfaces: [*c][*c]ClassEntry = @ptrCast(@alignCast(php.malloc(@sizeOf(*ClassEntry) * 2)));
-            interfaces[0] = php.getInterface(.iterator);
-            interfaces[1] = TypedArray.class_entry;
-            var ce: ClassEntry = .{
-                .name = N(class_name),
-                .num_interfaces = 2,
-                .unnamed_2 = .{ .interfaces = interfaces },
+        pub fn @"get buffer"(self: *@This()) !*Object {
+            const obj = self.array_buffer orelse create: {
+                const parent_buf = self.buffer.getBase();
+                const ab = try ArrayBuffer.create(.{ .buffer = parent_buf });
+                const ab_obj: *Object = @ptrCast(ab);
+                self.array_buffer = ab_obj;
+                break :create ab_obj;
             };
-            const parent_ce = php.getClassEntry(.standard);
-            class_entry = try php.registerInternalClass(&ce, parent_ce);
-            class_entry.unnamed_1.create_object = php.transform(handleCreateObject);
-            class_entry.get_iterator = php.transform(handleGetIterator);
-            constructor = php.createTransformedFunction(handleConstructor, "__construct", 0, true);
-            handlers = php.createHandlerTable(@This(), @offsetOf(@This(), "php_portion"));
+            return obj.retain();
         }
 
-        pub fn unregisterClass() void {
-            php.unregisterInternalClass(class_entry);
+        pub fn @"get byteLength"(self: *@This()) c_ulong {
+            return @intCast(self.buffer.bytes.len);
         }
 
-        fn createValue(item: T) Value {
-            return switch (@typeInfo(T)) {
-                .int => php.createValueAnyInt(item),
-                .float => php.createValueDouble(item),
-                else => unreachable,
-            };
+        pub fn @"get byteOffset"(self: *@This()) c_ulong {
+            const parent_buf = self.buffer.getBase();
+            const offset = @intFromPtr(self.buffer.bytes.ptr) - @intFromPtr(parent_buf.bytes.ptr);
+            return @intCast(offset);
         }
 
-        fn getProperty(self: *@This(), id: PropCache.Id) !Value {
-            switch (id) {
-                .buffer => {
-                    const obj = self.array_buffer orelse create: {
-                        const parent_buf = self.buffer.getBase();
-                        const ab = try ArrayBuffer.create(parent_buf);
-                        self.array_buffer = ab;
-                        break :create ab;
-                    };
-                    return php.createValueObject(php.reuse(obj));
-                },
-                .byteLength => {
-                    return php.createValueAnyInt(self.buffer.bytes.len);
-                },
-                .byteOffset => {
-                    const parent_buf = self.buffer.getBase();
-                    const offset = @intFromPtr(self.buffer.bytes.ptr) - @intFromPtr(parent_buf.bytes.ptr);
-                    return php.createValueAnyInt(offset);
-                },
-                .length => {
-                    const len = self.getLength();
-                    return php.createValueAnyInt(len);
-                },
-            }
+        pub fn @"get length"(self: *@This()) c_ulong {
+            return @intCast(self.getLength());
         }
 
         fn getLength(self: *@This()) usize {
             return self.buffer.bytes.len / @sizeOf(T);
         }
 
-        fn createBufferFromArray(ht: *HashTable) !*ByteBuffer {
+        fn getIndex(key: Value, len: usize) !usize {
+            const key_long = try key.getUnsigned();
+            const index: usize = @intCast(key_long);
+            // need bound check here even though ByteBuffer does that because
+            // element might be zero-bit
+            if (index >= len) return error.OutOfBound;
+            return index;
+        }
+
+        fn createValue(item: T) Value {
+            return switch (@typeInfo(T)) {
+                .int => |int| switch (int.signedness) {
+                    .signed => .fromInteger(item),
+                    .unsigned => .fromUnsigned(item),
+                },
+                .float => .fromFloat(item),
+                else => unreachable,
+            };
+        }
+
+        fn createBufferFromArray(arr: *Array) !*ByteBuffer {
             const buf = try ByteBuffer.create(.@"1");
             errdefer buf.release();
-            try buf.allocate(null, @sizeOf(T) * php.getHashLength(ht));
+            try buf.allocate(null, @sizeOf(T) * arr.length());
             const ptr: [*]T = @ptrCast(@alignCast(buf.bytes.ptr));
-            var ht_iter: HashTableIterator = .init(ht, .{});
+            var iter = arr.iterate(.{});
             var index: usize = 0;
-            while (ht_iter.next()) |value| {
+            while (iter.next()) |value| {
                 ptr[index] = try extractValue(value);
                 index += 1;
             }
             return buf;
         }
 
-        fn extractValue(value: *Value) !T {
+        fn extractValue(value: Value) !T {
             return switch (@typeInfo(T)) {
                 .int => |int| switch (int.signedness) {
-                    .signed => @truncate(try php.getValueLong(value)),
+                    .signed => @truncate(try value.getInteger()),
                     .unsigned => switch (clamped) {
-                        false => @truncate(try php.getValueUlong(value)),
+                        false => @truncate(try value.getUnsigned()),
                         true => get: {
                             const min = comptime std.math.minInt(T);
                             const max = comptime std.math.maxInt(T);
-                            const num = try php.getValueLong(value);
+                            const num = try value.getInteger();
                             break :get if (num < min)
                                 min
                             else if (num > max)
@@ -720,155 +438,83 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
                         },
                     },
                 },
-                .float => @floatCast(try php.getValueDouble(value)),
+                .float => @floatCast(try value.getFloat()),
                 else => unreachable,
             };
         }
 
-        fn reportFieldError(name: *String, access: accessor.FieldAccess, err: anytype) error{FailureReported} {
-            if (failure.match(err, error.FailureReported)) {
-                return error.FailureReported;
-            } else if (failure.match(err, error.Missing)) {
-                return failure.report("no field named '{s}' in {s}", .{
-                    php.getStringContent(name),
-                    class_name,
-                });
-            } else {
-                const message = failure.acquireMessage(err);
-                defer failure.freeMessage(message);
-                return failure.report("unable to {s} field '{s}' in {s}: {s}", .{
-                    @tagName(access),
-                    php.getStringContent(name),
-                    class_name,
-                    message,
-                });
-            }
-        }
+        const constructor: Function = .fromHandler(@"call __construct", .{ .this = @This() });
+        const Custom = @This();
+        const Iterator = struct {
+            array: *Custom,
+            index: usize = 0,
 
-        pub const Iterator = struct {
-            iter: ObjectIterator,
-            object: *Object,
-            len: usize,
-            index: usize,
-
-            fn fromIter(iter: *ObjectIterator) *@This() {
-                return @fieldParentPtr("iter", iter);
+            pub fn init(array: *Custom) @This() {
+                const object: *Object = .fromCustom(array);
+                object.addRef();
+                return .{ .array = array };
             }
 
-            pub fn create(obj: *Object) !*ObjectIterator {
-                const self = try php.allocator.create(@This());
-                const array = fromObject(obj);
-                php.initializeIterator(&self.iter);
-                self.object = php.reuse(obj);
-                self.len = array.getLength();
-                self.index = 0;
-                self.iter.funcs = &methods;
-                self.iter.data = php.createValueNull();
-                return &self.iter;
+            pub fn deinit(self: *@This()) void {
+                const object: *Object = .fromCustom(self.array);
+                object.release();
             }
 
-            pub fn destroy(iter: *ObjectIterator) void {
-                const self = fromIter(iter);
-                php.release(self.object);
+            pub fn next(self: *@This()) ?T {
+                const bytes = self.buffer.data(self.index * @sizeOf(T), false) catch return null;
+                const ptr: [*]const T = @ptrCast(@alignCast(bytes.ptr));
+                return ptr[self.index];
             }
 
-            pub fn isValid(iter: *ObjectIterator) !c_int {
-                const self = fromIter(iter);
-                return if (self.index < self.len) php.SUCCESS else php.FAILURE;
-            }
-
-            pub fn getCurrentData(iter: *ObjectIterator) *Value {
-                const self = fromIter(iter);
-                const array = fromObject(self.object);
-                const ptr: [*]T = @ptrCast(@alignCast(array.buffer.bytes.ptr));
-                iter.data = switch (@typeInfo(T)) {
-                    .int => php.createValueAnyInt(ptr[self.index]),
-                    .float => php.createValueDouble(ptr[self.index]),
-                    else => unreachable,
-                };
-                return &iter.data;
-            }
-
-            pub fn getCurrentKey(iter: *ObjectIterator, key_ptr: *Value) void {
-                const self = fromIter(iter);
-                key_ptr.* = php.createValueAnyInt(self.index);
-            }
-
-            pub fn moveForward(iter: *ObjectIterator) void {
-                const self = fromIter(iter);
-                self.index += 1;
-            }
-
-            pub fn rewind(iter: *ObjectIterator) !void {
-                const self = fromIter(iter);
+            pub fn reset(self: *@This()) void {
                 self.index = 0;
             }
-
-            const methods: ObjectIteratorFunctions = .{
-                .dtor = php.transform(destroy),
-                .valid = php.transform(isValid),
-                .get_current_data = php.transform(getCurrentData),
-                .get_current_key = php.transform(getCurrentKey),
-                .move_forward = php.transform(moveForward),
-                .rewind = php.transform(rewind),
-            };
         };
+        const TypedArray = TypedArrayOf(T, clamped);
 
-        comptime {
-            if (@offsetOf(@This(), "php_portion") + @sizeOf(Object) != @sizeOf(@This())) {
-                @compileError("PHP object is in the wrong position");
-            }
-        }
-    };
+        buffer: *ByteBuffer,
+        array_buffer: ?*Object = null,
+    });
 }
 
-pub const TypedArray = struct {
-    pub const class_name = "TypedArray";
-    pub var class_entry: *ClassEntry = undefined;
+const type_list = [_]type{ i8, i16, i32, i64, u8, u16, u32, u64, f16, f32, f64, u8 };
 
-    pub fn registerClass() !void {
-        var ce: ClassEntry = .{ .name = N(class_name) };
-        class_entry = try php.registerInternalInterface(&ce);
-    }
-
-    pub fn unregisterClass() void {
-        php.unregisterInternalClass(class_entry);
-    }
-};
-
-const type_list = [_]type{ i8, i16, i32, i64, u8, u16, u32, u64, f16, f32, f64 };
-
-pub const TypeArrays = init: {
-    var types: [type_list.len + 1]type = undefined;
-    for (type_list, 0..) |T, i| types[i] = TypedArrayOf(T, false);
-    types[type_list.len] = TypedArrayOf(u8, true);
-    break :init types;
+pub const TypeArrays = struct {
+    pub const Int8Array = TypedArrayOf(i8, false);
+    pub const Int16Array = TypedArrayOf(i16, false);
+    pub const Int32Array = TypedArrayOf(i32, false);
+    pub const Int64Array = TypedArrayOf(i64, false);
+    pub const Uint8Array = TypedArrayOf(u8, false);
+    pub const Uint16Array = TypedArrayOf(u16, false);
+    pub const Uint32Array = TypedArrayOf(u32, false);
+    pub const Uint64Array = TypedArrayOf(u64, false);
+    pub const Uint8ClampedArray = TypedArrayOf(u8, true);
 };
 
 pub fn registerClasses() !void {
-    try ArrayBuffer.registerClass();
+    try ArrayBuffer.registerClass(N("ArrayBuffer"));
     errdefer ArrayBuffer.unregisterClass();
-    try TypedArray.registerClass();
-    errdefer TypedArray.unregisterClass();
-    {
-        var failed_index: usize = undefined;
-        errdefer inline for (type_list, 0..) |T, index| {
-            if (failed_index == index) break;
-            TypedArrayOf(T, false).unregisterClass();
-        };
-        inline for (type_list, 0..) |T, index| {
-            errdefer failed_index = index;
-            try TypedArrayOf(T, false).registerClass();
-        }
-    }
-    try TypedArrayOf(u8, true).registerClass();
+    // try TypedArray.registerClass();
+    // errdefer TypedArray.unregisterClass();
+    // {
+    //     var failed_index: usize = undefined;
+    //     errdefer inline for (type_list, 0..) |T, index| {
+    //         if (failed_index == index) break;
+    //         TypedArrayOf(T, false).unregisterClass();
+    //     };
+    //     inline for (type_list, 0..) |T, index| {
+    //         errdefer failed_index = index;
+    //         try TypedArrayOf(T, false).registerClass();
+    //     }
+    // }
+    // try TypedArrayOf(u8, true).registerClass();
 }
 
 pub fn unregisterClasses() void {
     ArrayBuffer.unregisterClass();
-    TypedArray.unregisterClass();
-    inline for (type_list) |T| {
-        TypedArrayOf(T, false).unregisterClass();
-    }
-    TypedArrayOf(u8, true).unregisterClass();
+    // TypedArray.unregisterClass();
+    // inline for (type_list) |T| {
+    //     TypedArrayOf(T, false).unregisterClass();
+    // }
+    // TypedArrayOf(u8, true).unregisterClass();
 }

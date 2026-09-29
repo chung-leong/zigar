@@ -1,10 +1,11 @@
 pub const std = @import("std");
 
 const php = @import("root.zig");
+const Allocator = php.Allocator;
 const c = php.c;
-const pi = php.imports;
 const deref = php.deref;
-const emalloc = php.emalloc;
+const pi = php.imports;
+const php_al = php.allocator;
 const unsupported = php.failure.unsupported;
 const Value = php.Value;
 
@@ -47,10 +48,12 @@ pub fn createUnitialized(len: usize) *@This() {
         else => create: {
             const struct_size = @offsetOf(c.zend_string, "val") + len + 1;
             const aligned_size = std.mem.alignForward(usize, struct_size, c.ZEND_MM_ALIGNMENT);
-            const bytes = emalloc(aligned_size, @src());
-            const zs: *c.zend_string = @ptrCast(@alignCast(bytes));
+            const bytes = php_al.alloc(u8, aligned_size) catch unreachable;
+            const zs: *c.zend_string = @ptrCast(@alignCast(bytes.ptr));
+            var type_info: u32 = c.GC_STRING;
+            if (Allocator.mode == .persistent) type_info |= c.IS_STR_PERSISTENT;
             zs.* = .{
-                .gc = .{ .refcount = 1, .u = .{ .type_info = c.GC_STRING } },
+                .gc = .{ .refcount = 1, .u = .{ .type_info = type_info } },
                 .h = 0,
                 .len = len,
             };
@@ -86,7 +89,7 @@ pub fn createFromAny(arg: anytype) *@This() {
             },
         },
         .@"struct" => switch (AT) {
-            Value => arg.stringify(),
+            Value => arg.stringify().string(),
         },
         else => unsupported(AT),
     };
@@ -120,6 +123,13 @@ pub fn matchSlice(self: *const @This(), s2: []const u8) bool {
 
 pub fn duplicate(self: *const @This()) *@This() {
     return .create(self.slice());
+}
+
+pub fn duplicateLowerCase(self: *const @This()) *@This() {
+    const dup: *@This() = .create(self.slice());
+    const s = @constCast(dup.slice());
+    pi.zend_str_tolower(s.ptr, s.len);
+    return dup;
 }
 
 pub fn toValue(self: *const @This()) Value {

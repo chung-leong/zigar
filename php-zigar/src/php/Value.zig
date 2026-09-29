@@ -137,7 +137,7 @@ pub fn getFloat(self: *const @This()) !f64 {
     return switch (self.kind()) {
         .float => self.float(),
         .integer => try integerToFloat(self.integer()),
-        .string => switch (self.string().toNumeric()) {
+        .string => switch (try self.string().toNumeric()) {
             .integer => |i| try integerToFloat(i),
             .float => |f| f,
         },
@@ -223,6 +223,22 @@ pub fn stringify(self: *const @This()) !*String {
     return copy.string();
 }
 
+pub fn cast(self: *const @This(), comptime desired_kind: Kind) @This() {
+    var tmp = self.*;
+    const zval: *c.zval = @ptrCast(&tmp);
+    switch (desired_kind) {
+        .boolean => pi.convert_to_boolean(zval),
+        .integer => pi.convert_to_long(zval),
+        .float => pi.convert_to_double(zval),
+        .string => pi._convert_to_string(zval),
+        .array => pi.convert_to_array(zval),
+        .object => pi.convert_to_object(zval),
+        .null => pi.convert_to_null(zval),
+        else => @compileError("Illegal casting operation: " ++ @tagName(desired_kind)),
+    }
+    return tmp;
+}
+
 pub fn convertTo(self: *const @This(), comptime T: type) !T {
     if (T == @This()) return self.*;
     return switch (@typeInfo(T)) {
@@ -261,9 +277,12 @@ pub fn convertTo(self: *const @This(), comptime T: type) !T {
         },
         .@"union" => |un| switch (T) {
             Dictionary => try self.getDictionary(),
-            else => inline for (un.field_types, 0..) |FT, i| {
-                if (self.convertTo(FT)) |nv| break @unionInit(T, un.field_names[i], nv) else |_| {}
-            } else error.NoMatch,
+            else => switch (un.tag_type != null) {
+                true => inline for (un.field_types, 0..) |FT, i| {
+                    if (self.convertTo(FT)) |nv| break @unionInit(T, un.field_names[i], nv) else |_| {}
+                } else error.NoMatch,
+                false => @compileError("Union must be tagged"),
+            },
         },
 
         else => unsupported(T),
@@ -284,7 +303,7 @@ pub fn fromNull() @This() {
     };
 }
 
-pub fn fromBool(b: bool) @This() {
+pub fn fromBoolean(b: bool) @This() {
     return .{
         .impl = .{ .u1 = .{ .type_info = if (b) c.IS_TRUE else c.IS_FALSE } },
     };
@@ -375,18 +394,22 @@ pub fn fromPointer(ptr: *const anyopaque) @This() {
     };
 }
 
-pub fn fromAny(arg: anytype) @This() {
+pub fn fromAny(arg: anytype) switch (@typeInfo(@TypeOf(arg))) {
+    .error_union => |eu| eu.error_set!@This(),
+    else => @This(),
+} {
     const T = @TypeOf(arg);
     if (T == @This()) return arg;
     return switch (@typeInfo(T)) {
         .void => .fromNull(),
-        .bool => .fromBool(arg),
+        .bool => .fromBoolean(arg),
         .int => |int| switch (int.signedness) {
             .signed => .fromInteger(arg),
             .unsigned => .fromUnsigned(arg),
         },
         .float => .fromFloat(arg),
         .@"enum" => .fromEnum(arg),
+        .error_union => if (arg) |payload| .fromAny(payload) else |err| err,
         .pointer => |pt| switch (pt.size) {
             .one => switch (pt.child) {
                 String => .fromString(arg),

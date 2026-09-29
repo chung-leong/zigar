@@ -2,6 +2,9 @@ const std = @import("std");
 
 const php = @import("root.zig");
 const php_al = php.allocator;
+const c = php.c;
+const pi = php.imports;
+const WithoutError = php.util.WithoutError;
 
 pub fn report(comptime fmt: []const u8, params: anytype) error{FailureReported} {
     if (error_message) |msg| freeMessage(msg);
@@ -44,10 +47,10 @@ pub fn errorMessage(err: anytype) [:0]const u8 {
                 const name = @errorName(possible_error);
                 var buffer: [name.len * 2]u8 = undefined;
                 var len: usize = 0;
-                for (name, 0..) |c, i| {
+                for (name, 0..) |char, i| {
                     const conversion_needed = check: {
                         var needed = false;
-                        if (std.ascii.isUpper(c)) {
+                        if (std.ascii.isUpper(char)) {
                             // previous letter is not uppercase
                             if (i == 0 or !std.ascii.isUpper(name[i - 1])) {
                                 // next letter is not uppercase
@@ -63,10 +66,10 @@ pub fn errorMessage(err: anytype) [:0]const u8 {
                             buffer[len] = ' ';
                             len += 1;
                         }
-                        buffer[len] = std.ascii.toLower(c);
+                        buffer[len] = std.ascii.toLower(char);
                         len += 1;
                     } else {
-                        buffer[len] = c;
+                        buffer[len] = char;
                         len += 1;
                     }
                 }
@@ -81,12 +84,58 @@ pub fn errorMessage(err: anytype) [:0]const u8 {
     };
 }
 
-pub fn match(err: anyerror, other_err: anyerror) bool {
+pub fn match(err: anytype, other_err: anytype) bool {
     const E1 = @TypeOf(err);
     const E2 = @TypeOf(other_err);
     return (E1 || E2 == E1 and err == other_err);
 }
 
+pub fn throw(err: anytype) void {
+    // if an exception has already been thrown then don't do anything
+    if (match(err, error.ExceptionThrown)) return;
+    const msg = acquireMessage(err);
+    defer freeMessage(msg);
+    _ = pi.zend_throw_exception_ex(
+        null,
+        0,
+        "%s%s%s",
+        exception_prefix.ptr,
+        msg.ptr,
+        exception_suffix.ptr,
+    );
+}
+
+pub fn inspect(value: anytype, default: WithoutError(@TypeOf(value))) WithoutError(@TypeOf(value)) {
+    return switch (@typeInfo(@TypeOf(value))) {
+        .error_union => if (value) |v| v else |err| throw: {
+            throw(err);
+            break :throw default;
+        },
+        else => value,
+    };
+}
+
+pub fn zendResult(value: anytype) c.zend_result {
+    return switch (@typeInfo(@TypeOf(value))) {
+        .error_union => if (value) |_| c.SUCCESS else |_| c.FAILURE,
+        .error_set => c.FAILURE,
+        else => c.SUCCESS,
+    };
+}
+
+pub fn notice(value: anytype) bool {
+    return switch (@typeInfo(@TypeOf(value))) {
+        .error_union => if (value) |_| false else |err| throw: {
+            std.debug.print("Error encountered: {s}\n", .{errorMessage(err)});
+            break :throw true;
+        },
+        else => false,
+    };
+}
+
 pub fn unsupported(comptime T: type) noreturn {
     @compileError("Unexpected type: " ++ @typeName(T));
 }
+
+pub var exception_prefix: [:0]const u8 = "";
+pub var exception_suffix: [:0]const u8 = "";

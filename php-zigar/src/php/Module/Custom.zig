@@ -2,8 +2,11 @@ const std = @import("std");
 
 const php = @import("../root.zig");
 const c = php.c;
+const Allocator = php.Allocator;
 const Function = php.Function;
+const failure = php.failure;
 const Module = php.Module;
+const Singleton = php.Singleton;
 
 pub fn @"fn"(comptime T: type) type {
     if (@typeInfo(T) != .@"struct") @compileError("Expected struct, received: " ++ @typeName(T));
@@ -31,11 +34,11 @@ pub fn @"fn"(comptime T: type) type {
                     } else null,
                     .name = options.name.ptr,
                     .functions = functionEntries(),
-                    .module_startup_func = moduleHandler(.onModuleStartup, .life_cycle),
-                    .module_shutdown_func = moduleHandler(.onModuleShutdown, .life_cycle),
-                    .request_startup_func = moduleHandler(.onRequestStartup, .life_cycle),
-                    .request_shutdown_func = moduleHandler(.onRequestShutdown, .life_cycle),
-                    .info_func = moduleHandler(.onInfoRequest, .info),
+                    .module_startup_func = @ptrCast(&onModuleStartup),
+                    .module_shutdown_func = @ptrCast(&onModuleShutdown),
+                    .request_startup_func = @ptrCast(&onRequestStartup),
+                    .request_shutdown_func = @ptrCast(&onRequestShutdown),
+                    .info_func = @ptrCast(&onInfoRequest),
                     .version = options.version.ptr,
                     .build_id = php.build_id,
                 }),
@@ -52,6 +55,61 @@ pub fn @"fn"(comptime T: type) type {
         }
 
         pub const Options = @import("Custom/Options.zig");
+
+        pub fn onModuleStartup(module_type: Module.Type, module_no: c_int) callconv(.c) c.zend_result {
+            const singleton = Singleton(T);
+            const init_result = singleton.init();
+            if (failure.notice(init_result)) return c.FAILURE;
+            if (@hasDecl(T, "onModuleStartup")) {
+                const self = singleton.get();
+                const result = T.onModuleStartup(self, module_type, module_no);
+                if (failure.notice(result)) return c.FAILURE;
+            }
+            return c.SUCCESS;
+        }
+
+        pub fn onModuleShutdown(module_type: Module.Type, module_no: c_int) callconv(.c) c.zend_result {
+            Allocator.mode = .persistent;
+            const singleton = Singleton(T);
+            if (@hasDecl(T, "onModuleShutdown")) {
+                const self = singleton.get();
+                const result = T.onModuleShutdown(self, module_type, module_no);
+                if (failure.notice(result)) return c.FAILURE;
+            }
+            return c.SUCCESS;
+        }
+
+        pub fn onRequestStartup(module_type: Module.Type, module_no: c_int) callconv(.c) c.zend_result {
+            Allocator.mode = .per_request;
+            const singleton = Singleton(T);
+            if (@hasDecl(T, "onRequestStartup")) {
+                const self = singleton.get();
+                const result = T.onRequestStartup(self, module_type, module_no);
+                if (failure.notice(result)) return c.FAILURE;
+            }
+            return c.SUCCESS;
+        }
+
+        pub fn onRequestShutdown(module_type: Module.Type, module_no: c_int) callconv(.c) c.zend_result {
+            const singleton = Singleton(T);
+            defer singleton.reset();
+            if (@hasDecl(T, "onRequestShutdown")) {
+                const self = singleton.get();
+                const result = T.onRequestShutdown(self, module_type, module_no);
+                if (failure.notice(result)) return c.FAILURE;
+            }
+            return c.SUCCESS;
+        }
+
+        pub fn onInfoRequest(module: *Module) callconv(.c) void {
+            Allocator.mode = .per_request;
+            const singleton = Singleton(T);
+            if (@hasDecl(T, "onInfoRequest")) {
+                const self = singleton.get();
+                const result = T.onInfoRequest(self, module);
+                _ = failure.notice(result);
+            }
+        }
 
         fn functionEntries() [*]const c.zend_function_entry {
             const decl_names = @typeInfo(T).@"struct".decl_names;
@@ -107,60 +165,6 @@ pub fn @"fn"(comptime T: type) type {
             return &entries;
         }
 
-        fn moduleHandler(handle_name: HandlerName, purpose: HandlerPurpose) *const switch (purpose) {
-            .life_cycle => ModuleFunction,
-            .info => InfoFunction,
-        } {
-            if (@typeInfo(T) != .@"struct") @compileError("Expected struct, received: " ++ @typeName(T));
-            const func = switch (@hasDecl(T, @tagName(handle_name))) {
-                true => @field(T, @tagName(handle_name)),
-                false => void,
-            };
-            const F = @TypeOf(func);
-            const module_fn_ns = struct {
-                pub fn life_cycle(int: c_int, module_no: c_int) callconv(.c) c.zend_result {
-                    if (@typeInfo(F) == .@"fn") {
-                        const f = @typeInfo(F).@"fn";
-                        var tuple: std.meta.ArgsTuple(F) = undefined;
-                        inline for (&tuple) |*arg_ptr| {
-                            const Arg = @TypeOf(arg_ptr.*);
-                            arg_ptr.* = switch (Arg) {
-                                Module.Type => @enumFromInt(int),
-                                c_int => module_no,
-                                else => @compileError("Unexpected argument type: " ++ @typeName(Arg)),
-                            };
-                        }
-                        const RT = f.return_type.?;
-                        switch (@typeInfo(RT) == .error_union) {
-                            true => _ = @call(.auto, func, tuple) catch return c.FAILURE,
-                            false => @call(.auto, func, tuple),
-                        }
-                    }
-                    return c.SUCCESS;
-                }
-
-                pub fn info(zmod: [*c]c.zend_module_entry) callconv(.c) void {
-                    if (@typeInfo(F) == .@"fn") {
-                        const f = @typeInfo(F).@"fn";
-                        var tuple: std.meta.ArgsTuple(F) = undefined;
-                        inline for (&tuple) |*arg_ptr| {
-                            const Arg = @TypeOf(arg_ptr.*);
-                            arg_ptr.* = switch (Arg) {
-                                *Module => @ptrCast(zmod),
-                                else => @compileError("Unexpected argument type: " ++ @typeName(Arg)),
-                            };
-                        }
-                        const RT = f.return_type.?;
-                        switch (@typeInfo(RT) == .error_union) {
-                            true => _ = @call(.auto, func, tuple) catch {},
-                            false => @call(.auto, func, tuple),
-                        }
-                    }
-                }
-            };
-            return @field(module_fn_ns, @tagName(purpose));
-        }
-
         fn getMethodName(decl_name: [:0]const u8) ?[:0]const u8 {
             const F = @TypeOf(@field(T, decl_name));
             if (@typeInfo(F) == .@"fn") {
@@ -168,17 +172,6 @@ pub fn @"fn"(comptime T: type) type {
             }
             return null;
         }
-
-        const HandlerName = enum {
-            onModuleStartup,
-            onModuleShutdown,
-            onRequestStartup,
-            onRequestShutdown,
-            onInfoRequest,
-        };
-        const HandlerPurpose = enum { life_cycle, info };
-        const ModuleFunction = fn (c_int, c_int) callconv(.c) c.zend_result;
-        const InfoFunction = fn ([*c]c.zend_module_entry) callconv(.c) void;
 
         entry: Module,
     };

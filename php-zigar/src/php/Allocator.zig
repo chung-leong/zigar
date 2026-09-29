@@ -1,7 +1,8 @@
 const std = @import("std");
 
 const php = @import("root.zig");
-const argCount = php.argCount;
+const argCount = php.util.argCount;
+const c = php.c;
 const pi = php.imports;
 
 pub const vtable: std.mem.Allocator.VTable = .{
@@ -15,7 +16,7 @@ fn alloc(_: *anyopaque, len: usize, alignment: std.mem.Alignment, return_address
     _ = return_address;
     _ = alignment;
     std.debug.assert(len > 0);
-    const ptr = emalloc(len, @src());
+    const ptr = pemalloc(len, @src());
     return @ptrCast(ptr);
 }
 
@@ -40,10 +41,14 @@ fn remap(ctx: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: u
 fn free(_: *anyopaque, memory: []u8, alignment: std.mem.Alignment, return_address: usize) void {
     _ = return_address;
     _ = alignment;
-    efree(memory.ptr, @src());
+    pefree(memory.ptr, @src());
 }
 
-pub fn emalloc(size: usize, comptime src: std.builtin.SourceLocation) [*]u8 {
+pub const Mode = enum { persistent, per_request };
+
+pub threadlocal var mode: Mode = .persistent;
+
+fn emalloc(size: usize, comptime src: std.builtin.SourceLocation) [*]u8 {
     const ptr = switch (comptime argCount(@TypeOf(pi._emalloc))) {
         5 => pi._emalloc(size, src.file, src.line, null, 0),
         1 => pi._emalloc(size),
@@ -52,7 +57,7 @@ pub fn emalloc(size: usize, comptime src: std.builtin.SourceLocation) [*]u8 {
     return @ptrCast(ptr);
 }
 
-pub fn efree(ptr: *anyopaque, comptime src: std.builtin.SourceLocation) void {
+fn efree(ptr: *anyopaque, comptime src: std.builtin.SourceLocation) void {
     switch (comptime argCount(@TypeOf(pi._efree))) {
         5 => pi._efree(ptr, src.file, src.line, null, 0),
         1 => pi._efree(ptr),
@@ -60,7 +65,7 @@ pub fn efree(ptr: *anyopaque, comptime src: std.builtin.SourceLocation) void {
     }
 }
 
-pub fn malloc(size: usize) [*]u8 {
+fn malloc(size: usize) [*]u8 {
     const src = @src();
     const ptr = switch (comptime argCount(@TypeOf(pi.__zend_malloc))) {
         5 => pi.__zend_malloc(size, src.file, src.line + 1, null, 0),
@@ -68,4 +73,18 @@ pub fn malloc(size: usize) [*]u8 {
         else => @compileError("Unexpected __zend_malloc argument count"),
     };
     return @ptrCast(ptr);
+}
+
+fn pemalloc(size: usize, comptime src: std.builtin.SourceLocation) [*]u8 {
+    return switch (mode) {
+        .persistent => malloc(size),
+        .per_request => emalloc(size, src),
+    };
+}
+
+fn pefree(ptr: *anyopaque, comptime src: std.builtin.SourceLocation) void {
+    return switch (mode) {
+        .persistent => c.free(ptr),
+        .per_request => efree(ptr, src),
+    };
 }

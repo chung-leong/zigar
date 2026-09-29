@@ -3,6 +3,7 @@ pub const std = @import("std");
 pub const Iterator = @import("./Array/Iterator.zig");
 const php = @import("root.zig");
 const c = php.c;
+const php_al = php.allocator;
 const pi = php.imports;
 const String = php.String;
 const unsupported = php.failure.unsupported;
@@ -44,8 +45,9 @@ pub fn create() *@This() {
 }
 
 pub fn createNonDestructive() *@This() {
-    const bytes = pi.emalloc(@sizeOf(c.zend_array), @src());
-    const ht: *c.zend_array = @ptrCast(@alignCast(bytes));
+    const alignment: std.mem.Alignment = .fromByteUnits(@alignOf(c.zend_array));
+    const byte_ptr = php_al.rawAlloc(@sizeOf(c.zend_array), alignment, @returnAddress());
+    const ht: *c.zend_array = @ptrCast(@alignCast(byte_ptr));
     pi._zend_hash_init(ht, c.HT_MIN_SIZE, null, false);
     return @ptrCast(ht);
 }
@@ -72,7 +74,7 @@ pub fn has(self: *const @This(), key: anytype) bool {
     if (self.get(key)) |value| {
         value.release();
         return true;
-    } else {
+    } else |_| {
         return false;
     }
 }
@@ -81,10 +83,10 @@ pub fn get(self: *const @This(), key: anytype) !Value {
     const ht = &self.impl;
     const zval = switch (Key.fromAny(key)) {
         .integer => |i| pi.zend_hash_index_find(ht, i),
-        .string => |s| pi.zend_hash_find(ht, s),
-        .slice => |s| pi.zend_hash_str_find(ht, s.ptr, s.len),
+        .string => |str| pi.zend_hash_find(ht, @ptrCast(str)),
+        .slice => |slice| pi.zend_hash_str_find(ht, slice.ptr, slice.len),
     } orelse return error.Missing;
-    return @ptrCast(zval);
+    return .fromZval(zval.*);
 }
 
 pub fn set(self: *@This(), key: anytype, value: Value) void {
@@ -106,8 +108,8 @@ pub fn remove(self: *@This(), key: anytype) bool {
     const ht = &self.impl;
     const result = switch (Key.fromAny(key)) {
         .integer => |i| pi.zend_hash_index_del(ht, i),
-        .string => |s| pi.zend_hash_del(ht, s),
-        .slice => |s| pi.zend_hash_str_del(ht, s.ptr, s.len),
+        .string => |str| pi.zend_hash_del(ht, @ptrCast(str)),
+        .slice => |slice| pi.zend_hash_str_del(ht, slice.ptr, slice.len),
     };
     return result == c.SUCCESS;
 }

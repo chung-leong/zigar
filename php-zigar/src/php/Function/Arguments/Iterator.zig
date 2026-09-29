@@ -117,7 +117,7 @@ pub fn extract(self: *@This(), comptime T: type) !T {
                 if (mismatch == null) {
                     // remember the first mismatch
                     mismatch = .{
-                        .fn_name = self.callee.getName(),
+                        .fn_name = self.callee.name(),
                         .arg_name = arg_name,
                         .value_type = valueTypeName(FT),
                         .index = i,
@@ -170,7 +170,7 @@ pub fn extractNamed(self: *@This(), comptime T: type) !T {
         if (arg_maybe) |arg| {
             const value = arg.convertTo(VT) catch |err| {
                 mismatch = .{
-                    .fn_name = self.callee.getName(),
+                    .fn_name = self.callee.name(),
                     .arg_name = arg_name,
                     .value = arg,
                     .value_type = valueTypeName(FT),
@@ -184,7 +184,7 @@ pub fn extractNamed(self: *@This(), comptime T: type) !T {
                 @field(set, arg_name) = fieldDefaultValue(T, i);
             } else {
                 mismatch = .{
-                    .fn_name = self.callee.getName(),
+                    .fn_name = self.callee.name(),
                     .arg_name = arg_name,
                     .value = .fromNull(),
                     .value_type = valueTypeName(FT),
@@ -207,9 +207,8 @@ pub fn extractNamed(self: *@This(), comptime T: type) !T {
 
 pub fn verifyCount(self: *const @This(), min: usize, max: usize) !void {
     if (self.len < min or self.len > max) {
-        const fn_name = if (self.callee.getName()) |s| s.slice() else "(unknown)";
         return failure.report("{s}() expects {s} {d} argument{s}, {d} given{s}", .{
-            fn_name,
+            self.callee.name().slice(),
             if (max > min)
                 "at most"
             else if (self.len < min)

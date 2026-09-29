@@ -4,9 +4,6 @@ const builtin = @import("builtin");
 pub const c = @import("c");
 
 pub const Allocator = @import("Allocator.zig");
-pub const efree = Allocator.efree;
-pub const emalloc = Allocator.emalloc;
-pub const malloc = Allocator.malloc;
 pub const Array = @import("Array.zig");
 pub const Callable = @import("Callable.zig");
 pub const Class = @import("Class.zig");
@@ -21,6 +18,7 @@ pub const Resource = @import("Resource.zig");
 pub const Singleton = @import("Singleton.zig").@"fn";
 pub const Stream = @import("Stream.zig");
 pub const String = @import("String.zig");
+pub const util = @import("util.zig");
 pub const Value = @import("Value.zig");
 
 pub const api_no = c.ZEND_MODULE_API_NO + 0;
@@ -97,12 +95,4 @@ fn ZendTypePointer(comptime Ptr: type) type {
         },
         else => @compileError("Pointer expected, received: " ++ @typeName(Ptr)),
     }
-}
-
-pub fn argCount(comptime Func: type) usize {
-    return switch (@typeInfo(Func)) {
-        .pointer => |pt| argCount(pt.child),
-        .@"fn" => @typeInfo(Func).@"fn".param_types.len,
-        else => @compileError("Not a function or function pointer"),
-    };
 }

@@ -11,6 +11,7 @@ const HashTableIterator = php.HashTableIterator;
 const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
+const php_ng = @import("../php/root.zig");
 const structure = @import("../structure.zig");
 
 pub const Slice = struct {
@@ -111,7 +112,8 @@ pub const Slice = struct {
                                     break :use false;
                                 }
                             }
-                            self.buffer.referenceString(str, read_only);
+                            const str_ng: *php_ng.String = @ptrCast(str);
+                            self.buffer.referenceString(str_ng, read_only);
                             break :use true;
                         };
                         if (!using_string) {

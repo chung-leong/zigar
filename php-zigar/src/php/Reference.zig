@@ -1,12 +1,12 @@
 pub const std = @import("std");
 
 const php = @import("root.zig");
+const php_al = php.allocator;
 const c = php.c;
-const emalloc = php.emalloc;
 const Value = php.Value;
 
 pub fn create(value: Value) *@This() {
-    const ref: *Reference = @ptrCast(@alignCast(emalloc(@sizeOf(Reference), @src())));
+    const ref = php_al.create(Reference) catch unreachable;
     ref.* = .{
         .impl = .{
             .gc = .{ .refcount = 1, .u = .{ .type_info = c.GC_REFERENCE } },

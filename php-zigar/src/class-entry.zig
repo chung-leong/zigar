@@ -28,6 +28,7 @@ const Object = php.Object;
 const ObjectIterator = php.ObjectIterator;
 const String = php.String;
 const Value = php.Value;
+const php_ng = @import("php/root.zig");
 const structure = @import("structure.zig");
 const TypedArrayOf = @import("js-compat.zig").TypedArrayOf;
 const ZigObject = @import("object.zig").ZigObject;
@@ -532,7 +533,8 @@ pub const ZigClassEntry = struct {
             switch (element.type) {
                 inline .int, .uint, .float => |t| inline for (@field(typed_array_types, @tagName(t))) |T| {
                     if (element.bit_size == @bitSizeOf(T)) {
-                        return try TypedArrayOf(T, false).create(buffer);
+                        const ta = try TypedArrayOf(T, false).create(.{ .buffer = buffer });
+                        return @ptrCast(ta);
                     }
                 },
                 else => {},
@@ -543,17 +545,21 @@ pub const ZigClassEntry = struct {
 
     pub fn createClampedArray(self: *@This(), buffer: *ByteBuffer) !*Object {
         if (!self.isClampedArray()) return error.Unsupported;
-        return TypedArrayOf(u8, true).create(buffer);
+        const ta = try TypedArrayOf(u8, true).create(.{ .buffer = buffer });
+        return @ptrCast(ta);
     }
 
     pub fn extractBuffer(self: *@This(), obj: *Object, strict: bool) ?*ByteBuffer {
-        if (php.instanceOf(obj, ArrayBuffer.entry())) {
-            return ArrayBuffer.fromObject(obj).buffer;
+        const obj_ng: *php_ng.Object = @ptrCast(obj);
+        if (obj_ng.isInstanceOf(ArrayBuffer.class())) {
+            const ab = obj_ng.toCustom(ArrayBuffer);
+            return ab.buffer;
         }
         if (!strict) {
             const Uint8Array = TypedArrayOf(u8, false);
-            if (php.instanceOf(obj, Uint8Array.entry())) {
-                return Uint8Array.fromObject(obj).buffer;
+            if (obj_ng.isInstanceOf(Uint8Array.class())) {
+                const ta = obj_ng.toCustom(Uint8Array);
+                return ta.buffer;
             }
         }
         const is_opaque_slice = self.type == .slice and self.flags.slice.is_opaque;
@@ -569,10 +575,11 @@ pub const ZigClassEntry = struct {
             switch (member.type) {
                 inline .int, .uint, .float => |t| inline for (@field(typed_array_types, @tagName(t))) |T| {
                     const TypedArray = TypedArrayOf(T, false);
-                    if (php.instanceOf(obj, TypedArray.entry())) {
+                    if (obj_ng.isInstanceOf(TypedArray.class())) {
                         // opaque can accept typed array of any size
                         if (member.bit_size == @bitSizeOf(T) or is_opaque_slice) {
-                            return TypedArray.fromObject(obj).buffer;
+                            const ta = obj_ng.toCustom(TypedArray);
+                            return ta.buffer;
                         }
                     }
                 },
@@ -581,8 +588,9 @@ pub const ZigClassEntry = struct {
         }
         if (self.isClampedArray() or self.type == .@"opaque") {
             const ClampedArray = TypedArrayOf(u8, true);
-            if (php.instanceOf(obj, ClampedArray.entry())) {
-                return ClampedArray.fromObject(obj).buffer;
+            if (obj_ng.isInstanceOf(ClampedArray.class())) {
+                const ta = obj_ng.toCustom(ClampedArray);
+                return ta.buffer;
             }
         }
         return null;

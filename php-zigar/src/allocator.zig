@@ -57,7 +57,7 @@ pub const AllocatorStatic = struct {
         try buf.allocate(&allocator, args.len);
         defer buf.release();
         defer _ = buf.externalize();
-        const ab = try ArrayBuffer.create(buf);
+        const ab = try ArrayBuffer.create(.{ .buffer = buf });
         return @ptrCast(ab);
     }
 
@@ -74,14 +74,14 @@ pub const AllocatorStatic = struct {
                     obj_og = try ptr_struct.getTarget();
                 }
                 break :get getObjectBuffer(obj_og);
-            } else if (php.instanceOf(obj_og, ArrayBuffer.entry())) {
-                const ar = ArrayBuffer.fromObject(obj_og);
-                break :get ar.buffer;
-            } else inline for (TypeArrays) |TA| {
-                if (php.instanceOf(obj_og, TA.entry())) {
-                    const ta = TA.fromObject(obj_og);
-                    break :get ta.buffer;
-                }
+            } else if (args.object.isInstanceOf(ArrayBuffer.class())) {
+                const ar: *ArrayBuffer = @ptrCast(obj_og);
+                break :get ar.custom.buffer;
+                // } else inline for (TypeArrays) |TA| {
+                //     if (php.instanceOf(obj_og, TA.entry())) {
+                //         const ta = TA.fromObject(obj_og);
+                //         break :get ta.buffer;
+                //     }
             } else {
                 return error.InvalidOperation;
             }
@@ -114,11 +114,14 @@ pub const AllocatorStatic = struct {
         const bytes, const is_typed_array = switch (args.source) {
             .string => |str| .{ str.slice(), false },
             .object => |obj| get: {
-                if (obj.isInstanceOf(@ptrCast(ArrayBuffer.entry()))) {} else inline for (TypeArrays) |TA| {
-                    if (obj.isInstanceOf(@ptrCast(TA.entry()))) {
-                        const ta = TA.fromObject(@ptrCast(obj));
-                        break :get .{ try ta.buffer.data(0, false), true };
-                    }
+                if (obj.isInstanceOf(ArrayBuffer.class())) {
+                    const ab = obj.toCustom(ArrayBuffer);
+                    break :get .{ try ab.buffer.data(0, false), true };
+                    // } else inline for (TypeArrays) |TA| {
+                    //     if (obj.isInstanceOf(@ptrCast(TA.entry()))) {
+                    //         const ta = TA.fromObject(@ptrCast(obj));
+                    //         break :get .{ try ta.buffer.data(0, false), true };
+                    //     }
                 }
                 return error.InvalidOperation;
             },
@@ -128,21 +131,22 @@ pub const AllocatorStatic = struct {
         try buf.allocate(&allocator, bytes.len);
         defer buf.release();
         try buf.copyBytes(bytes);
-        const ar_obj = try ArrayBuffer.create(buf);
+        const ar = try ArrayBuffer.create(.{ .buffer = buf });
         _ = buf.externalize();
         if (is_typed_array) {
-            const obj = args.source.object;
-            const new_ta_obj = inline for (TypeArrays) |TA| {
-                if (obj.isInstanceOf(@ptrCast(TA.entry()))) {
-                    const ta_obj = try TA.create(buf);
-                    const ta_struct = TA.fromObject(ta_obj);
-                    ta_struct.array_buffer = ar_obj;
-                    break ta_obj;
-                }
-            } else unreachable;
-            return @ptrCast(new_ta_obj);
+            // const obj = args.source.object;
+            // const new_ta_obj = inline for (TypeArrays) |TA| {
+            //     if (obj.isInstanceOf(@ptrCast(TA.entry()))) {
+            //         const ta_obj = try TA.create(buf);
+            //         const ta_struct = TA.fromObject(ta_obj);
+            //         ta_struct.array_buffer = ar_obj;
+            //         break ta_obj;
+            //     }
+            // } else unreachable;
+            // return @ptrCast(new_ta_obj);
+            unreachable;
         } else {
-            return @ptrCast(ar_obj);
+            return @ptrCast(ar);
         }
     }
 };

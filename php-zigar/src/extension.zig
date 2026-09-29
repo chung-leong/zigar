@@ -100,10 +100,10 @@ pub fn @"call zigar_import"(args: struct {
     return @as(*const Value, @ptrCast(&root_og)).*;
 }
 
-pub fn onModuleStartup(module_number: c_int) !void {
+pub fn onModuleStartup(_: *@This(), _: Module.Type, module_no: c_int) !void {
     dyn_lib.fixEnvironment();
     system.init();
-    try Options.setup(module_number);
+    try Options.setup(module_no);
     try ModuleHost.setup();
     options = .init();
     if (php_ng.use_tsrm) {
@@ -112,12 +112,12 @@ pub fn onModuleStartup(module_number: c_int) !void {
     }
 }
 
-pub fn onModuleShutdown(module_number: c_int) void {
+pub fn onModuleShutdown(_: *@This(), _: Module.Type, module_no: c_int) void {
     ModuleHost.shutdown();
-    Options.shutdown(module_number);
+    Options.shutdown(module_no);
 }
 
-pub fn onRequestStartup() !void {
+pub fn onRequestStartup(_: *@This(), _: Module.Type, _: c_int) !void {
     if (php_ng.use_tsrm and !options_set) {
         options = default_options.*;
         options_set = true;
@@ -125,7 +125,7 @@ pub fn onRequestStartup() !void {
     try CallDispatcher.installHandler();
 }
 
-pub fn onRequestShutdown() void {
+pub fn onRequestShutdown(_: *@This(), _: Module.Type, _: c_int) void {
     CallDispatcher.event_loop.reset();
     shutdown_callbacks.call();
     // free any unclaimed message (just in case)
@@ -133,7 +133,7 @@ pub fn onRequestShutdown() void {
     php_ng.failure.clearMessage();
 }
 
-pub fn onInfoRequest(module: *Module) void {
+pub fn onInfoRequest(_: *@This(), module: *Module) void {
     var tbl: InfoTable = .init();
     tbl.addTwoColumns("Version", module.version());
     tbl.addTwoColumns("Extension optimization level", @tagName(builtin.mode));

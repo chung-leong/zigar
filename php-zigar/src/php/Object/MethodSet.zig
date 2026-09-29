@@ -11,8 +11,11 @@ pub fn @"fn"(comptime names: anytype) type {
         var field_names: [names.len][]const u8 = undefined;
         var field_types: [names.len]type = undefined;
         var field_attrs: [names.len]std.lang.Type.Struct.FieldAttributes = undefined;
-        inline for (names, 0..) |name, i| {
-            field_names[i] = @tagName(name);
+        inline for (names, 0..) |n, i| {
+            field_names[i] = switch (@typeInfo(@TypeOf(n))) {
+                .@"enum", .enum_literal => @tagName(n),
+                else => n,
+            };
             field_types[i] = Function;
             field_attrs[i] = .{};
         }
@@ -26,10 +29,24 @@ pub fn @"fn"(comptime names: anytype) type {
         break :init .{ Container, CallCacheContainer, Name };
     };
     return struct {
-        pub fn find(self: *const @This(), name: *String) ?*Function {
+        pub fn find(self: *const @This(), name: *String) ?*const Function {
             return inline for (names) |n| {
-                if (name.matchSlice(n)) break &@field(self.entries, n);
+                const field_name = switch (@typeInfo(@TypeOf(n))) {
+                    .@"enum", .enum_literal => @tagName(n),
+                    else => n,
+                };
+                if (name.matchSlice(field_name)) break &@field(self.entries, field_name);
             } else null;
+        }
+
+        pub fn fromType(comptime T: type, comptime prefix: []const u8) @This() {
+            var m: Container = undefined;
+            const st = @typeInfo(Container).@"struct";
+            for (st.field_names) |name| {
+                const func = @field(T, prefix ++ name);
+                @field(m, name) = Function.fromHandler(func, .{ .this = T });
+            }
+            return .{ .entries = m };
         }
 
         pub const CallCache = struct {

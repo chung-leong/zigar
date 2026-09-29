@@ -19,6 +19,7 @@ const Object = php.Object;
 const ObjectIterator = php.ObjectIterator;
 const String = php.String;
 const Value = php.Value;
+const php_ng = @import("php/root.zig");
 pub const ArgStruct = @import("structure/arg-struct.zig").ArgStruct;
 pub const Array = @import("structure/array.zig").Array;
 pub const Class = @import("structure/class.zig").Class;
@@ -216,7 +217,8 @@ pub fn Parent(comptime S: type) type {
             switch (transform) {
                 .bytes, .base64 => |t| {
                     if (!@hasField(S, "buffer")) return error.Unsupported;
-                    const str = try php.getValueString(value);
+                    const str_og = try php.getValueString(value);
+                    const str: *php_ng.String = @ptrCast(str_og);
                     const encoding: ?ByteBuffer.Encoding = switch (t) {
                         .bytes => null,
                         .base64 => .base64,

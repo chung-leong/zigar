@@ -83,7 +83,7 @@ pub const Enum = struct {
                         }
                     } else if (php.isGmpObject(obj)) {
                         return self.findCanonical(value) catch php.createValueNull();
-                    } else if (php.instanceOf(obj, ArrayBuffer.entry())) {
+                    } else if (php.instanceOf(obj, @ptrCast(ArrayBuffer.class()))) {
                         // allow default handling
                         return null;
                     }

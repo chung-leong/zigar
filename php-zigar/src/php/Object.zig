@@ -1,6 +1,7 @@
 pub const std = @import("std");
 
 pub const Custom = @import("Object/Custom.zig").@"fn";
+pub const Iterator = @import("Object/Iterator.zig");
 pub const MethodSet = @import("Object/MethodSet.zig").@"fn";
 const php = @import("root.zig");
 const Array = php.Array;
@@ -8,13 +9,16 @@ const c = php.c;
 const pi = php.imports;
 const deref = php.deref;
 const Class = php.Class;
-const efree = php.efree;
 const failure = php.failure;
 const unsupported = failure.unsupported;
 const Function = php.Function;
 const String = php.String;
 const Value = php.Value;
 pub const Handlers = c.zend_object_handlers;
+
+pub fn class(self: *const @This()) *const Class {
+    return @ptrCast(self.impl.ce);
+}
 
 pub fn create(ce: *const Class, params: []const Value) !*@This() {
     var zval: c.zval = undefined;
@@ -123,17 +127,69 @@ pub fn getProperties(self: *const @This()) *Array {
     return @ptrCast(ht);
 }
 
-pub fn toCustom(self: *const @This(), comptime T: type) *T {
-    const offset: usize = @intCast(self.impl.handlers.*.offset);
-    const self_addr: usize = @intFromPtr(self);
-    // TODO: check class entry
-    const custom_type_addr = self_addr - offset;
-    return @ptrFromInt(custom_type_addr);
+pub fn toCustom(self: *const @This(), comptime C: type) *C.Custom {
+    std.debug.assert(self.class() == C.class());
+    const custom_obj: *C = @ptrCast(@constCast(self));
+    return &custom_obj.custom;
+}
+
+pub fn fromCustom(self: anytype) *@This() {
+    const T = @TypeOf(self.*);
+    const C = *Custom(T);
+    const custom_obj: *C = @ptrCast(@constCast(self));
+    std.debug.assert(custom_obj.object.class() == C.class());
+    return &custom_obj.object;
 }
 
 pub fn standardHandlers() *const Handlers {
     return deref(&pi.std_object_handlers).?;
 }
+
+pub const GarbageCollectionResult = struct {
+    slice: []const *Value = &.{},
+    array: ?*Array = null,
+};
+pub const ClosureResult = struct {
+    class: ?*Class = null,
+    function: ?*Function = null,
+    object: ?*@This() = null,
+};
+/// Purpose the data to be returned by getProperties()
+pub const PropertiesPurpose = enum(c_int) {
+    /// Used for debugging. Supersedes get_debug_info handler.
+    debug = c.ZEND_PROP_PURPOSE_DEBUG,
+    /// Used for (array) casts.
+    array = c.ZEND_PROP_PURPOSE_ARRAY_CAST,
+    /// Used for serialization using the "O" scheme.
+    /// Unserialization will use __wakeup().
+    serialize = c.ZEND_PROP_PURPOSE_SERIALIZE,
+    /// Used for var_export().
+    /// The data will be passed to __set_state() when evaluated.
+    var_export = c.ZEND_PROP_PURPOSE_VAR_EXPORT,
+    /// Used for json_encode().
+    json = c.ZEND_PROP_PURPOSE_JSON,
+    /// Used for get_object_vars().
+    get_object_vars = switch (@hasDecl(c, "ZEND_PROP_PURPOSE_GET_OBJECT_VARS")) {
+        true => c.ZEND_PROP_PURPOSE_GET_OBJECT_VARS,
+        false => c.ZEND_PROP_PURPOSE_JSON + 1,
+    },
+    default,
+};
+/// Opcodes supported by doOperation()
+pub const Opcode = enum(u8) {
+    add = c.ZEND_ADD,
+    sub = c.ZEND_SUB,
+    mul = c.ZEND_MUL,
+    div = c.ZEND_DIV,
+    MOD = c.ZEND_MOD,
+    POW = c.ZEND_POW,
+    _,
+};
+pub const PropertyStatus = enum(c_int) {
+    isset = c.ZEND_PROPERTY_ISSET,
+    not_empty = c.ZEND_PROPERTY_NOT_EMPTY,
+    exists = c.ZEND_PROPERTY_EXISTS,
+};
 
 const Key = struct {
     pub fn createFromAny(arg: anytype) @This() {

@@ -4,8 +4,8 @@ const builtin = @import("builtin");
 const php = @import("../root.zig");
 const Array = php.Array;
 const c = php.c;
+const php_al = php.allocator;
 const pi = php.imports;
-const efree = php.efree;
 const failure = php.failure;
 const String = php.String;
 const Value = php.Value;
@@ -16,11 +16,12 @@ pub fn init(callable: Value) !@This() {
     fci.retval = null;
     fci.param_count = 0;
     fci.params = null;
-    var err_msg: [*c]u8 = undefined;
-    const result = pi.zend_fcall_info_init(@ptrCast(@constCast(&callable)), 0, &fci, &fcc, null, &err_msg);
+    var err_msg_ptr: [*c]u8 = undefined;
+    const result = pi.zend_fcall_info_init(@ptrCast(@constCast(&callable)), 0, &fci, &fcc, null, &err_msg_ptr);
     if (result != c.SUCCESS) {
-        if (err_msg != null) {
-            defer efree(err_msg, @src());
+        if (err_msg_ptr != null) {
+            const err_msg = std.mem.sliceTo(err_msg_ptr, 0);
+            defer php_al.free(err_msg);
             return failure.report("{s}", .{err_msg});
         } else {
             return error.NotCallable;

@@ -59,7 +59,7 @@ pub const ErrorSet = struct {
                         if (php.getHashEntry(ht, "error") catch null) |msg| {
                             return try self.castValue(msg);
                         }
-                    } else if (php.instanceOf(obj, ArrayBuffer.entry())) {
+                    } else if (php.instanceOf(obj, @ptrCast(ArrayBuffer.class()))) {
                         return null; // allow default handling
                     }
                 },

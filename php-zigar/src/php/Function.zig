@@ -5,24 +5,45 @@ pub const Arguments = @import("Function/Arguments.zig");
 pub const CallCache = @import("Function/CallCache.zig");
 pub const Closure = @import("Function/Closure.zig");
 const php = @import("root.zig");
+const php_al = php.allocator;
 const Array = php.Array;
 const c = php.c;
 const pi = php.imports;
 const Callable = php.Callable;
 const Class = php.Class;
 const Dictionary = php.Dictionary;
-const efree = php.efree;
 const failure = php.failure;
-const unsupported = failure.unsupported;
 const Object = php.Object;
 const Resource = php.Resource;
 const Singleton = php.Singleton;
 const String = php.String;
 const Value = php.Value;
 
-pub fn getName(self: *const @This()) ?*String {
-    const zstr = self.impl.common.function_name orelse return null;
+pub fn name(self: *const @This()) *String {
+    const zstr = self.impl.common.function_name orelse return .create("");
     return @ptrCast(zstr);
+}
+
+pub fn create(comptime func: anytype, comptime self_src: SelfSource) *@This() {
+    const self = php_al.create(@This());
+    self.* = .fromHandler(func, self_src);
+}
+
+pub fn register(self: *@This()) !void {
+    const cg = php.globals("compiler");
+    const list: *Array = @ptrCast(cg.function_table);
+    const lc_name = self.name().createLowerCase();
+    defer lc_name.release();
+    if (list.has(lc_name)) return error.NameConflict;
+    list.set(lc_name, .fromPointer(&self));
+}
+
+pub fn unregister(self: *@This()) !void {
+    const cg = php.globals("compiler");
+    const list: *Array = @ptrCast(cg.function_table);
+    const lc_name = self.name().createLowerCase();
+    defer lc_name.release();
+    list.delete(lc_name);
 }
 
 pub fn createClosure(self: *const @This(), scope: ?*Class, called_scope: ?*Class, this: ?Value) Closure {
@@ -36,12 +57,12 @@ pub fn fromHandler(comptime func: anytype, comptime self_src: SelfSource) @This(
         true => c.ZEND_ACC_VARIADIC,
         false => 0,
     };
-    const name = String.static(extractName(func));
+    const func_name = String.static(extractName(func));
     return .{
         .impl = .{
             .internal_function = .{
                 .type = c.ZEND_INTERNAL_FUNCTION,
-                .function_name = @ptrCast(name),
+                .function_name = @ptrCast(func_name),
                 .handler = &zendInternalFunction(func, self_src),
                 .num_args = handler_info.arguments.len,
                 .required_num_args = handler_info.required_count,
@@ -129,70 +150,51 @@ pub fn zendInternalFunction(comptime func: anytype, comptime self_src: SelfSourc
             var iter = args.iterate();
             if (iter.extract(AT[0].?)) |arg0| {
                 const result = switch (returning_error) {
-                    true => func(arg0) catch |err| return throw(err),
+                    true => func(arg0) catch |err| return failure.throw(err),
                     false => func(arg0),
                 };
                 retval.* = .fromAny(result);
-            } else |err| throw(err);
+            } else |err| failure.throw(err);
         }
 
         pub fn method(zed: [*c]c.zend_execute_data, zretval: [*c]c.zval) callconv(.c) void {
             const php_args: *Arguments = @ptrCast(zed);
             const retval: *Value = @ptrCast(zretval);
             var iter = php_args.iterate();
-            // use this variable as the first argument (i.e. self), which is going
-            // a custom object
+            // the self variable is either a singleton or held in PHP's $this variable
             const arg0 = switch (self_src) {
                 .singleton => |T| Singleton(T).get(),
                 .this => |T| get: {
-                    switch (iter.this.kind()) {
-                        .object => {
-                            const this_obj = iter.this.object();
-                            switch (T) {
-                                Object => break :get this_obj,
-                                else => break :get this_obj.toCustom(T),
-                            }
-                        },
-                        .pointer => {
-                            const ptr = iter.this.pointer();
-                            break :get @as(*T, @ptrCast(@alignCast(ptr)));
-                        },
-                        else => return throw(error.NotObject),
+                    if (T == Object) {
+                        break :get iter.this.getObject() catch |err| return failure.throw(err);
+                    } else if (@hasDecl(T, "Custom")) {
+                        // self is a custom object
+                        const obj = iter.this.getObject() catch |err| return failure.throw(err);
+                        break :get obj.toCustom(T);
+                    } else {
+                        // self is some data structure that we reference by a pointer
+                        const ptr = iter.this.getPointer() catch |err| return failure.throw(err);
+                        break :get @as(*T, @ptrCast(@alignCast(ptr)));
                     }
                 },
                 .none => unreachable,
             };
             if (iter.extract(AT[1].?)) |arg1| {
                 const result = switch (returning_error) {
-                    true => func(arg0, arg1) catch |err| return throw(err),
+                    true => func(arg0, arg1) catch |err| return failure.throw(err),
                     false => func(arg0, arg1),
                 };
                 retval.* = .fromAny(result);
-            } else |err| throw(err);
+            } else |err| failure.throw(err);
         }
 
         pub fn raw(zed: [*c]c.zend_execute_data, zretval: [*c]c.zval) callconv(.c) void {
             const args: *Arguments = @ptrCast(zed);
             const retval: *Value = @ptrCast(zretval);
             switch (returning_error) {
-                true => func(args, retval) catch |err| return throw(err),
+                true => func(args, retval) catch |err| return failure.throw(err),
                 false => func(args, retval),
             }
-        }
-
-        fn throw(err: anytype) void {
-            // if an exception has already been thrown then don't do anything
-            if (failure.match(err, error.ExceptionThrown)) return;
-            const msg = failure.acquireMessage(err);
-            defer failure.freeMessage(msg);
-            _ = pi.zend_throw_exception_ex(
-                null,
-                0,
-                "%s%s%s",
-                exception_prefix.ptr,
-                msg.ptr,
-                exception_suffix.ptr,
-            );
         }
     };
     return @field(ns, @tagName(handler_type));
@@ -206,10 +208,10 @@ pub fn extractName(comptime func: anytype) []const u8 {
             };
         }
     };
-    const name = @typeName(ns.Dummy(func));
-    const si = std.mem.indexOfScalar(u8, name, '\'').?;
-    const ei = std.mem.lastIndexOfScalar(u8, name, '\'').?;
-    return name[si + 1 .. ei];
+    const type_name = @typeName(ns.Dummy(func));
+    const si = std.mem.indexOfScalar(u8, type_name, '\'').?;
+    const ei = std.mem.lastIndexOfScalar(u8, type_name, '\'').?;
+    return type_name[si + 1 .. ei];
 }
 
 pub const HandlerInfo = struct {
@@ -244,9 +246,6 @@ pub const SelfSource = union(enum) {
         };
     }
 };
-
-pub var exception_prefix: [:0]const u8 = "";
-pub var exception_suffix: [:0]const u8 = "";
 
 fn emptyArgInfo(comptime count: usize, comptime is_variadic: bool) []const c.zend_internal_arg_info {
     const len = count + if (is_variadic) 1 else 0;
