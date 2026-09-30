@@ -114,10 +114,10 @@ pub fn remove(self: *@This(), key: anytype) bool {
     return result == c.SUCCESS;
 }
 
-pub fn append(self: *@This(), value: *const Value) void {
+pub fn append(self: *@This(), value: Value) void {
     const ht = &self.impl;
     ht.*.u.flags |= c.HASH_FLAG_ALLOW_COW_VIOLATION;
-    _ = pi.zend_hash_next_index_insert(ht, @ptrCast(value));
+    _ = pi.zend_hash_next_index_insert(ht, @ptrCast(@constCast(&value)));
     value.addRef();
 }
 
@@ -134,7 +134,7 @@ const Key = union(enum) {
         const KT = @TypeOf(arg);
         return switch (@typeInfo(KT)) {
             .int => |int| switch (int.signedness) {
-                .signed => @bitCast(@as(c_long, arg)),
+                .signed => .{ .integer = @as(c_ulong, @bitCast(arg)) },
                 .unsigned => .{ .integer = arg },
             },
             .comptime_int => .{ .integer = arg },
@@ -152,6 +152,14 @@ const Key = union(enum) {
                     },
                     else => unsupported(KT),
                 },
+            },
+            .@"struct" => switch (KT) {
+                Value => switch (arg.kind()) {
+                    .string => fromAny(arg.string()),
+                    .integer => fromAny(arg.integer()),
+                    else => @panic("Unexpected"),
+                },
+                else => unsupported(KT),
             },
             else => unsupported(KT),
         };

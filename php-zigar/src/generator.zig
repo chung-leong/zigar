@@ -96,7 +96,7 @@ pub const Generator = struct {
     }
 
     pub fn createHandler() Value {
-        var func = Function.fromHandler(@"call resolve", .{ .this = @This() });
+        var func = Function.fromHandler(@"call resolve", .{ .this_object = @This() });
         const closure = func.createClosure(null, null, null);
         return closure.toValue();
     }
@@ -228,7 +228,7 @@ pub const GeneratorStatic = struct {
     pub fn init(self: *@This()) !void {
         self.* = .{
             .methods = .{
-                .yield = .fromHandler(@"call yield", .{ .this = Object }),
+                .yield = .fromHandler(@"call yield", .{ .this_object = Object }),
             },
         };
     }

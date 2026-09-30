@@ -128,6 +128,7 @@ pub fn getProperties(self: *const @This()) *Array {
 }
 
 pub fn toCustom(self: *const @This(), comptime C: type) *C.Custom {
+    if (C == @This()) return @constCast(self);
     std.debug.assert(self.class() == C.class());
     const custom_obj: *C = @ptrCast(@constCast(self));
     return &custom_obj.custom;
@@ -152,7 +153,7 @@ pub const GarbageCollectionResult = struct {
 pub const ClosureResult = struct {
     class: ?*Class = null,
     function: ?*Function = null,
-    object: ?*@This() = null,
+    object: ?*Object = null,
 };
 /// Purpose the data to be returned by getProperties()
 pub const PropertiesPurpose = enum(c_int) {
@@ -206,5 +207,6 @@ const Key = struct {
 
     value: Value,
 };
+const Object = @This();
 
 impl: c.zend_object,

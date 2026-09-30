@@ -164,18 +164,15 @@ pub fn zendInternalFunction(comptime func: anytype, comptime self_src: SelfSourc
             // the self variable is either a singleton or held in PHP's $this variable
             const arg0 = switch (self_src) {
                 .singleton => |T| Singleton(T).get(),
-                .this => |T| get: {
-                    if (T == Object) {
-                        break :get iter.this.getObject() catch |err| return failure.throw(err);
-                    } else if (@hasDecl(T, "Custom")) {
-                        // self is a custom object
-                        const obj = iter.this.getObject() catch |err| return failure.throw(err);
-                        break :get obj.toCustom(T);
-                    } else {
-                        // self is some data structure that we reference by a pointer
-                        const ptr = iter.this.getPointer() catch |err| return failure.throw(err);
-                        break :get @as(*T, @ptrCast(@alignCast(ptr)));
-                    }
+                .this_object => |T| get: {
+                    // self is a custom object
+                    const obj = iter.this.getObject() catch |err| return failure.throw(err);
+                    break :get obj.toCustom(Object.Custom(T));
+                },
+                .this_pointer => |T| get: {
+                    // self is some data structure that we reference by a pointer
+                    const ptr = iter.this.getPointer() catch |err| return failure.throw(err);
+                    break :get @as(*T, @ptrCast(@alignCast(ptr)));
                 },
                 .none => unreachable,
             };
@@ -226,13 +223,14 @@ pub const ArgumentInfo = struct {
 };
 pub const HandlerType = enum { handler, raw, method };
 pub const SelfSource = union(enum) {
-    this: type,
+    this_object: type,
+    this_pointer: type,
     singleton: type,
     none: void,
 
     pub fn match(self: @This(), Arg0: type) bool {
         return switch (self) {
-            inline .this, .singleton => |T| match: {
+            inline .this_object, .this_pointer, .singleton => |T| match: {
                 if (@typeInfo(T) == .pointer) @compileError("Unexpected pointer");
                 switch (@typeInfo(Arg0)) {
                     .pointer => |pt| break :match pt.child == T,

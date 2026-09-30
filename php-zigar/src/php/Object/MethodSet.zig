@@ -22,7 +22,7 @@ pub fn @"fn"(comptime names: anytype) type {
         const Container = @Struct(.auto, null, &field_names, &field_types, &field_attrs);
         inline for (&field_types) |*ptr| ptr.* = Function.CallCache;
         const CallCacheContainer = @Struct(.auto, null, &field_names, &field_types, &field_attrs);
-        const Tag = std.math.IntFittingRange(0, names.len - 1);
+        const Tag = std.math.IntFittingRange(0, names.len);
         var field_values: [names.len]Tag = undefined;
         inline for (&field_values, 0..) |*ptr, i| ptr.* = i;
         const Name = @Enum(Tag, .exhaustive, &field_names, &field_values);
@@ -44,7 +44,7 @@ pub fn @"fn"(comptime names: anytype) type {
             const st = @typeInfo(Container).@"struct";
             for (st.field_names) |name| {
                 const func = @field(T, prefix ++ name);
-                @field(m, name) = Function.fromHandler(func, .{ .this = T });
+                @field(m, name) = Function.fromHandler(func, .{ .this_object = T });
             }
             return .{ .entries = m };
         }

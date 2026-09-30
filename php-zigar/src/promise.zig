@@ -183,7 +183,7 @@ pub const PromiseStatic = struct {
     pub fn init(self: *@This()) !void {
         self.* = .{
             .methods = .{
-                .resolve = .fromHandler(@"call resolve", .{ .this = Object }),
+                .resolve = .fromHandler(@"call resolve", .{ .this_object = Object }),
             },
         };
     }

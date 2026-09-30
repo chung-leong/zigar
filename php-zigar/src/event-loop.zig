@@ -35,7 +35,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
 
         pub fn init(self: *@This(), stream: Value) !void {
             // create closure for loop fiber
-            var func: Function = .fromHandler(@"call run", .{ .this = @This() });
+            var func: Function = .fromHandler(@"call run", .{ .this_pointer = @This() });
             const this: Value = .fromPointer(self);
             const closure = func.createClosure(null, null, this);
             defer closure.release();
@@ -222,7 +222,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
         }
 
         pub fn addTimeout(self: *@This(), seconds: f64, signal: *AbortSignal) !void {
-            var func: Function = .fromHandler(@"call abort", .{ .this = Object });
+            var func: Function = .fromHandler(@"call abort", .{ .this_object = Object });
             const signal_value: Value = .fromObject(@ptrCast(signal.object()));
             const closure = func.createClosure(null, null, signal_value);
             defer closure.release();

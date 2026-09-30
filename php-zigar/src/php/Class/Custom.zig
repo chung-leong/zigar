@@ -2,7 +2,7 @@ const std = @import("std");
 
 const php = @import("../root.zig");
 const c = php.c;
-const pi = php.pi;
+const pi = php.imports;
 const php_al = php.allocator;
 const deref = php.deref;
 const Array = php.Array;
@@ -32,34 +32,7 @@ pub fn @"fn"(comptime T: type) type {
         pub fn create(class_name: *String, parent_class: ?*Class) !*@This() {
             const self = php_al.create(@This()) catch unreachable;
             errdefer php_al.destroy(self);
-            const class_flags: Class.Flags = .{
-                .linked = true,
-                .no_dynamic_properties = true,
-                .resolved_interfaces = true,
-                .resolved_parent = true,
-                .not_serializable = !@hasDecl(T, "serialize"),
-            };
-            const class_pce = parent_class orelse Class.builtin(.standard);
-            self.* = .{
-                .class = .{
-                    .impl = .{
-                        .type = c.ZEND_INTERNAL_CLASS,
-                        .name = @ptrCast(class_name),
-                        .unnamed_0 = .{
-                            .parent = @ptrCast(@constCast(class_pce)),
-                        },
-                        .refcount = 1,
-                        .ce_flags = @bitCast(class_flags),
-                    },
-                },
-                .custom = switch (@hasDecl(T, "staitcInit")) {
-                    true => switch (@typeInfo(ReturnType(@TypeOf(T.staitcInit)))) {
-                        .error_union => try .staitcInit(),
-                        else => .staitcInit(),
-                    },
-                    false => if (Static == void) {} else .{},
-                },
-            };
+            self.* = try init(class_name, parent_class);
             return self;
         }
 
@@ -90,25 +63,31 @@ pub fn @"fn"(comptime T: type) type {
         pub fn createObject(class: *Class) callconv(.c) ?*Object {
             _ = class;
             const result = Instance.create(.{});
-            const custom_obj = failure.inspect(result, null) orelse return null;
+            const custom_obj = switch (@typeInfo(@TypeOf(result))) {
+                .error_union => result catch |err| {
+                    failure.throw(err);
+                    return null;
+                },
+                else => result,
+            };
             return &custom_obj.object;
         }
 
         pub fn getIterator(class: *Class, this: *Value, by_ref: c_int) callconv(.c) ?*Object.Iterator {
             _ = class;
             _ = by_ref;
-            const obj = this.object();
-            const custom_obj: *Instance = .fromObject(obj);
-            const result = custom_obj.getIterator(obj);
+            const result = Instance.getIterator(this.object());
             return failure.inspect(result, null);
         }
 
-        pub fn getMethod(class: *Class, method_name: *String) callconv(.c) ?*Function {
+        pub fn getMethod(class: *Class, method_name: *String) callconv(.c) ?*const Function {
             const self: *@This() = @ptrCast(class);
-            const result = methods.find(method_name) orelse switch (@hasDecl(T, "getStaticMethod")) {
-                true => self.custom.getStaticMethod(&self.custom, method_name),
-                false => error.UndefinedMethod,
-            };
+            if (methods.find(method_name)) |func| return func;
+            if (!@hasDecl(T, "getStaticMethod")) {
+                failure.throw(error.UndefinedMethod);
+                return null;
+            }
+            const result = self.custom.getStaticMethod(&self.custom, method_name);
             return failure.inspect(result, null);
         }
 
@@ -117,12 +96,12 @@ pub fn @"fn"(comptime T: type) type {
             const interfaces = init: {
                 const has_array_access = @hasDecl(T, "readDimension") or @hasDecl(T, "writeDimension");
                 const has_countable = @hasDecl(T, "countDimension");
-                const has_traversable = @hasDecl(T, "getIterator");
-                var count: usize = 0;
+                const has_traversable = Instance.has_iterator;
+                comptime var count: usize = 0;
                 if (has_array_access) count += 1;
                 if (has_countable) count += 1;
                 if (has_traversable) count += 1;
-                var interfaces: [count]*Class = undefined;
+                var interfaces: [count]*const Class = undefined;
                 comptime var i: usize = 0;
                 if (has_array_access) {
                     interfaces[i] = .interface(.array_access);
@@ -139,21 +118,41 @@ pub fn @"fn"(comptime T: type) type {
                 break :init &interfaces;
             };
             var self: @This() = undefined;
+            const class_flags: Class.Flags = .{
+                .linked = true,
+                .no_dynamic_properties = true,
+                .resolved_interfaces = true,
+                .resolved_parent = true,
+                .not_serializable = !@hasDecl(T, "serialize"),
+                .abstract = decl_names.len == 0,
+            };
+            const class_pce = parent_class orelse Class.builtin(.standard);
             const zce = &self.class.impl;
             zce.* = .{};
-            zce.type = c.INTERNAL_CLASS;
+            zce.type = c.ZEND_INTERNAL_CLASS;
             zce.refcount = 1;
             zce.name = @ptrCast(class_name);
-            zce.ce_flags = c.ZEND_ACC_LINKED | c.ZEND_ACC_RESOLVED_INTERFACES | c.ZEND_ACC_NO_DYNAMIC_PROPERTIES;
+            zce.ce_flags = @bitCast(class_flags);
             zce.num_interfaces = @intCast(interfaces.len);
-            zce.unnamed_0.parent = @ptrCast(parent_class orelse Class.builtin(.standard));
+            zce.unnamed_0.parent = @ptrCast(@constCast(class_pce));
             zce.unnamed_1.create_object = @ptrCast(&createObject);
             zce.get_iterator = @ptrCast(&getIterator);
             zce.get_static_method = @ptrCast(&getMethod);
-            zce.unnamed_2.interfaces = if (interfaces.len > 0) @ptrCast(&interfaces) else null;
+            zce.unnamed_2.interfaces = switch (interfaces.len) {
+                0 => null,
+                else => @ptrCast(@constCast(&interfaces)),
+            };
             pi._zend_hash_init(&zce.properties_info, c.HT_MIN_SIZE, null, false);
             pi._zend_hash_init(&zce.constants_table, c.HT_MIN_SIZE, null, false);
             pi._zend_hash_init(&zce.function_table, c.HT_MIN_SIZE, deref(&pi.zend_function_dtor), false);
+            self.custom = switch (@hasDecl(T, "staitcInit")) {
+                true => switch (@typeInfo(ReturnType(@TypeOf(T.staitcInit)))) {
+                    .error_union => try .staitcInit(),
+                    else => .staitcInit(),
+                },
+                false => if (Static == void) {} else .{},
+            };
+            return self;
         }
 
         pub const Static = init: {

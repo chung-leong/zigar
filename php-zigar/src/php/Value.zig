@@ -284,7 +284,6 @@ pub fn convertTo(self: *const @This(), comptime T: type) !T {
                 false => @compileError("Union must be tagged"),
             },
         },
-
         else => unsupported(T),
     };
 }

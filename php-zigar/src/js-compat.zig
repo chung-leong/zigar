@@ -18,8 +18,13 @@ const N = String.static;
 const Value = php_ng.Value;
 
 pub const ArrayBuffer = Object.Custom(struct {
-    pub fn init(args: struct { buffer: ?*ByteBuffer }) !@This() {
-        return .{ .buffer = args.buffer orelse try .create(.@"1") };
+    pub fn init(args: struct { buffer: ?*ByteBuffer = null }) !@This() {
+        return .{
+            .buffer = if (args.buffer) |buf|
+                buf.retain()
+            else
+                try .create(.@"1"),
+        };
     }
 
     pub fn @"call __construct"(self: *@This(), args: struct {
@@ -72,10 +77,10 @@ pub const ArrayBuffer = Object.Custom(struct {
         };
     }
 
-    pub fn getPropertiesFor(self: *@This(), purpose: PropertiesPurpose) !*Array {
+    pub fn getProperties(self: *@This(), purpose: PropertiesPurpose) !?*Array {
+        const arr: *Array = .create();
         if (purpose == .debug) {
             if (self.flags.bytes_debug_output) {
-                const arr: *Array = .create();
                 if (self.buffer.data(0, false) catch null) |bytes| {
                     const bytes_arr: *Array = .create();
                     for (bytes, 0..) |byte, index| {
@@ -101,6 +106,7 @@ pub const ArrayBuffer = Object.Custom(struct {
                 self.flags.bytes_debug_output = true;
             }
         }
+        return arr;
     }
 
     pub fn compareWith(self: *@This(), value: Value) c_int {
@@ -120,30 +126,7 @@ pub const ArrayBuffer = Object.Custom(struct {
         };
     }
 
-    fn reportFieldError(name: *String, access: accessor.FieldAccess, err: anytype) error{FailureReported} {
-        if (failure.match(err, error.FailureReported)) {
-            return error.FailureReported;
-        } else if (failure.match(err, error.Missing)) {
-            return failure.report("no field named '{s}' in {s}", .{
-                name.slice(),
-                class_name,
-            });
-        } else {
-            const message = failure.acquireMessage(err);
-            defer failure.freeMessage(message);
-            return failure.report("unable to {s} field '{s}' in {s}: {s}", .{
-                @tagName(access),
-                name.slice(),
-                class_name,
-                message,
-            });
-        }
-    }
-
-    pub const PropCache = cache.IdCache(.{ .byteLength, .detached, .readOnly }, "", .{});
-    pub const class_name = "ArrayBuffer";
-
-    const constructor: Function = .fromHandler(@"call __construct", .{ .this = @This() });
+    const constructor: Function = .fromHandler(@"call __construct", .{ .this_object = @This() });
 
     buffer: *ByteBuffer,
     flags: packed struct(usize) {
@@ -152,9 +135,11 @@ pub const ArrayBuffer = Object.Custom(struct {
     } = .{},
 });
 
+pub const TypedArray = Object.Custom(struct {});
+
 pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
     return Object.Custom(struct {
-        pub fn init(args: struct { buffer: ?*ByteBuffer }) @This() {
+        pub fn init(args: struct { buffer: ?*ByteBuffer = null }) @This() {
             return .{
                 .buffer = if (args.buffer) |buf| buf.retain() else init: {
                     var ptr: *ByteBuffer = undefined;
@@ -184,7 +169,7 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
             };
         }
 
-        pub fn readElement(self: *@This(), key: *Value, access: Value.Access) !Value {
+        pub fn readDimension(self: *@This(), key: Value, access: Value.Access) !Value {
             _ = access;
             const len = self.getLength();
             const index = try getIndex(key, len);
@@ -196,12 +181,12 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
                     .signed => .fromInteger(value),
                     .unsigned => .fromUnsigned(value),
                 },
-                .float => .fromDouble(value),
+                .float => .fromFloat(value),
                 else => unreachable,
             };
         }
 
-        pub fn writeElement(self: *@This(), key: Value, value: Value) !void {
+        pub fn writeDimension(self: *@This(), key: Value, value: Value) !void {
             const len = self.getLength();
             const index = try getIndex(key, len);
             const bytes = try self.buffer.data(index * @sizeOf(T), true);
@@ -209,10 +194,10 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
             ptr[index] = try extractValue(value);
         }
 
-        pub fn hasElement(self: *@This(), key: Value, status: Object.PropertyStatus) bool {
-            _ = status;
+        pub fn hasDimension(self: *@This(), key: Value, check_empty: bool) bool {
+            _ = check_empty;
             const len = self.getLength();
-            return getIndex(key, len) != null;
+            return if (getIndex(key, len)) |_| true else |_| false;
         }
 
         pub fn countElements(self: *@This()) !usize {
@@ -223,11 +208,11 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
 
         pub fn compareWith(self: *@This(), value: Value) c_int {
             const other_obj = value.getObject() catch return 1;
-            const class = TypedArray.class();
+            const class = Self.class();
             if (other_obj.isInstanceOf(class)) {
                 return class.compareWith(other_obj.class());
             }
-            const other = other_obj.toCustom(TypedArray);
+            const other = other_obj.toCustom(Self);
             if (self.buffer == other.buffer) return 0;
             if (self.buffer.flags.uninitialized or other.buffer.flags.uninitialized) {
                 return if (self.buffer.flags.uninitialized) 1 else -1;
@@ -245,7 +230,7 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
             };
         }
 
-        pub fn getProperties(self: *@This(), purpose: PropertiesPurpose) !*Array {
+        pub fn getProperties(self: *@This(), purpose: PropertiesPurpose) !?*Array {
             const ptr: [*]const T, const len = init: {
                 const bytes = self.buffer.data(0, false) catch {
                     break :init .{ &.{}, 0 };
@@ -276,7 +261,7 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
                 // at this point, array_buffer will have been created by getProperty()
                 // if it was empty before
                 const ab_obj = self.array_buffer.?;
-                const ab = ab_obj.custom(ArrayBuffer);
+                const ab = ab_obj.toCustom(ArrayBuffer);
                 ab.flags.bytes_debug_output = false;
                 // ArrayBuffer's getPropertiesFor() will reset the flag
                 return arr;
@@ -321,8 +306,8 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
                             } else {
                                 break :get try ab.buffer.slice(offset, byte_len, .@"1", 0);
                             }
-                        } else if (obj.isInstanceOf(TypedArray.class())) {
-                            const other = obj.toCustom(TypedArray);
+                        } else if (obj.isInstanceOf(Self.class())) {
+                            const other = obj.toCustom(Self);
                             const buf: *ByteBuffer = try .create(.@"1");
                             errdefer buf.release();
                             try buf.allocate(null, other.buffer.bytes.len);
@@ -443,7 +428,7 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
             };
         }
 
-        const constructor: Function = .fromHandler(@"call __construct", .{ .this = @This() });
+        const constructor: Function = .fromHandler(@"call __construct", .{ .this_object = @This() });
         const Custom = @This();
         const Iterator = struct {
             array: *Custom,
@@ -470,51 +455,60 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
                 self.index = 0;
             }
         };
-        const TypedArray = TypedArrayOf(T, clamped);
+        const Self = TypedArrayOf(T, clamped);
 
         buffer: *ByteBuffer,
         array_buffer: ?*Object = null,
     });
 }
 
-const type_list = [_]type{ i8, i16, i32, i64, u8, u16, u32, u64, f16, f32, f64, u8 };
+pub const Int8Array = TypedArrayOf(i8, false);
+pub const Int16Array = TypedArrayOf(i16, false);
+pub const Int32Array = TypedArrayOf(i32, false);
+pub const Int64Array = TypedArrayOf(i64, false);
+pub const Uint8Array = TypedArrayOf(u8, false);
+pub const Uint16Array = TypedArrayOf(u16, false);
+pub const Uint32Array = TypedArrayOf(u32, false);
+pub const Uint64Array = TypedArrayOf(u64, false);
+pub const Uint8ClampedArray = TypedArrayOf(u8, true);
 
-pub const TypeArrays = struct {
-    pub const Int8Array = TypedArrayOf(i8, false);
-    pub const Int16Array = TypedArrayOf(i16, false);
-    pub const Int32Array = TypedArrayOf(i32, false);
-    pub const Int64Array = TypedArrayOf(i64, false);
-    pub const Uint8Array = TypedArrayOf(u8, false);
-    pub const Uint16Array = TypedArrayOf(u16, false);
-    pub const Uint32Array = TypedArrayOf(u32, false);
-    pub const Uint64Array = TypedArrayOf(u64, false);
-    pub const Uint8ClampedArray = TypedArrayOf(u8, true);
+const ta_names = .{
+    "Int8Array",
+    "Int16Array",
+    "Int32Array",
+    "Int64Array",
+    "Uint8Array",
+    "Uint16Array",
+    "Uint32Array",
+    "Uint64Array",
+    "Uint8ClampedArray",
 };
 
 pub fn registerClasses() !void {
-    try ArrayBuffer.registerClass(N("ArrayBuffer"));
+    try ArrayBuffer.registerClass(N("ArrayBuffer"), null);
     errdefer ArrayBuffer.unregisterClass();
-    // try TypedArray.registerClass();
-    // errdefer TypedArray.unregisterClass();
-    // {
-    //     var failed_index: usize = undefined;
-    //     errdefer inline for (type_list, 0..) |T, index| {
-    //         if (failed_index == index) break;
-    //         TypedArrayOf(T, false).unregisterClass();
-    //     };
-    //     inline for (type_list, 0..) |T, index| {
-    //         errdefer failed_index = index;
-    //         try TypedArrayOf(T, false).registerClass();
-    //     }
-    // }
-    // try TypedArrayOf(u8, true).registerClass();
+    try TypedArray.registerClass(N("TypedArray"), TypedArray.class());
+    errdefer TypedArray.unregisterClass();
+    {
+        var failed_index: usize = undefined;
+        errdefer inline for (ta_names, 0..) |name, index| {
+            if (failed_index == index) break;
+            const TA = @field(@This(), name);
+            TA.unregisterClass();
+        };
+        inline for (ta_names, 0..) |name, index| {
+            errdefer failed_index = index;
+            const TA = @field(@This(), name);
+            try TA.registerClass(N(name), TypedArray.class());
+        }
+    }
 }
 
 pub fn unregisterClasses() void {
     ArrayBuffer.unregisterClass();
-    // TypedArray.unregisterClass();
-    // inline for (type_list) |T| {
-    //     TypedArrayOf(T, false).unregisterClass();
-    // }
-    // TypedArrayOf(u8, true).unregisterClass();
+    TypedArray.unregisterClass();
+    inline for (ta_names) |name| {
+        const TA = @field(@This(), name);
+        TA.unregisterClass();
+    }
 }

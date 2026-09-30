@@ -97,8 +97,8 @@ pub fn extract(self: *@This(), comptime T: type) !T {
     const min, const max = init: {
         const field_types = @typeInfo(T).@"struct".field_types;
         var required: usize = 0;
-        inline for (field_types) |FT| {
-            if (@typeInfo(FT) != .optional) required += 1;
+        inline for (0..field_types.len) |i| {
+            if (!isFieldOptional(T, i)) required += 1;
         }
         break :init .{ required, field_types.len };
     };

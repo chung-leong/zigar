@@ -22,7 +22,7 @@ pub const AllocatorStatic = struct {
     methods: Methods = undefined,
 
     pub fn init(self: *@This()) !void {
-        const self_src: Function.SelfSource = .{ .this = Object };
+        const self_src: Function.SelfSource = .{ .this_object = Object };
         self.methods = .{
             .alloc = .fromHandler(@"call alloc", self_src),
             .free = .fromHandler(@"call free", self_src),
