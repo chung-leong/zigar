@@ -61,10 +61,20 @@ pub const @"union" = union(enum) {
             else => @compileError("Struct type expected, received: " ++ @typeName(T)),
         };
         var s: T = undefined;
-        inline for (st.field_names, 0..) |field_name, i| {
-            const value = try self.read(String.static(field_name));
-            defer value.release();
-            @field(s, field_name) = try value.convertTo(st.field_types[i]);
+        {
+            var failure_at: usize = undefined;
+            errdefer {
+                inline for (st.field_names, 0..) |field_name, i| {
+                    if (i == failure_at) break;
+                    Value.freeAny(@field(s, field_name));
+                }
+            }
+            inline for (st.field_names, 0..) |field_name, i| {
+                errdefer failure_at = i;
+                const value = try self.read(String.static(field_name));
+                defer value.release();
+                @field(s, field_name) = try value.convertTo(st.field_types[i]);
+            }
         }
         return s;
     }

@@ -3,6 +3,7 @@ const std = @import("std");
 const php = @import("root.zig");
 const c = php.c;
 const pi = php.imports;
+const php_al = php.allocator;
 const Callable = php.Callable;
 const Dictionary = php.Dictionary;
 const List = php.List;
@@ -298,7 +299,11 @@ pub fn convertTo(self: *const @This(), comptime T: type) !T {
                 Array => try self.getArray(),
                 Object => try self.getObject(),
                 Resource => try self.getResource(),
-                else => unsupported(T),
+                else => {
+                    const result = try convertTo(pt.child);
+                    const target = php_al.create(T);
+                    target.* = result;
+                },
             },
             .slice => switch (pt.child) {
                 u8 => (try self.getString()).slice(),
@@ -335,6 +340,47 @@ pub fn convertTo(self: *const @This(), comptime T: type) !T {
             break :get list.extract(T);
         },
         else => unsupported(T),
+    };
+}
+
+pub fn freeAny(arg: anytype) void {
+    const T = @TypeOf(arg);
+    if (T == @This()) return;
+    return switch (@typeInfo(T)) {
+        .error_union => if (arg) |payload| freeAny(payload) else |_| {},
+        .pointer => |pt| switch (pt.size) {
+            .one => switch (pt.child) {
+                String, Array, Object, Resource, Stream, Reference => {},
+                else => {
+                    freeAny(arg.*);
+                    php_al.destroy(arg);
+                },
+            },
+            .slice => switch (pt.child) {
+                u8 => {},
+                else => {
+                    for (arg) |element| freeAny(element);
+                    php_al.free(arg);
+                },
+            },
+            else => {},
+        },
+        .optional => if (arg) |payload| freeAny(payload),
+        .@"struct" => |st| if (st.backing_integer == null) {
+            inline for (st.field_names) |field_name| {
+                freeAny(@field(arg, field_name));
+            }
+        },
+        .@"union" => |un| switch (T) {
+            Dictionary, List => {},
+            else => switch (un.tag_type != null) {
+                true => switch (arg) {
+                    inline else => |payload| freeAny(payload),
+                },
+                false => {},
+            },
+        },
+        else => {},
     };
 }
 

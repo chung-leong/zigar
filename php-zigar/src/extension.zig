@@ -5,6 +5,12 @@ const CallDispatcher = @import("dispatch.zig").CallDispatcher;
 const dyn_lib = @import("dyn-lib.zig");
 const failure_og = @import("failure.zig");
 const getSharedLibraryPath = @import("compilation.zig").getSharedLibraryPath;
+const interface = @import("module/native/interface.zig");
+const StructFlags = interface.StructureFlags.Struct;
+const StructurePurpose = interface.StructurePurpose;
+const StructureType = interface.StructureType;
+const MemberFlags = interface.MemberFlags;
+const MemberType = interface.MemberType;
 const ModuleHost = @import("host.zig").ModuleHost;
 const Options = @import("options.zig").Options;
 const php = @import("php.zig");
@@ -26,12 +32,23 @@ const ZigCompiler = @import("compilation.zig").ZigCompiler;
 pub fn @"call zigar_test"(args: struct {
     dict: Dictionary,
 }) !void {
-    const fields = try args.dict.extract(struct {
-        number1: i32,
-        number2: []i32,
+    const type_info = try args.dict.extract(struct {
+        type: StructureType,
+        purpose: StructurePurpose,
+        static: struct {
+            members: []struct {
+                name: []const u8,
+                type: MemberType,
+                bitOffset: ?usize,
+                byteSize: ?usize,
+                bitSize: usize,
+            },
+        },
     });
-    defer php_al.free(fields.number2);
-    std.debug.print("{}\n", .{fields});
+    defer Value.freeAny(type_info);
+    for (type_info.static.members) |member| {
+        std.debug.print("{}\n", .{member});
+    }
 }
 
 pub fn @"call zigar_compile"(args: struct {

@@ -69,10 +69,20 @@ pub const @"union" = union(enum) {
         switch (@typeInfo(T)) {
             inline .array, .vector => |ar| {
                 var s: T = undefined;
-                for (0..ar.len) |i| {
-                    const value = try self.read(i);
-                    defer value.release();
-                    s[i] = try value.convertTo(ar.child);
+                {
+                    var failure_at: usize = undefined;
+                    errdefer {
+                        for (0..ar.len) |i| {
+                            if (i == failure_at) break;
+                            Value.freeAny(s[i]);
+                        }
+                    }
+                    for (0..ar.len) |i| {
+                        errdefer failure_at = i;
+                        const value = try self.read(i);
+                        defer value.release();
+                        s[i] = try value.convertTo(ar.child);
+                    }
                 }
                 return s;
             },
@@ -80,10 +90,21 @@ pub const @"union" = union(enum) {
                 .slice => {
                     const len = try self.getLength();
                     const s = try php_al.alloc(pt.child, len);
-                    for (0..len) |i| {
-                        const value = try self.read(i);
-                        defer value.release();
-                        s[i] = try value.convertTo(pt.child);
+                    errdefer php_al.free(s);
+                    {
+                        var failure_at: usize = undefined;
+                        errdefer {
+                            for (0..len) |i| {
+                                if (i == failure_at) break;
+                                Value.freeAny(s[i]);
+                            }
+                        }
+                        for (0..len) |i| {
+                            errdefer failure_at = i;
+                            const value = try self.read(i);
+                            defer value.release();
+                            s[i] = try value.convertTo(pt.child);
+                        }
                     }
                     return s;
                 },
