@@ -2,10 +2,11 @@ const std = @import("std");
 
 const php = @import("../root.zig");
 const c = php.c;
+const deref = php.deref;
 const pi = php.imports;
 const php_al = php.allocator;
-const deref = php.deref;
 const Array = php.Array;
+const Allocator = php.Allocator;
 const Class = php.Class;
 const failure = php.failure;
 const Function = php.Function;
@@ -36,6 +37,10 @@ pub fn @"fn"(comptime T: type) type {
             return self;
         }
 
+        pub fn addRef(self: *@This()) void {
+            self.class.impl.refcount += 1;
+        }
+
         pub fn release(self: *@This()) void {
             self.class.impl.refcount -= 1;
             if (self.class.impl.refcount == 0) {
@@ -50,6 +55,7 @@ pub fn @"fn"(comptime T: type) type {
             defer lc_name.release();
             if (list.has(lc_name)) return error.NameConflict;
             list.set(lc_name, .fromPointer(&self.class.impl));
+            self.addRef();
         }
 
         pub fn unregister(self: *@This()) void {
@@ -58,6 +64,7 @@ pub fn @"fn"(comptime T: type) type {
             const lc_name = self.name().duplicateLowerCase();
             defer lc_name.release();
             list.delete(lc_name);
+            self.release();
         }
 
         pub fn createObject(class: *Class) callconv(.c) ?*Object {

@@ -64,9 +64,9 @@ pub fn getWrapperData(self: *const @This()) ?*Object {
     return value.getObject() catch null;
 }
 
-pub fn getWrapperProperty(self: *const @This(), name: anytype) !Value {
+pub fn readWrapperProperty(self: *const @This(), name: anytype) !Value {
     const data = self.getWrapperData() orelse return error.Missing;
-    return try data.getProperty(name);
+    return try data.readProperty(name);
 }
 
 pub fn setWrapper(self: *@This(), wpr: *const Wrapper) void {

@@ -5,6 +5,7 @@ const c = php.c;
 const pi = php.imports;
 const Callable = php.Callable;
 const Dictionary = php.Dictionary;
+const List = php.List;
 const Object = php.Object;
 const Reference = php.Reference;
 const Resource = php.Resource;
@@ -212,9 +213,44 @@ pub fn getDictionary(self: *const @This()) !Dictionary {
     };
 }
 
+pub fn getList(self: *const @This()) !List {
+    return switch (self.kind()) {
+        .array => get: {
+            const arr = self.array();
+            if (!arr.isZeroBased()) return error.NotLinearArray;
+            break :get .{ .array = arr };
+        },
+        .object => get: {
+            const obj = self.object();
+            if (!obj.hasInterface(.array_access)) return error.ObjectIsNotArrayLike;
+            break :get .{ .object = self.object() };
+        },
+        else => error.NotArrayOrObject,
+    };
+}
+
 pub fn getCallable(self: *const @This()) !Callable {
     if (!self.isCallable()) return error.NotCallable;
     return .{ .value = self.* };
+}
+
+pub fn getEnum(self: *const @This(), comptime T: type) !T {
+    if (@typeInfo(T) != .@"enum") {
+        @compileError("Enum type expected, received: " ++ @typeName(T));
+    }
+    const int = try self.getInteger();
+    return std.enums.fromInt(T, int) orelse error.InvalidEnumValue;
+}
+
+pub fn getPackedStruct(self: *const @This(), comptime T: type) !T {
+    const BT = switch (@typeInfo(T)) {
+        .@"struct" => |st| st.backing_integer,
+        else => null,
+    } orelse @compileError("Packed struct type expected, received: " ++ @typeName(T));
+    const int = try self.getInteger();
+    const bits: @Int(@typeInfo(BT).int.signedness, @bitSizeOf(c_long)) = @bitCast(int);
+    const backing_int: BT = @truncate(bits);
+    return @bitCast(backing_int);
 }
 
 pub fn stringify(self: *const @This()) !*String {
@@ -255,6 +291,7 @@ pub fn convertTo(self: *const @This(), comptime T: type) !T {
             const float_value = self.getFloat();
             break :get @floatCast(float_value);
         },
+        .@"enum" => try self.getEnum(T),
         .pointer => |pt| switch (pt.size) {
             .one => switch (pt.child) {
                 String => try self.getString(),
@@ -265,24 +302,37 @@ pub fn convertTo(self: *const @This(), comptime T: type) !T {
             },
             .slice => switch (pt.child) {
                 u8 => (try self.getString()).slice(),
-                else => unsupported(T),
+                else => get: {
+                    const list = try self.getList();
+                    break :get list.extract(T);
+                },
             },
             else => unsupported(T),
         },
         .optional => |opt| if (self.isNull()) null else try self.convertTo(opt.child),
-        .@"struct" => switch (T) {
+        .@"struct" => |st| switch (T) {
             Callable => try self.getCallable(),
-            // TODO: handle packed struct
-            else => unsupported(T),
+            else => switch (st.backing_integer != null) {
+                true => try self.getPackedStruct(T),
+                false => get: {
+                    const dict = try self.getDictionary();
+                    break :get dict.extract(T);
+                },
+            },
         },
         .@"union" => |un| switch (T) {
             Dictionary => try self.getDictionary(),
+            List => try self.getList(),
             else => switch (un.tag_type != null) {
                 true => inline for (un.field_types, 0..) |FT, i| {
                     if (self.convertTo(FT)) |nv| break @unionInit(T, un.field_names[i], nv) else |_| {}
                 } else error.NoMatch,
                 false => @compileError("Union must be tagged"),
             },
+        },
+        .array => get: {
+            const list = try self.getList();
+            break :get list.extract(T);
         },
         else => unsupported(T),
     };
@@ -483,6 +533,11 @@ pub const Access = enum(c_int) {
     isset = c.BP_VAR_IS,
     argument = c.BP_VAR_FUNC_ARG,
     unset = c.BP_VAR_UNSET,
+};
+pub const State = enum(c_int) {
+    not_null,
+    not_false,
+    present,
 };
 
 fn floatToInteger(value: f64) !c_long {

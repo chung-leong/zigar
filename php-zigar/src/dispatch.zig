@@ -857,7 +857,7 @@ pub const CallDispatcher = struct {
 
     pub fn getStreamPath(strm: *Stream) !*String {
         if (strm.getPath()) |path| return .create(path);
-        const value = strm.getWrapperProperty("path") catch {
+        const value = strm.readWrapperProperty("path") catch {
             return failure.report("stream wrapper does not have the property 'path'", .{});
         };
         defer value.release();

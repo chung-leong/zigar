@@ -76,48 +76,73 @@ pub fn hasInterface(self: *const @This(), iface: Class.InterfaceId) bool {
     return self.isInstanceOf(iface.get());
 }
 
-pub fn hasElement(self: *const @This(), key: anytype) !bool {
+pub fn hasDimension(self: *const @This(), key: anytype) !bool {
     const zobj = @constCast(&self.impl);
     const k: Value = .createFromAny(key);
     defer k.release();
-    var value: Value = undefined;
     const std_handlers = standardHandlers();
-    const handlers = zobj.handlers.?;
-    const handler = handlers.read_dimension orelse return error.NoArrayAccess;
-    if (std_handlers.read_dimension == handler) {
-        if (zobj.ce.*.arrayaccess_funcs_ptr == null) return error.NoArrayAccess;
+    const handler = zobj.handlers.*.has_dimension orelse return error.NoArrayAccess;
+    if (@hasField(c.zend_class_entry, "arrayaccess_funcs_ptr")) {
+        if (zobj.ce.*.arrayaccess_funcs_ptr == null) {
+            if (std_handlers.has_dimension == handler) return error.NoArrayAccess;
+        }
     }
-    const rv = handler(zobj, @ptrCast(k.value), c.BP_VAR_IS, &value);
+    const zk: *c.zval = @ptrCast(@constCast(&k.value));
+    const rv = handler(zobj, zk, false);
     return rv != null;
 }
 
-pub fn getElement(self: *const @This(), key: anytype) !Value {
+pub fn readDimension(self: *const @This(), key: anytype) !Value {
     const zobj = @constCast(&self.impl);
     const k: Key = .createFromAny(key);
     defer k.release();
     var value: Value = undefined;
+    const zval: *c.zval = @ptrCast(&value);
     const std_handlers = standardHandlers();
-    const handlers = zobj.handlers.?;
-    const handler = handlers.read_dimension orelse return error.NoArrayAccess;
-    if (std_handlers.read_dimension == handler) {
-        if (zobj.ce.*.arrayaccess_funcs_ptr == null) return error.NoArrayAccess;
+    const handler = zobj.handlers.*.read_dimension orelse return error.NoArrayAccess;
+    if (@hasField(c.zend_class_entry, "arrayaccess_funcs_ptr")) {
+        if (zobj.ce.*.arrayaccess_funcs_ptr == null) {
+            if (std_handlers.read_dimension == handler) return error.NoArrayAccess;
+        }
     }
-    const zk: *c.zval = @ptrCast(&k.value);
-    const rv = handler(zobj, zk, c.BP_VAR_R, &value);
+    const zk: *c.zval = @ptrCast(@constCast(&k.value));
+    const rv = handler(zobj, zk, c.BP_VAR_R, zval);
     if (rv == null) return error.Missing;
-    return rv.*;
+    return @as(*Value, @ptrCast(rv)).*;
 }
 
-pub fn getProperty(self: *const @This(), name: anytype) !Value {
+pub fn countElements(self: *const @This()) !usize {
+    const zobj = @constCast(&self.impl);
+    const handler = zobj.handlers.*.count_elements orelse return error.NoPropertyAccess;
+    var count: c_long = undefined;
+    const result = handler(zobj, &count);
+    if (result != c.SUCCESS) return error.Missing;
+    return @intCast(count);
+}
+
+pub fn readProperty(self: *const @This(), name: anytype) !Value {
     const zobj = @constCast(&self.impl);
     const n: *String = .createFromAny(name);
     defer n.release();
     var value: Value = undefined;
-    const zn: *c.zend_string = @ptrCast(n);
     const zval: *c.zval = @ptrCast(&value);
-    const result = pi.zend_read_property_ex(zobj.ce, zobj, zn, true, zval);
+    const zn: *c.zend_string = @ptrCast(n);
+    const handler = zobj.handlers.*.read_property orelse return error.NoPropertyAccess;
+    const access: Value.Access = .read;
+    const result = handler(zobj, zn, @intFromEnum(access), null, zval);
     if (result != c.SUCCESS) return error.Missing;
     return value;
+}
+
+pub fn hasProperty(self: *const @This(), name: anytype) !bool {
+    const zobj = @constCast(&self.impl);
+    const n: *String = .createFromAny(name);
+    defer n.release();
+    const zn: *c.zend_string = @ptrCast(n);
+    const handler = zobj.handlers.*.has_property orelse return error.NoPropertyAccess;
+    const state: Value.State = .present;
+    const result = handler(zobj, zn, @intFromEnum(state), null);
+    return result == c.SUCCESS;
 }
 
 pub fn getProperties(self: *const @This()) *Array {
@@ -143,7 +168,7 @@ pub fn fromCustom(self: anytype) *@This() {
 }
 
 pub fn standardHandlers() *const Handlers {
-    return deref(&pi.std_object_handlers).?;
+    return deref(&pi.std_object_handlers);
 }
 
 pub const GarbageCollectionResult = struct {

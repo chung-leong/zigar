@@ -16,6 +16,7 @@ const PropertiesPurpose = Object.PropertiesPurpose;
 const String = php.String;
 const Value = php.Value;
 const Access = Value.Access;
+const State = Value.State;
 const Kind = Value.Kind;
 const argCount = php.util.argCount;
 const ArgType = php.util.ArgType;
@@ -225,7 +226,8 @@ pub fn @"fn"(comptime T: type) type {
             } else switch (@hasDecl(T, "readProperty")) {
                 true => switch (argCount(@TypeOf(self.custom.readProperty))) {
                     4 => self.custom.readProperty(name, access, cache_slot),
-                    else => self.custom.readProperty(name, access),
+                    3 => self.custom.readProperty(name, access),
+                    else => unreachable,
                 },
                 false => error.UndefinedProperty,
             };
@@ -245,19 +247,36 @@ pub fn @"fn"(comptime T: type) type {
             } else switch (@hasDecl(T, "writeProperty")) {
                 true => switch (argCount(@TypeOf(self.custom.readProperty))) {
                     4 => self.custom.writeProperty(name, value.*, cache_slot),
-                    else => self.custom.writeProperty(name, value.*),
+                    3 => self.custom.writeProperty(name, value.*),
+                    else => unreachable,
                 },
                 false => error.UndefinedProperty,
             };
         }
 
-        fn hasProperty(object: *Object, name: *String, cache_slot: [*]*anyopaque) callconv(.c) c_int {
-            return if (tryHasProperty(object, name, cache_slot)) |state| {
-                return if (state) c.SUCCESS else c.FAILURE;
+        fn hasProperty(object: *Object, name: *String, state: State, cache_slot: [*]*anyopaque) callconv(.c) c_int {
+            if (tryHasProperty(object, name, cache_slot)) |found| {
+                if (found) {
+                    if (state == .not_null or state == .not_false) {
+                        if (tryReadProperty(object, name, .isset, cache_slot)) |value| {
+                            if (state == .not_false) {
+                                if (value.cast(.boolean).boolean() == false) return c.FAILURE;
+                            } else {
+                                if (value.isNull()) return c.FAILURE;
+                            }
+                        } else |err| {
+                            failure.throw(fieldError(name, .isset, err));
+                            return c.FAILURE;
+                        }
+                    }
+                    return c.SUCCESS;
+                } else {
+                    return c.FAILURE;
+                }
             } else |err| {
                 failure.throw(fieldError(name, .isset, err));
                 return c.FAILURE;
-            };
+            }
         }
 
         fn tryHasProperty(object: *Object, name: *String, cache_slot: [*]*anyopaque) !bool {
@@ -267,7 +286,8 @@ pub fn @"fn"(comptime T: type) type {
             } else switch (@hasDecl(T, "unsetProperty")) {
                 true => switch (argCount(@TypeOf(self.custom.hasProperty))) {
                     3 => self.custom.hasProperty(name, cache_slot),
-                    else => self.custom.hasProperty(name),
+                    2 => self.custom.hasProperty(name),
+                    else => unreachable,
                 },
                 false => false,
             };
@@ -285,8 +305,9 @@ pub fn @"fn"(comptime T: type) type {
                 if (name.matchSlice(n)) break self.callSetterWithNull(n);
             } else switch (@hasDecl(T, "unsetProperty")) {
                 true => switch (argCount()) {
-                    3 => self.custom.unsetProperty(name),
-                    else => self.custom.unsetProperty(name, cache_slot),
+                    3 => self.custom.unsetProperty(name, cache_slot),
+                    2 => self.custom.unsetProperty(name),
+                    else => unreachable,
                 },
                 false => error.UndefinedProperty,
             };

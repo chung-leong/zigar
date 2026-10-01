@@ -11,6 +11,7 @@ pub const Dictionary = @import("Dictionary.zig").@"union";
 pub const failure = @import("failure.zig");
 pub const Function = @import("Function.zig");
 pub const InfoTable = @import("InfoTable.zig");
+pub const List = @import("List.zig").@"union";
 pub const Module = @import("Module.zig");
 pub const Object = @import("Object.zig");
 pub const Reference = @import("Reference.zig");

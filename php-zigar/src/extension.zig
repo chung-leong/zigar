@@ -23,6 +23,17 @@ const io = system.io;
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 const ZigCompiler = @import("compilation.zig").ZigCompiler;
 
+pub fn @"call zigar_test"(args: struct {
+    dict: Dictionary,
+}) !void {
+    const fields = try args.dict.extract(struct {
+        number1: i32,
+        number2: []i32,
+    });
+    defer php_al.free(fields.number2);
+    std.debug.print("{}\n", .{fields});
+}
+
 pub fn @"call zigar_compile"(args: struct {
     src_path: []const u8,
     mod_path: ?[]const u8,
