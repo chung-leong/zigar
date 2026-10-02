@@ -22,6 +22,186 @@ const invokeMethod = structure.invokeMethod;
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 const ZigObject = @import("object.zig").ZigObject;
 
+pub const Scope = enum { .instance, .static };
+pub const Parameters = struct {
+    scope: Scope,
+    bit_offset: ?usize,
+    byte_size: ?usize,
+    bit_size: usize,
+    structure: StructureType,
+    container: StructureType,
+    flags: MemberFlags,
+    slot: usize,
+    class: *Class,
+};
+
+pub fn get(params: Parameters) !Any {
+    @setEvalBranchQuota(2000000);
+    const for_vector = if (params.scope == .instance) switch (params.container) {
+        .array, .slice, .vector => true,
+        else => false,
+    } else false;
+    const for_scalar = params.bit_offset != null;
+    const byte_offset: usize = if (params.bit_offset) |bit_offset| bit_offset / 8 else 0;
+    // when byte size is given the field is byte-aligned; there's no need to adjust for
+    // use a bit-shifting accrossor
+    const use_bit_offset = params.byte_size == null and params.bit_offset != null;
+    const bit_offset: u3 = if (use_bit_offset) @intCast(params.bit_offset.? % 8) else undefined;
+    const prebaked = params.scope == .static or params.structure == .@"comptime";
+    const acc_info = @typeInfo(Any).@"union";
+    var accessors: Any = inline for (acc_info.field_names, 0..) |field_name, i| {
+        const Acc = acc_info.field_types[i];
+        var acc: Acc = undefined;
+        switch (acc.type) {
+            .void => if (params.structure == .void) {
+                break @unionInit(Any, field_name, acc);
+            },
+            .bool, .int, .float, .gmp => {
+                const primitive_type: MemberType = comptime switch (acc.type) {
+                    .bool => .bool,
+                    .int, .gmp => switch (acc.attributes.signedness) {
+                        .signed => .int,
+                        .unsigned => .uint,
+                    },
+                    .float => .float,
+                    else => unreachable,
+                };
+                if (for_scalar and params.structure == primitive_type) {
+                    if (acc.attributes.use_bit_offset == use_bit_offset) {
+                        const match = check: {
+                            // accessors handle one particular bit sizes
+                            if (@hasField(@TypeOf(acc.attributes), "bit_size")) {
+                                break :check params.bit_size == acc.attributes.bit_size;
+                            } else {
+                                if (acc.type == .bool) break :check true;
+                                if (acc.type == .gmp and params.bit_size > 64) {
+                                    // accessors can handle different bit sizes
+                                    break :check true;
+                                }
+                                break :check false;
+                            }
+                        };
+                        if (match) {
+                            acc.byte_offset = byte_offset;
+                            if (@hasField(Acc, "bit_offset")) {
+                                acc.bit_offset = bit_offset;
+                            }
+                            if (@hasField(Acc, "bit_size")) {
+                                acc.bit_size = params.bit_size;
+                            }
+                            if (@hasField(Acc, "runtime_check")) {
+                                acc.runtime_check = self.host.useRuntimeSafety();
+                            }
+                            break @unionInit(accessor.Any, field_name, acc);
+                        }
+                    }
+                }
+            },
+            .slot => if (params.structure == .object or params.structure == .literal or params.structure == .type) {
+                if (acc.attributes.prebaked == prebaked) {
+                    const slots: @TypeOf(acc.attributes.slots) = switch (slot_usage) {
+                        .multiple => .multiple,
+                        else => .single,
+                    };
+                    const index: @TypeOf(acc.attributes.index) = switch (for_vector) {
+                        true => .use,
+                        false => .none,
+                    };
+                    if (acc.attributes.slots == slots and acc.attributes.index == index) {
+                        acc.transform = if (params.flags.is_string or params.structure == .literal)
+                            .string
+                        else if (params.flags.is_plain)
+                            .plain
+                        else if (params.flags.is_typed_array)
+                            .typed_array
+                        else if (params.flags.is_clamped_array)
+                            .clamped_array
+                        else if (member.class.flags.common.has_value)
+                            .none
+                        else
+                            null;
+                        if (@hasField(Acc, "slot")) {
+                            acc.slot = params.slot orelse return error.Unexpected;
+                        }
+                        if (@hasField(Acc, "byte_size")) {
+                            if (params.byte_size) |byte_size| {
+                                acc.byte_size = byte_size;
+                            } else {
+                                acc.byte_size = (params.bit_size + bit_offset + 7) / 8;
+                                if (@hasField(Acc, "bit_offset")) {
+                                    acc.bit_offset = bit_offset;
+                                }
+                            }
+                        }
+                        if (@hasField(Acc, "byte_offset")) {
+                            acc.byte_offset = byte_offset;
+                        }
+                        if (@hasField(Acc, "class")) {
+                            acc.class = member.class;
+                        }
+                        break @unionInit(accessor.Any, field_name, acc);
+                    }
+                }
+            },
+            .vector => if (for_vector) {
+                const primitive_type: MemberType = comptime switch (acc.attributes) {
+                    .bool => .bool,
+                    inline .int, .gmp => |child_attrs| switch (child_attrs.signedness) {
+                        .signed => .int,
+                        .unsigned => .uint,
+                    },
+                    .float => .float,
+                };
+                if (params.structure == primitive_type) {
+                    switch (acc.attributes) {
+                        inline else => |child_attrs| {
+                            const match = check: {
+                                if (@hasField(@TypeOf(child_attrs), "bit_size")) {
+                                    // accessors handle one particular bit sizes
+                                    break :check params.bit_size == child_attrs.bit_size;
+                                } else {
+                                    if (acc.attributes == .bool) break :check true;
+                                    if (acc.attributes == .gmp and params.bit_size > 64) {
+                                        // accessors can handle different bit sizes
+                                        break :check true;
+                                    }
+                                    break :check false;
+                                }
+                            };
+                            if (match) {
+                                if (@hasField(Acc, "bit_size")) {
+                                    acc.bit_size = params.bit_size;
+                                }
+                                break @unionInit(accessor.Any, field_name, acc);
+                            }
+                        },
+                    }
+                }
+            },
+            .null => if (params.structure == .null or params.structure == .undefined) {
+                break @unionInit(accessor.Any, field_name, acc);
+            },
+            .constant, .property, .inaccessible => {},
+        }
+    } else .{ .inaccessible = .{} };
+    if (accessors == .inaccessible) {
+        if (self.type == .vector and self.flags.common.has_pointer) {
+            self.type = .array;
+            return get(member, scope, .multiple);
+        }
+    }
+    if (params.structure == .int or params.structure == .uint) {
+        if (member.class.type == .@"enum" or member.class.type == .error_set) {
+            // use constant accessor to translate integers to enum and error set objects
+            const int_accessors = accessors;
+            accessors = .{
+                .constant = try .init(int_accessors, member.class),
+            };
+        }
+    }
+    return accessors;
+}
+
 pub const FieldAccess = enum { read, write, call };
 pub const Output = enum { object, value };
 pub const Type = enum {
@@ -75,7 +255,6 @@ pub const Transform = enum {
         }
     }
 };
-
 pub fn WithBitOffset(comptime T: type, comptime bit_offset: u3) type {
     const field_names: [2][]const u8 = .{ "padding", "value" };
     const field_types: [2]type = .{ @Int(.unsigned, bit_offset), T };

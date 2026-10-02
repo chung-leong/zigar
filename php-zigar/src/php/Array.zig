@@ -10,14 +10,14 @@ const unsupported = php.failure.unsupported;
 const Value = php.Value;
 
 pub fn length(self: *const @This()) usize {
-    const ht = &self.impl;
-    return ht.nNumOfElements;
+    const arr = &self.impl;
+    return arr.nNumOfElements;
 }
 
 pub fn nextIndex(self: *const @This()) isize {
-    const ht = &self.impl;
-    return switch (ht.nNextFreeElement) {
-        std.math.minInt(@TypeOf(ht.nNextFreeElement)) => 0,
+    const arr = &self.impl;
+    return switch (arr.nNextFreeElement) {
+        std.math.minInt(@TypeOf(arr.nNextFreeElement)) => 0,
         else => |i| i,
     };
 }
@@ -27,29 +27,29 @@ pub fn isZeroBased(self: *const @This()) bool {
 }
 
 pub fn isAssociative(self: *const @This()) bool {
-    const ht = &self.impl;
-    if (ht.u.flags & c.HASH_FLAG_PACKED != 0) return false;
-    return for (0..ht.nNumUsed) |i| {
+    const arr = &self.impl;
+    if (arr.u.flags & c.HASH_FLAG_PACKED != 0) return false;
+    return for (0..arr.nNumUsed) |i| {
         const p = switch (@hasField(c.zend_array, "arData")) {
             // in newer version of PHP, the field is stored in an unnamed union
-            false => ht.unnamed_0.arData[i],
-            true => ht.arData[i],
+            false => arr.unnamed_0.arData[i],
+            true => arr.arData[i],
         };
         if (p.val.u1.v.type != c.IS_UNDEF and p.key == null) break false;
     } else true;
 }
 
 pub fn create() *@This() {
-    const ht = pi._zend_new_array_0();
-    return @ptrCast(ht);
+    const arr = pi._zend_new_array_0();
+    return @ptrCast(arr);
 }
 
 pub fn createNonDestructive() *@This() {
     const alignment: std.mem.Alignment = .fromByteUnits(@alignOf(c.zend_array));
     const byte_ptr = php_al.rawAlloc(@sizeOf(c.zend_array), alignment, @returnAddress());
-    const ht: *c.zend_array = @ptrCast(@alignCast(byte_ptr));
-    pi._zend_hash_init(ht, c.HT_MIN_SIZE, null, false);
-    return @ptrCast(ht);
+    const arr: *c.zend_array = @ptrCast(@alignCast(byte_ptr));
+    pi._zend_hash_init(arr, c.HT_MIN_SIZE, null, false);
+    return @ptrCast(arr);
 }
 
 pub fn retain(self: *@This()) *@This() {
@@ -62,8 +62,8 @@ pub fn addRef(self: *@This()) void {
 }
 
 pub fn release(self: *@This()) void {
-    const ht = &self.impl;
-    pi.zend_hash_release(ht);
+    const arr = &self.impl;
+    pi.zend_hash_release(arr);
 }
 
 pub fn subtractRef(self: *@This()) void {
@@ -80,22 +80,26 @@ pub fn has(self: *const @This(), key: anytype) bool {
 }
 
 pub fn get(self: *const @This(), key: anytype) !Value {
-    const ht = &self.impl;
+    return self.getPointer(key).*;
+}
+
+pub fn getPointer(self: *const @This(), key: anytype) !*Value {
+    const arr = &self.impl;
     const zval = switch (Key.fromAny(key)) {
-        .integer => |i| pi.zend_hash_index_find(ht, i),
-        .string => |str| pi.zend_hash_find(ht, @ptrCast(str)),
-        .slice => |slice| pi.zend_hash_str_find(ht, slice.ptr, slice.len),
+        .integer => |i| pi.zend_hash_index_find(arr, i),
+        .string => |str| pi.zend_hash_find(arr, @ptrCast(str)),
+        .slice => |slice| pi.zend_hash_str_find(arr, slice.ptr, slice.len),
     } orelse return error.Missing;
-    return .fromZval(zval.*);
+    return @ptrCast(zval);
 }
 
 pub fn set(self: *@This(), key: anytype, value: Value) void {
-    const ht = &self.impl;
+    const arr = &self.impl;
     const zval: *c.zval = @ptrCast(@constCast(&value));
     _ = switch (Key.fromAny(key)) {
-        .integer => |i| pi.zend_hash_index_update(ht, i, zval),
-        .string => |str| pi.zend_hash_update(ht, @ptrCast(str), zval),
-        .slice => |slice| pi.zend_hash_str_update(ht, slice.ptr, slice.len, zval),
+        .integer => |i| pi.zend_hash_index_update(arr, i, zval),
+        .string => |str| pi.zend_hash_update(arr, @ptrCast(str), zval),
+        .slice => |slice| pi.zend_hash_str_update(arr, slice.ptr, slice.len, zval),
     };
     value.addRef();
 }
@@ -105,19 +109,19 @@ pub fn delete(self: *@This(), key: anytype) void {
 }
 
 pub fn remove(self: *@This(), key: anytype) bool {
-    const ht = &self.impl;
+    const arr = &self.impl;
     const result = switch (Key.fromAny(key)) {
-        .integer => |i| pi.zend_hash_index_del(ht, i),
-        .string => |str| pi.zend_hash_del(ht, @ptrCast(str)),
-        .slice => |slice| pi.zend_hash_str_del(ht, slice.ptr, slice.len),
+        .integer => |i| pi.zend_hash_index_del(arr, i),
+        .string => |str| pi.zend_hash_del(arr, @ptrCast(str)),
+        .slice => |slice| pi.zend_hash_str_del(arr, slice.ptr, slice.len),
     };
     return result == c.SUCCESS;
 }
 
 pub fn append(self: *@This(), value: Value) void {
-    const ht = &self.impl;
-    ht.*.u.flags |= c.HASH_FLAG_ALLOW_COW_VIOLATION;
-    _ = pi.zend_hash_next_index_insert(ht, @ptrCast(@constCast(&value)));
+    const arr = &self.impl;
+    arr.*.u.flags |= c.HASH_FLAG_ALLOW_COW_VIOLATION;
+    _ = pi.zend_hash_next_index_insert(arr, @ptrCast(@constCast(&value)));
     value.addRef();
 }
 

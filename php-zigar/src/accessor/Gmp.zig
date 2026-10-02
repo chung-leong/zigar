@@ -1,0 +1,264 @@
+const std = @import("std");
+const builtin = @import("builtin");
+
+const accessor = @import("../accessor.zig");
+const ByteBuffer = @import("../buffer.zig").ByteBuffer;
+const Error = @import("../failure.zig").Error;
+const php = @import("../php.zig");
+const String = php.String;
+const Value = php.Value;
+
+pub fn @"fn"(comptime attrs: Attributes) type {
+    const be = comptime builtin.target.cpu.arch.endian() == .big;
+    return switch (attrs.use_bit_offset) {
+        false => struct {
+            pub fn get(self: @This(), buffer: *ByteBuffer) Error!Value {
+                const byte_count = (self.bit_size + 7) / 8;
+                const bytes = try buffer.data(self.byte_offset + byte_count, false);
+                const str: *String = .createUninitialized(byte_count);
+                defer str.release();
+                const dst = @constCast(str.slice());
+                var offset = self.byte_offset + if (be) 0 else byte_count - 1;
+                var dst_offset: usize = 0;
+                var negate = false;
+                // read the most significant byte first
+                const msb_bits = self.bit_size - (byte_count - 1) * 8;
+                inline for (.{ 1, 2, 3, 4, 5, 6, 7, 8 }) |bits| {
+                    if (msb_bits == bits) {
+                        const T = @Int(attrs.signedness, bits);
+                        const ptr: *align(1) const T = @ptrCast(&bytes[offset]);
+                        var int = ptr.*;
+                        if (attrs.signedness == .signed and int < 0) {
+                            int = int ^ -1;
+                            negate = true;
+                        }
+                        dst[dst_offset] = @intCast(int);
+                        break;
+                    }
+                }
+                const mask: u8 = if (negate) 0xff else 0;
+                while (dst_offset < byte_count - 1) {
+                    if (be) offset += 1 else offset -= 1;
+                    dst_offset += 1;
+                    const ptr: *align(1) const u8 = @ptrCast(&bytes[offset]);
+                    const int = ptr.*;
+                    dst[dst_offset] = int ^ mask;
+                }
+                if (attrs.signedness == .signed and negate) {
+                    // need to add one
+                    while (true) {
+                        dst[dst_offset] +%= 1;
+                        if (dst[dst_offset] != 0 or dst_offset == 0) break;
+                        // apply carry to previous byte
+                        dst_offset -= 1;
+                    }
+                }
+                return try gmpFromString(str, negate, attrs.signedness);
+            }
+
+            pub fn set(self: @This(), buffer: *ByteBuffer, value: Value) Error!void {
+                const byte_count = (self.bit_size + 7) / 8;
+                const bytes = try buffer.data(self.byte_offset + byte_count, true);
+                const str, const negate = try stringFromGmp(value);
+                defer str.release();
+                const src = str.slice();
+                if (src.len > byte_count) return error.IntegerOverflow;
+                const blk_offset = byte_count - src.len;
+                var offset = self.byte_offset + if (be) 0 else byte_count - 1;
+                var src_offset: usize = 0;
+                // write the most significant byte
+                const msb_bits = self.bit_size - (byte_count - 1) * 8;
+                inline for (.{ 1, 2, 3, 4, 5, 6, 7, 8 }) |bits| {
+                    if (msb_bits == bits) {
+                        const T = @Int(attrs.signedness, bits);
+                        const ptr: *align(1) T = @ptrCast(&bytes[offset]);
+                        const byte = if (src_offset >= blk_offset) src[src_offset - blk_offset] else 0;
+                        if (byte > std.math.maxInt(T)) return error.IntegerOverflow;
+                        var int: T = @intCast(byte);
+                        if (attrs.signedness == .signed and negate) int = int ^ -1;
+                        ptr.* = int;
+                        break;
+                    }
+                }
+                const mask: u8 = if (negate) 0xff else 0;
+                while (src_offset < byte_count - 1) {
+                    if (be) offset += 1 else offset -= 1;
+                    src_offset += 1;
+                    const ptr: *align(1) u8 = @ptrCast(&bytes[offset]);
+                    const byte = if (src_offset >= blk_offset) src[src_offset - blk_offset] else 0;
+                    const int = byte ^ mask;
+                    ptr.* = int;
+                }
+                if (attrs.signedness == .signed and negate) {
+                    // need to shift value by one
+                    const last = self.byte_offset + if (be) byte_count - 1 else 0;
+                    while (true) {
+                        bytes[offset] +%= 1;
+                        if (bytes[offset] != 0 or offset == last) break;
+                        // need to borrow from previous byte
+                        if (be) offset += 1 else offset -= 1;
+                    }
+                }
+            }
+
+            byte_offset: usize,
+            bit_size: usize,
+            comptime type: accessor.Type = .gmp,
+            comptime attributes: Attributes = attrs,
+        },
+        true => struct {
+            pub fn get(self: @This(), buffer: *ByteBuffer) Error!Value {
+                const bit_offset = buffer.bit_offset +% self.bit_offset;
+                return inline for (.{ 0, 1, 2, 3, 4, 5, 6, 7 }) |possible_offset| {
+                    if (bit_offset == possible_offset) {
+                        break try self.getAt(buffer, possible_offset);
+                    }
+                } else unreachable;
+            }
+
+            pub fn getAt(self: @This(), buffer: *ByteBuffer, comptime bit_offset: u3) Error!Value {
+                const byte_count = (self.bit_size + 7) / 8;
+                const extra = if (bit_offset != 0) 1 else 0;
+                const bytes = try buffer.data(self.byte_offset + byte_count + extra, false);
+                const str = php.createStringWithLength(byte_count);
+                defer php.release(str);
+                const dst = @constCast(php.getStringContent(str));
+                var offset = self.byte_offset + if (be) 0 else byte_count - 1;
+                var dst_offset: usize = 0;
+                var negate = false;
+                // read the most significant byte first
+                const msb_bits = self.bit_size - (byte_count - 1) * 8;
+                inline for (.{ 1, 2, 3, 4, 5, 6, 7, 8 }) |bits| {
+                    if (msb_bits == bits) {
+                        const T = @Int(attrs.signedness, bits);
+                        const AT = accessor.WithBitOffset(T, bit_offset);
+                        const ptr: *align(1) const AT = @ptrCast(&bytes[offset]);
+                        var int = ptr.value;
+                        if (attrs.signedness == .signed and int < 0) {
+                            int = int ^ -1;
+                            negate = true;
+                        }
+                        dst[dst_offset] = @intCast(int);
+                        break;
+                    }
+                }
+                const mask: u8 = if (negate) 0xff else 0;
+                while (dst_offset < byte_count - 1) {
+                    if (be) offset += 1 else offset -= 1;
+                    dst_offset += 1;
+                    const U = accessor.WithBitOffset(u8, bit_offset);
+                    const ptr: *align(1) const U = @ptrCast(&bytes[offset]);
+                    const int = ptr.value;
+                    dst[dst_offset] = int ^ mask;
+                }
+                if (attrs.signedness == .signed and negate) {
+                    // need to add one
+                    while (true) {
+                        dst[dst_offset] +%= 1;
+                        if (dst[dst_offset] != 0 or dst_offset == 0) break;
+                        // apply carry to previous byte
+                        dst_offset -= 1;
+                    }
+                }
+                return try gmpFromString(str, negate, attrs.signedness);
+            }
+
+            pub fn set(self: @This(), buffer: *ByteBuffer, value: Value) Error!void {
+                const bit_offset = buffer.bit_offset +% self.bit_offset;
+                inline for (.{ 0, 1, 2, 3, 4, 5, 6, 7 }) |possible_offset| {
+                    if (bit_offset == possible_offset) {
+                        break try self.setAt(buffer, possible_offset, value);
+                    }
+                } else unreachable;
+            }
+
+            pub fn setAt(self: @This(), buffer: *ByteBuffer, comptime bit_offset: u3, value: Value) Error!void {
+                const byte_count = (self.bit_size + 7) / 8;
+                const extra = if (bit_offset != 0) 1 else 0;
+                const bytes = try buffer.data(self.byte_offset + byte_count + extra, true);
+                const str, const negate = try stringFromGmp(value);
+                defer php.release(str);
+                const src = php.getStringContent(str);
+                if (src.len > byte_count) return error.IntegerOverflow;
+                const blk_offset = byte_count - src.len;
+                var offset = self.byte_offset + if (be) 0 else byte_count - 1;
+                var src_offset: usize = 0;
+                // write the most significant byte
+                const msb_bits = self.bit_size - (byte_count - 1) * 8;
+                inline for (.{ 1, 2, 3, 4, 5, 6, 7, 8 }) |bits| {
+                    if (msb_bits == bits) {
+                        const T = @Int(attrs.signedness, bits);
+                        const AT = accessor.WithBitOffset(T, bit_offset);
+                        const ptr: *align(1) AT = @ptrCast(&bytes[offset]);
+                        const byte = if (src_offset >= blk_offset) src[src_offset - blk_offset] else 0;
+                        if (byte > std.math.maxInt(T)) return error.IntegerOverflow;
+                        var int: T = @intCast(byte);
+                        if (attrs.signedness == .signed and negate) int = int ^ -1;
+                        ptr.value = int;
+                        break;
+                    }
+                }
+                const mask: u8 = if (negate) 0xff else 0;
+                while (src_offset < byte_count - 1) {
+                    if (be) offset += 1 else offset -= 1;
+                    src_offset += 1;
+                    const U = accessor.WithBitOffset(u8, bit_offset);
+                    const ptr: *align(1) U = @ptrCast(&bytes[offset]);
+                    const byte = if (src_offset >= blk_offset) src[src_offset - blk_offset] else 0;
+                    const int = byte ^ mask;
+                    if (comptime U == u8) ptr.* = int else ptr.value = int;
+                }
+                if (attrs.signedness == .signed and negate) {
+                    // need to shift value by one
+                    const last = self.byte_offset + if (be) byte_count - 1 else 0;
+                    while (true) {
+                        bytes[offset] +%= 1;
+                        if (bytes[offset] != 0 or offset == last) break;
+                        // need to borrow from previous byte
+                        if (be) offset += 1 else offset -= 1;
+                    }
+                }
+            }
+
+            byte_offset: usize,
+            bit_size: usize,
+            bit_offset: u3,
+            comptime type: accessor.Type = .gmp,
+            comptime attributes: Attributes = attrs,
+        },
+    };
+}
+
+fn gmpFromString(str: *String, negate: bool, comptime signedness: std.builtin.Signedness) !Value {
+    const str_value: Value = .fromString(str);
+    const pos_value = try php.invokeFunction("gmp_import", &.{str_value});
+    if (signedness == .unsigned or !negate) return pos_value;
+    defer pos_value.release();
+    return try php.invokeFunction("gmp_neg", &.{pos_value});
+}
+
+fn stringFromGmp(value: Value) !@Tuple(&.{ *String, bool }) {
+    const gmp_value = switch (value.kind()) {
+        .object => use: {
+            value.addRef();
+            break :use value;
+        },
+        else => convert: {
+            break :convert try php.invokeFunction("gmp_init", &.{value.*});
+        },
+    };
+    defer gmp_value.release();
+    const sign_value = try php.invokeFunction("gmp_sign", &.{value.*});
+    const sign = try sign_value.getInteger();
+    const str_value = try php.invokeFunction("gmp_export", &.{gmp_value});
+    return .{ try str_value.getString(), sign < 0 };
+}
+
+const Attributes = struct {
+    signedness: std.builtin.Signedness,
+    use_bit_offset: bool = false,
+
+    pub fn Type(self: @This()) type {
+        return @Int(self.signedness, self.use_bit_size);
+    }
+};

@@ -3,6 +3,7 @@ pub const std = @import("std");
 pub const Custom = @import("Object/Custom.zig").@"fn";
 pub const Iterator = @import("Object/Iterator.zig");
 pub const MethodSet = @import("Object/MethodSet.zig").@"fn";
+pub const Opcode = @import("Object/Opcode.zig").@"enum";
 const php = @import("root.zig");
 const Array = php.Array;
 const c = php.c;
@@ -200,16 +201,6 @@ pub const PropertiesPurpose = enum(c_int) {
         false => c.ZEND_PROP_PURPOSE_JSON + 1,
     },
     default,
-};
-/// Opcodes supported by doOperation()
-pub const Opcode = enum(u8) {
-    add = c.ZEND_ADD,
-    sub = c.ZEND_SUB,
-    mul = c.ZEND_MUL,
-    div = c.ZEND_DIV,
-    MOD = c.ZEND_MOD,
-    POW = c.ZEND_POW,
-    _,
 };
 pub const PropertyStatus = enum(c_int) {
     isset = c.ZEND_PROPERTY_ISSET,

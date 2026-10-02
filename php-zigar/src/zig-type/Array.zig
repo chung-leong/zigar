@@ -29,9 +29,7 @@ pub const @"struct" = Object.Custom(struct {
         return static.length;
     }
 
-    pub fn staticInit(args: struct { type_info: *Array }) @This() {
-        c
-    }
+    pub fn staticInit(args: struct { type_info: *Array }) @This() {}
 
     pub fn countElements(self: *@This()) usize {
         const zig_class = self.class();

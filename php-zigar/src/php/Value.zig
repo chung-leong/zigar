@@ -111,6 +111,13 @@ pub fn subtractRef(self: *@This()) void {
     }
 }
 
+pub fn getNull(self: *const @This()) !void {
+    return switch (self.kind()) {
+        .null => {},
+        else => error.NotNull,
+    };
+}
+
 pub fn getBoolean(self: *const @This()) !bool {
     return switch (self.kind()) {
         .boolean => self.boolean(),
@@ -252,6 +259,12 @@ pub fn getPackedStruct(self: *const @This(), comptime T: type) !T {
     const bits: @Int(@typeInfo(BT).int.signedness, @bitSizeOf(c_long)) = @bitCast(int);
     const backing_int: BT = @truncate(bits);
     return @bitCast(backing_int);
+}
+
+pub fn compareWith(self: *const @This(), other: @This()) c_int {
+    const zval1: *c.zval = @ptrCast(@constCast(self));
+    const zval2: *c.zval = @ptrCast(@constCast(&other));
+    return pi.zend_compare(zval1, zval2);
 }
 
 pub fn stringify(self: *const @This()) !*String {
