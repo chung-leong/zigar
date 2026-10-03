@@ -1,6 +1,6 @@
 {
   "name": "zigar-compiler",
-  "version": "0.17.0-alpha.0",
+  "version": "0.17.0",
   "description": "Compile Zig code into WASM or native module",
   "main": "./dist/index.js",
   "exports": {
@@ -41,11 +41,11 @@
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@rollup/plugin-replace": "^6.0.3",
     "c8": "^12.0.0",
-    "chai": "^6.2.2",
+    "chai": "^6.3.0",
     "chai-as-promised": "^8.0.2",
-    "mocha": "^12.0.0",
+    "mocha": "^12.0.3",
     "mocha-skip-if": "^1.0.4",
-    "rollup": "^4.63.1",
-    "sharp": "^0.35.4"
+    "rollup": "^4.64.0",
+    "sharp": "^0.35.5"
   }
 }
