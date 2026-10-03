@@ -7,6 +7,7 @@ const BufferMap = @import("buffer.zig").BufferMap;
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
 const DynLib = @import("dyn-lib.zig").DynLib;
+const failure = @import("failure.zig");
 const GarbageCollectionBuffer = @import("gc.zig").GarbageCollectionBuffer;
 const io = @import("system.zig").io;
 const js_compat = @import("js-compat.zig");
@@ -69,7 +70,13 @@ pub const ModuleHost = struct {
     }
 
     pub fn load(path: []const u8) !Value {
-        var lib: DynLib = try DynLib.open(path);
+        var lib = DynLib.open(path) catch |err| {
+            if (DynLib.getLastError(php.allocator)) |msg| {
+                defer php.allocator.free(msg);
+                return failure.report("{s}", .{msg});
+            }
+            return err;
+        };
         errdefer lib.close();
         const module = lib.lookup(*Module, "zig_module") orelse return error.MissingSymbol;
         if (module.revision != Module.current_revision) return error.IncorrectVersion;
