@@ -1,3 +1,5 @@
+const std = @import("std");
+
 pub fn argCount(comptime F: type) usize {
     return switch (@typeInfo(F)) {
         .pointer => |pt| argCount(pt.child),
@@ -31,4 +33,24 @@ pub fn WithoutError(comptime T: type) type {
         .error_union => |eu| eu.payload,
         else => T,
     };
+}
+
+pub inline fn camelize(comptime name: []const u8) [:0]const u8 {
+    var buffer: [name.len + 1]u8 = undefined;
+    var len: usize = 0;
+    var capitalize = false;
+    for (name) |c| {
+        if (c == '_') {
+            capitalize = true;
+        } else if (capitalize) {
+            buffer[len] = std.ascii.toUpper(c);
+            len += 1;
+            capitalize = false;
+        } else {
+            buffer[len] = c;
+            len += 1;
+        }
+    }
+    buffer[len] = 0;
+    return @ptrCast(buffer[0..len]);
 }
