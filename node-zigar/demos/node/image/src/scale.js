@@ -41,16 +41,13 @@ const m = {
 // declare structure objects
 const s0 = {}, s1 = {}, s2 = {}, s3 = {}, s4 = {}, s5 = {}, s6 = {}, s7 = {}, s8 = {}, s9 = {};
 const s10 = {}, s11 = {}, s12 = {}, s13 = {}, s14 = {}, s15 = {}, s16 = {}, s17 = {}, s18 = {}, s19 = {};
-const s20 = {}, s21 = {}, s22 = {}, s23 = {}, s24 = {}, s25 = {}, s26 = {}, s27 = {}, s28 = {}, s29 = {};
-const s30 = {}, s31 = {}, s32 = {}, s33 = {}, s34 = {}, s35 = {}, s36 = {};
+const s20 = {}, s21 = {}, s22 = {}, s23 = {}, s24 = {}, s25 = {}, s26 = {}, s27 = {};
 
 // declare objects
 const o0 = {}, o1 = {}, o2 = {}, o3 = {}, o4 = {}, o5 = {}, o6 = {}, o7 = {}, o8 = {}, o9 = {};
 const o10 = {}, o11 = {}, o12 = {}, o13 = {}, o14 = {}, o15 = {}, o16 = {}, o17 = {}, o18 = {}, o19 = {};
 const o20 = {}, o21 = {}, o22 = {}, o23 = {}, o24 = {}, o25 = {}, o26 = {}, o27 = {}, o28 = {}, o29 = {};
 const o30 = {}, o31 = {}, o32 = {}, o33 = {}, o34 = {}, o35 = {}, o36 = {}, o37 = {}, o38 = {}, o39 = {};
-const o40 = {}, o41 = {}, o42 = {}, o43 = {}, o44 = {}, o45 = {}, o46 = {}, o47 = {}, o48 = {}, o49 = {};
-const o50 = {}, o51 = {}, o52 = {}, o53 = {}, o54 = {}, o55 = {};
 
 // define byte arrays
 const U = i => new Uint8Array(i);
@@ -61,21 +58,15 @@ const a3 = U(1);
 const a4 = U(1);
 const a5 = U([ 1 ]);
 const a6 = U(32);
-const a7 = U([ 0, 0, 0, 0, 0, 0, 0, 0, 1, 0 ]);
-const a8 = U(12);
-const a9 = U(1);
-const a10 = U(32);
-const a11 = U([ 0, 1 ]);
-const a12 = U(3);
+const a7 = U([ 0, 1 ]);
+const a8 = U(3);
+const a9 = U(a5);
+const a10 = U(8);
+const a11 = U(8);
+const a12 = U(1);
 const a13 = U(a5);
-const a14 = U(8);
+const a14 = U(32);
 const a15 = U(8);
-const a16 = U(1);
-const a17 = U(a5);
-const a18 = U([ 2 ]);
-const a19 = U(32);
-const a20 = U(32);
-const a21 = U(8);
 
 // fill in object properties
 const $ = Object.assign;
@@ -124,7 +115,7 @@ $(o12, {
 });
 $(o13, {
   memory: { array: a6 },
-  handle: 153332,
+  handle: 223800,
   slots: {
     0: o14,
   },
@@ -144,166 +135,100 @@ $(o16, {
   memory: { array: a7 },
 });
 $(o17, {});
-$(o18, {});
-$(o19, {
+$(o18, {
   slots: {
-    0: o20, 1: o22, 2: o23,
+    0: o19, 1: o21, 2: o22,
   },
 });
-$(o20, {
+$(o19, {
   structure: s3,
   memory: { array: a1 },
   slots: {
-    0: o21,
+    0: o20,
   },
+});
+$(o20, {
+  structure: s1,
 });
 $(o21, {
   structure: s15,
-});
-$(o22, {
-  structure: s17,
   memory: { array: a8 },
 });
-$(o23, {
+$(o22, {
   structure: s4,
   memory: { array: a9 },
 });
-$(o24, {});
-$(o25, {
+$(o23, {});
+$(o24, {
   memory: { array: a10 },
-  handle: 153332,
+  handle: 204706,
+  slots: {
+    0: o25,
+  },
+});
+$(o25, {
+  structure: s17,
+  memory: { array: a11 },
+  handle: 204706,
   slots: {
     0: o26,
   },
 });
 $(o26, {
-  structure: s19,
-  memory: { array: a6, offset: 0, length: 16 },
-  slots: {
-    0: o27,
-  },
+  structure: s16,
+  memory: { array: a1 },
 });
 $(o27, {
-  structure: s18,
-  memory: { array: a1 },
+  slots: {
+    1: o28, 2: o29,
+  },
 });
 $(o28, {
-  memory: { array: a11 },
-});
-$(o29, {});
-$(o30, {
-  slots: {
-    0: o31, 1: o33, 2: o34,
-  },
-});
-$(o31, {
-  structure: s3,
-  memory: { array: a1 },
-  slots: {
-    0: o32,
-  },
-});
-$(o32, {
-  structure: s1,
-});
-$(o33, {
-  structure: s22,
+  structure: s19,
   memory: { array: a12 },
 });
-$(o34, {
-  structure: s4,
+$(o29, {
+  structure: s19,
   memory: { array: a13 },
 });
-$(o35, {});
-$(o36, {
+$(o30, {});
+$(o31, {});
+$(o32, {
   memory: { array: a14 },
-  handle: 153345,
+  handle: 223800,
   slots: {
-    0: o37,
+    0: o33,
   },
 });
-$(o37, {
-  structure: s24,
-  memory: { array: a15 },
-  handle: 153345,
-  slots: {
-    0: o38,
-  },
-});
-$(o38, {
-  structure: s23,
-  memory: { array: a1 },
-});
-$(o39, {
-  slots: {
-    1: o40, 2: o41, 3: o42,
-  },
-});
-$(o40, {
-  structure: s26,
-  memory: { array: a16 },
-});
-$(o41, {
-  structure: s26,
-  memory: { array: a17 },
-});
-$(o42, {
-  structure: s26,
-  memory: { array: a18 },
-});
-$(o43, {});
-$(o44, {});
-$(o45, {
-  memory: { array: a19 },
-  handle: 153332,
-  slots: {
-    0: o46,
-  },
-});
-$(o46, {
-  structure: s28,
+$(o33, {
+  structure: s21,
   memory: { array: a6, offset: 0, length: 16 },
   slots: {
     0: o15,
   },
 });
-$(o47, {});
-$(o48, {
-  memory: { array: a20 },
-  handle: 153332,
+$(o34, {
+  memory: { array: a15 },
+  handle: 204706,
   slots: {
-    0: o49,
+    0: o25,
   },
 });
-$(o49, {
-  structure: s30,
-  memory: { array: a6, offset: 0, length: 16 },
-  slots: {
-    0: o27,
-  },
-});
-$(o50, {
-  memory: { array: a21 },
-  handle: 153345,
-  slots: {
-    0: o37,
-  },
-});
-$(o51, {});
-$(o52, {});
-$(o53, {
+$(o35, {});
+$(o36, {});
+$(o37, {
   memory: { array: a1 },
-  handle: 115684,
+  handle: 183417,
 });
-$(o54, {
+$(o38, {
   slots: {
-    0: o55,
+    0: o39,
   },
 });
-$(o55, {
-  structure: s35,
+$(o39, {
+  structure: s26,
   memory: { array: a1 },
-  handle: 92995,
+  handle: 176563,
 });
 
 // fill in structure properties
@@ -634,7 +559,7 @@ $(s12, {
   ...s,
   type: 6,
   flags: 1,
-  signature: 0xb8bcea51494b4eb3n,
+  signature: 0x5e679c93379adf69n,
   byteSize: 1,
   align: 1,
   instance: {
@@ -677,7 +602,7 @@ $(s13, {
   type: 2,
   purpose: 9,
   flags: 14,
-  signature: 0x4764ee5e7b3e2246n,
+  signature: 0x0e9ecacb757e608dn,
   byteSize: 32,
   align: 8,
   instance: {
@@ -735,253 +660,6 @@ $(s13, {
 });
 $(s14, {
   ...s,
-  flags: 1,
-  signature: 0x92399f17de7db807n,
-  byteSize: 2,
-  align: 2,
-  instance: {
-    members: [
-      {
-        ...m,
-        type: 4,
-        bitSize: 16,
-        byteSize: 2,
-        bitOffset: 0,
-        structure: s14,
-      },
-    ],
-  },
-  static: {
-    members: [],
-  },
-  name: "f16",
-});
-$(s15, {
-  ...s,
-  type: 1,
-  flags: 144,
-  signature: 0x8b48dd32f9b1f164n,
-  length: 4,
-  byteSize: 8,
-  align: 2,
-  instance: {
-    members: [
-      {
-        ...m,
-        type: 4,
-        bitSize: 16,
-        byteSize: 2,
-        structure: s14,
-      },
-    ],
-  },
-  static: {
-    members: [],
-  },
-  name: "[4]f16",
-});
-$(s16, {
-  ...s,
-  type: 2,
-  flags: 10,
-  signature: 0x46bdb01dbd156620n,
-  byteSize: 10,
-  align: 2,
-  instance: {
-    members: [
-      {
-        ...m,
-        name: "value",
-        type: 5,
-        flags: 1,
-        bitOffset: 0,
-        bitSize: 64,
-        byteSize: 8,
-        slot: 0,
-        structure: s15,
-      },
-      {
-        ...m,
-        name: "is_required",
-        type: 1,
-        bitOffset: 64,
-        bitSize: 1,
-        byteSize: 1,
-        slot: 1,
-        structure: s4,
-      },
-    ],
-    template: o16
-  },
-  static: {
-    members: [],
-  },
-  name: "S2",
-});
-$(s17, {
-  ...s,
-  type: 7,
-  flags: 43,
-  signature: 0x24013fa005d07adfn,
-  byteSize: 12,
-  align: 2,
-  instance: {
-    members: [
-      {
-        ...m,
-        type: 5,
-        bitSize: 80,
-        byteSize: 10,
-        bitOffset: 0,
-        slot: 0,
-        structure: s16,
-      },
-      {
-        ...m,
-        type: 3,
-        flags: 8,
-        bitOffset: 80,
-        bitSize: 8,
-        byteSize: 1,
-        structure: s1,
-      },
-    ],
-    template: o17
-  },
-  static: {
-    members: [],
-  },
-  name: "?S2",
-});
-$(s18, {
-  ...s,
-  type: 9,
-  flags: 154,
-  signature: 0x1f99bbb644993974n,
-  byteSize: 8,
-  align: 2,
-  instance: {
-    members: [
-      {
-        ...m,
-        type: 5,
-        bitSize: 64,
-        byteSize: 8,
-        structure: s15,
-      },
-    ],
-    template: o18
-  },
-  static: {
-    members: [],
-    template: o19
-  },
-  name: "[_][4]f16",
-});
-$(s19, {
-  ...s,
-  type: 8,
-  flags: 380,
-  signature: 0xe816348a39454434n,
-  byteSize: 16,
-  align: 8,
-  instance: {
-    members: [
-      {
-        ...m,
-        type: 5,
-        bitSize: 128,
-        byteSize: 16,
-        slot: 0,
-        structure: s18,
-      },
-      {
-        ...m,
-        type: 3,
-        bitOffset: 0,
-        bitSize: 64,
-        byteSize: 8,
-        structure: s8,
-      },
-      {
-        ...m,
-        type: 3,
-        bitOffset: 64,
-        bitSize: 64,
-        byteSize: 8,
-        structure: s9,
-      },
-    ],
-    template: o24
-  },
-  static: {
-    members: [],
-  },
-  name: "[]const [4]f16",
-});
-$(s20, {
-  ...s,
-  type: 2,
-  purpose: 9,
-  flags: 14,
-  signature: 0x55622539a54e413an,
-  byteSize: 32,
-  align: 8,
-  instance: {
-    members: [
-      {
-        ...m,
-        name: "data",
-        type: 5,
-        flags: 1,
-        bitOffset: 0,
-        bitSize: 128,
-        byteSize: 16,
-        slot: 0,
-        structure: s19,
-      },
-      {
-        ...m,
-        name: "width",
-        type: 3,
-        flags: 1,
-        bitOffset: 128,
-        bitSize: 32,
-        byteSize: 4,
-        slot: 1,
-        structure: s11,
-      },
-      {
-        ...m,
-        name: "height",
-        type: 3,
-        flags: 1,
-        bitOffset: 160,
-        bitSize: 32,
-        byteSize: 4,
-        slot: 2,
-        structure: s11,
-      },
-      {
-        ...m,
-        name: "colorSpace",
-        type: 3,
-        bitOffset: 192,
-        bitSize: 1,
-        byteSize: 1,
-        slot: 3,
-        structure: s12,
-      },
-    ],
-    template: o25
-  },
-  static: {
-    members: [],
-  },
-  name: "S3",
-});
-$(s21, {
-  ...s,
   type: 2,
   signature: 0x03fe2ef485ad3365n,
   byteSize: 2,
@@ -1010,14 +688,14 @@ $(s21, {
         structure: s4,
       },
     ],
-    template: o28
+    template: o16
   },
   static: {
     members: [],
   },
-  name: "S4",
+  name: "S2",
 });
-$(s22, {
+$(s15, {
   ...s,
   type: 7,
   flags: 43,
@@ -1033,7 +711,7 @@ $(s22, {
         byteSize: 2,
         bitOffset: 0,
         slot: 0,
-        structure: s21,
+        structure: s14,
       },
       {
         ...m,
@@ -1045,14 +723,14 @@ $(s22, {
         structure: s1,
       },
     ],
-    template: o29
+    template: o17
   },
   static: {
     members: [],
   },
-  name: "?S4",
+  name: "?S2",
 });
-$(s23, {
+$(s16, {
   ...s,
   type: 9,
   flags: 976,
@@ -1070,11 +748,11 @@ $(s23, {
   },
   static: {
     members: [],
-    template: o30
+    template: o18
   },
   name: "anyopaque",
 });
-$(s24, {
+$(s17, {
   ...s,
   type: 8,
   flags: 668,
@@ -1089,7 +767,7 @@ $(s24, {
         bitSize: 64,
         byteSize: 8,
         slot: 0,
-        structure: s23,
+        structure: s16,
       },
       {
         ...m,
@@ -1100,14 +778,14 @@ $(s24, {
         structure: s8,
       },
     ],
-    template: o35
+    template: o23
   },
   static: {
     members: [],
   },
   name: "*opaque",
 });
-$(s25, {
+$(s18, {
   ...s,
   type: 2,
   purpose: 11,
@@ -1126,17 +804,17 @@ $(s25, {
         bitSize: 64,
         byteSize: 8,
         slot: 0,
-        structure: s24,
+        structure: s17,
       },
     ],
-    template: o36
+    template: o24
   },
   static: {
     members: [],
   },
-  name: "S5",
+  name: "S3",
 });
-$(s26, {
+$(s19, {
   ...s,
   name: "Format",
   type: 6,
@@ -1149,10 +827,10 @@ $(s26, {
       {
         ...m,
         type: 3,
-        bitSize: 2,
+        bitSize: 1,
         byteSize: 1,
         bitOffset: 0,
-        structure: s26,
+        structure: s19,
       },
     ],
   },
@@ -1164,34 +842,26 @@ $(s26, {
         type: 5,
         flags: 4,
         slot: 1,
-        structure: s26,
-      },
-      {
-        ...m,
-        name: "web_hdr",
-        type: 5,
-        flags: 4,
-        slot: 2,
-        structure: s26,
+        structure: s19,
       },
       {
         ...m,
         name: "gd",
         type: 5,
         flags: 4,
-        slot: 3,
-        structure: s26,
+        slot: 2,
+        structure: s19,
       },
     ],
-    template: o39
+    template: o27
   },
 });
-$(s27, {
+$(s20, {
   ...s,
   type: 3,
   purpose: 8,
   flags: 110,
-  signature: 0xa46f52736eb522a5n,
+  signature: 0x5a92fc66ad166bdfn,
   byteSize: 40,
   align: 8,
   instance: {
@@ -1208,42 +878,32 @@ $(s27, {
       },
       {
         ...m,
-        name: "web_hdr",
-        type: 5,
-        bitOffset: 0,
-        bitSize: 256,
-        byteSize: 32,
-        slot: 1,
-        structure: s20,
-      },
-      {
-        ...m,
         name: "gd",
         type: 5,
         bitOffset: 0,
         bitSize: 64,
         byteSize: 8,
-        slot: 2,
-        structure: s25,
+        slot: 1,
+        structure: s18,
       },
       {
         ...m,
         type: 3,
         flags: 8,
         bitOffset: 256,
-        bitSize: 2,
+        bitSize: 1,
         byteSize: 1,
-        structure: s26,
+        structure: s19,
       },
     ],
-    template: o43
+    template: o30
   },
   static: {
     members: [],
   },
   name: "U0",
 });
-$(s28, {
+$(s21, {
   ...s,
   type: 8,
   flags: 124,
@@ -1277,19 +937,19 @@ $(s28, {
         structure: s9,
       },
     ],
-    template: o44
+    template: o31
   },
   static: {
     members: [],
   },
   name: "[][4]u8",
 });
-$(s29, {
+$(s22, {
   ...s,
   type: 2,
   purpose: 9,
   flags: 14,
-  signature: 0x1aff04a1f8782ec2n,
+  signature: 0xd83ab987c7c49f45n,
   byteSize: 32,
   align: 8,
   instance: {
@@ -1303,7 +963,7 @@ $(s29, {
         bitSize: 128,
         byteSize: 16,
         slot: 0,
-        structure: s28,
+        structure: s21,
       },
       {
         ...m,
@@ -1338,116 +998,14 @@ $(s29, {
         structure: s12,
       },
     ],
-    template: o45
+    template: o32
   },
   static: {
     members: [],
   },
-  name: "S6",
+  name: "S4",
 });
-$(s30, {
-  ...s,
-  type: 8,
-  flags: 124,
-  signature: 0x76cad0aae5ec8d10n,
-  byteSize: 16,
-  align: 8,
-  instance: {
-    members: [
-      {
-        ...m,
-        type: 5,
-        bitSize: 128,
-        byteSize: 16,
-        slot: 0,
-        structure: s18,
-      },
-      {
-        ...m,
-        type: 3,
-        bitOffset: 0,
-        bitSize: 64,
-        byteSize: 8,
-        structure: s8,
-      },
-      {
-        ...m,
-        type: 3,
-        bitOffset: 64,
-        bitSize: 64,
-        byteSize: 8,
-        structure: s9,
-      },
-    ],
-    template: o47
-  },
-  static: {
-    members: [],
-  },
-  name: "[][4]f16",
-});
-$(s31, {
-  ...s,
-  type: 2,
-  purpose: 9,
-  flags: 14,
-  signature: 0x1dfeffa19a825703n,
-  byteSize: 32,
-  align: 8,
-  instance: {
-    members: [
-      {
-        ...m,
-        name: "data",
-        type: 5,
-        flags: 1,
-        bitOffset: 0,
-        bitSize: 128,
-        byteSize: 16,
-        slot: 0,
-        structure: s30,
-      },
-      {
-        ...m,
-        name: "width",
-        type: 3,
-        flags: 1,
-        bitOffset: 128,
-        bitSize: 32,
-        byteSize: 4,
-        slot: 1,
-        structure: s11,
-      },
-      {
-        ...m,
-        name: "height",
-        type: 3,
-        flags: 1,
-        bitOffset: 160,
-        bitSize: 32,
-        byteSize: 4,
-        slot: 2,
-        structure: s11,
-      },
-      {
-        ...m,
-        name: "colorSpace",
-        type: 3,
-        bitOffset: 192,
-        bitSize: 1,
-        byteSize: 1,
-        slot: 3,
-        structure: s12,
-      },
-    ],
-    template: o48
-  },
-  static: {
-    members: [],
-  },
-  name: "S7",
-});
-$(s32, {
+$(s23, {
   ...s,
   type: 2,
   purpose: 11,
@@ -1466,22 +1024,22 @@ $(s32, {
         bitSize: 64,
         byteSize: 8,
         slot: 0,
-        structure: s24,
+        structure: s17,
       },
     ],
-    template: o50
+    template: o34
   },
   static: {
     members: [],
   },
-  name: "S8",
+  name: "S5",
 });
-$(s33, {
+$(s24, {
   ...s,
   type: 3,
   purpose: 8,
   flags: 110,
-  signature: 0xab25bae3c340b94dn,
+  signature: 0x2ac8f0107ece7922n,
   byteSize: 40,
   align: 8,
   instance: {
@@ -1494,17 +1052,7 @@ $(s33, {
         bitSize: 256,
         byteSize: 32,
         slot: 0,
-        structure: s29,
-      },
-      {
-        ...m,
-        name: "web_hdr",
-        type: 5,
-        bitOffset: 0,
-        bitSize: 256,
-        byteSize: 32,
-        slot: 1,
-        structure: s31,
+        structure: s22,
       },
       {
         ...m,
@@ -1513,31 +1061,31 @@ $(s33, {
         bitOffset: 0,
         bitSize: 64,
         byteSize: 8,
-        slot: 2,
-        structure: s32,
+        slot: 1,
+        structure: s23,
       },
       {
         ...m,
         type: 3,
         flags: 8,
         bitOffset: 256,
-        bitSize: 2,
+        bitSize: 1,
         byteSize: 1,
-        structure: s26,
+        structure: s19,
       },
     ],
-    template: o51
+    template: o35
   },
   static: {
     members: [],
   },
   name: "U1",
 });
-$(s34, {
+$(s25, {
   ...s,
   type: 12,
   flags: 14,
-  signature: 0x9fcaf53c79b6dadfn,
+  signature: 0xfb3c154aa9227bbcn,
   length: 2,
   byteSize: 80,
   align: 8,
@@ -1562,7 +1110,7 @@ $(s34, {
         bitSize: 320,
         byteSize: 40,
         slot: 1,
-        structure: s27,
+        structure: s20,
       },
       {
         ...m,
@@ -1573,20 +1121,20 @@ $(s34, {
         bitSize: 320,
         byteSize: 40,
         slot: 2,
-        structure: s33,
+        structure: s24,
       },
     ],
-    template: o52
+    template: o36
   },
   static: {
     members: [],
   },
   name: "Arg(fn (U0, U1) void)",
 });
-$(s35, {
+$(s26, {
   ...s,
   type: 14,
-  signature: 0xc5ec3ab469bfbcd8n,
+  signature: 0xa759d919a3aba980n,
   length: 2,
   byteSize: 0,
   align: 1,
@@ -1595,17 +1143,17 @@ $(s35, {
       {
         ...m,
         type: 5,
-        structure: s34,
+        structure: s25,
       },
     ],
-    template: o53
+    template: o37
   },
   static: {
     members: [],
   },
   name: "fn (U0, U1) void",
 });
-$(s36, {
+$(s27, {
   ...s,
   name: "scale",
   type: 2,
@@ -1624,19 +1172,18 @@ $(s36, {
         type: 5,
         flags: 2,
         slot: 0,
-        structure: s35,
+        structure: s26,
       },
     ],
-    template: o54
+    template: o38
   },
 });
 const structures = [
   s0, s1, s2, s3, s4, s5, s6, s7, s8, s9,
   s10, s11, s12, s13, s14, s15, s16, s17, s18, s19,
-  s20, s21, s22, s23, s24, s25, s26, s27, s28, s29,
-  s30, s31, s32, s33, s34, s35, s36,
+  s20, s21, s22, s23, s24, s25, s26, s27,
 ];
-const root = s36;
+const root = s27;
 const settings = {
   runtimeSafety: false,
   littleEndian: true,
