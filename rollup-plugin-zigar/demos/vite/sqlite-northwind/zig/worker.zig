@@ -22,26 +22,14 @@ const sql = .{
 };
 
 var stmt: define: {
-    const sql_fields = std.meta.fields(@TypeOf(sql));
-    var fields: [sql_fields.len]std.builtin.Type.StructField = undefined;
-    for (sql_fields, 0..) |sql_field, i| {
-        const T = sqlite.StatementType(.{}, @field(sql, sql_field.name));
-        fields[i] = .{
-            .name = sql_field.name,
-            .type = T,
-            .default_value_ptr = null,
-            .is_comptime = false,
-            .alignment = @alignOf(T),
-        };
+    const field_names = std.meta.fieldNames(@TypeOf(sql));
+    var field_types: [field_names.len]type = undefined;
+    var field_attrs: [field_names.len]std.lang.Type.Struct.FieldAttributes = undefined;
+    for (field_names, 0..) |field_name, i| {
+        field_types[i] = sqlite.StatementType(.{}, @field(sql, field_name));
+        field_attrs[i] = .{};
     }
-    break :define @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .fields = &fields,
-            .decls = &.{},
-            .is_tuple = false,
-        },
-    });
+    break :define @Struct(.auto, null, field_names, &field_types, &field_attrs);
 } = undefined;
 
 pub fn openDb(path: [:0]const u8) !void {
@@ -56,12 +44,12 @@ pub fn openDb(path: [:0]const u8) !void {
     errdefer db.deinit();
     var initialized: usize = 0;
     errdefer {
-        inline for (std.meta.fields(@TypeOf(sql)), 0..) |field, i| {
-            if (i < initialized) @field(stmt, field.name).deinit();
+        inline for (std.meta.fieldNames(@TypeOf(sql)), 0..) |field_name, i| {
+            if (i < initialized) @field(stmt, field_name).deinit();
         }
     }
-    inline for (std.meta.fields(@TypeOf(sql))) |field| {
-        @field(stmt, field.name) = try db.prepare(@field(sql, field.name));
+    inline for (std.meta.fieldNames(@TypeOf(sql))) |field_name| {
+        @field(stmt, field_name) = try db.prepare(@field(sql, field_name));
         initialized += 1;
     }
     database = db;
@@ -69,8 +57,8 @@ pub fn openDb(path: [:0]const u8) !void {
 
 pub fn closeDb() void {
     if (database) |db| {
-        inline for (std.meta.fields(@TypeOf(sql))) |field| {
-            @field(stmt, field.name).deinit();
+        inline for (std.meta.fieldNames(@TypeOf(sql))) |field_name| {
+            @field(stmt, field_name).deinit();
         }
         db.deinit();
         wasm_allocator.destroy(db);
