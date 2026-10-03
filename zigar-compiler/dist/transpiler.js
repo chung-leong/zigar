@@ -1741,7 +1741,7 @@ async function getManifestLists(buildPath) {
       names = [];
     }
   }
-  return names.filter(n => /\.txt$/.test(n)).map(n => join(dirPath, n));
+  return names.filter(n => /^\w{32}$/.test(n)).map(n => join(dirPath, n));
 }
 
 async function findSourcePaths(buildPath) {
@@ -1750,24 +1750,21 @@ async function findSourcePaths(buildPath) {
   const involved = {};
   for (const manifestPath of manifestPaths) {
     try {
-      const data = await readFile(manifestPath, 'utf-8');
-      if (data.length > 0) {
-        const lines = data.split(/\r?\n/);
-        // https://ziglang.org/documentation/master/std/#std.Build.Cache.Manifest.writeManifest
-        // size inode mtime bin_digest prefix sub_path
-        const re = /\d+ \d+ \d+ \w+ \d+ (.+)/;
-        for (const line of lines) {
-          const m = re.exec(line);
-          if (m) {
-            const srcPath = m[1];
-            if(isAbsolute(srcPath) && !srcPath.startsWith(realBuildPath) && !srcPath.includes('/.cache/zig/')) {
-              try {
-                await stat(srcPath);
-                involved[srcPath] = true;
-              } catch {};
-            }
-          }
+      const data = await readFile(manifestPath);
+      let offset = 41;
+      while (offset < data.length) {
+        const si = offset;
+        while (data[offset] !== 0) offset++;
+        const ei = offset;
+        const pathBytes = data.subarray(si, ei);
+        const srcPath = pathBytes.toString('utf-8');
+        if(isAbsolute(srcPath) && !srcPath.startsWith(realBuildPath) && !srcPath.includes('/.cache/zig/')) {
+          try {
+            await stat(srcPath);
+            involved[srcPath] = true;
+          } catch {};
         }
+        offset += 42;
       }
       /* c8 ignore next 2 */
     } catch (err) {

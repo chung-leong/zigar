@@ -1,19 +1,20 @@
 const std = @import("std");
 const c_allocator = std.heap.c_allocator;
 const POLL = std.c.POLL;
-const pollfd = switch (builtin.target.os.tag) {
-    .windows => c_int,
-    else => std.c.pollfd,
-};
 const nfds_t = std.c.nfds_t;
 const builtin = @import("builtin");
 
 const c = @import("c");
 const off_t = c.off_t;
-const off64_t = if (@hasDecl(c, "off64_t")) c.off64_t else c.off_t;
 
 const io = @import("../../system.zig").io;
 const fn_transform = @import("../../zigft/fn-transform.zig");
+
+const pollfd = switch (builtin.target.os.tag) {
+    .windows => c_int,
+    else => std.c.pollfd,
+};
+const off64_t = if (@hasDecl(c, "off64_t")) c.off64_t else c.off_t;
 
 const size_t = usize;
 const ssize_t = isize;
@@ -4434,7 +4435,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
                                 const path_wtf8 = converter.convertTo(path) catch return c.STATUS_NO_MEMORY;
                                 const fd = toDescriptor(handle);
                                 var fd_path_buf: [128]u8 = undefined;
-                                const fd_path = std.fmt.bufPrintZ(&fd_path_buf, fd_format_string, .{fd}) catch unreachable;
+                                const fd_path = std.fmt.bufPrintSentinel(&fd_path_buf, fd_format_string, .{fd}, 0) catch unreachable;
                                 var result: c_int = undefined;
                                 if (redirector.symlink(path_wtf8, fd_path, &result) and result >= 0) {
                                     return c.STATUS_SUCCESS;
@@ -4682,7 +4683,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
                             const struct_size = @sizeOf(@TypeOf(info.*));
                             if (length > struct_size) {
                                 var wtf8_buf: [128]u8 = undefined;
-                                const n = std.fmt.bufPrintZ(&wtf8_buf, fd_format_string, .{fd}) catch unreachable;
+                                const n = std.fmt.bufPrintSentinel(&wtf8_buf, fd_format_string, .{fd}, 0) catch unreachable;
                                 // copy it if it fits
                                 if (n.len <= length - struct_size) break :get n;
                             }
@@ -4709,7 +4710,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
                             const struct_size = @sizeOf(@TypeOf(info.*));
                             if (length > struct_size) {
                                 var wtf8_buf: [128]u8 = undefined;
-                                const n = std.fmt.bufPrintZ(&wtf8_buf, fd_format_string, .{fd}) catch unreachable;
+                                const n = std.fmt.bufPrintSentinel(&wtf8_buf, fd_format_string, .{fd}, 0) catch unreachable;
                                 // copy it if it fits
                                 if (n.len <= length - struct_size) break :get n;
                             }
@@ -4745,7 +4746,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
                 switch (object_information_class) {
                     c.ObjectNameInformation => {
                         var wtf8_buf: [128]u8 = undefined;
-                        const name = std.fmt.bufPrintZ(&wtf8_buf, fd_format_string, .{fd}) catch unreachable;
+                        const name = std.fmt.bufPrintSentinel(&wtf8_buf, fd_format_string, .{fd}, 0) catch unreachable;
                         const name_offset = @sizeOf(c.OBJECT_NAME_INFORMATION);
                         if (object_information_length > @sizeOf(c.OBJECT_NAME_INFORMATION)) {
                             const info: *c.OBJECT_NAME_INFORMATION = @ptrCast(@alignCast(object_information));
@@ -5265,7 +5266,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
                 .int => offset,
                 .pointer => |pt| switch (pt.child) {
                     c.union__LARGE_INTEGER => get: {
-                        const offset_ptr: *const c_longlong = @ptrCast(&offset);
+                        const offset_ptr: *const c_longlong = @ptrCast(@alignCast(&offset));
                         break :get offset_ptr.*;
                     },
                     else => offset.*,

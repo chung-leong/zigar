@@ -1719,7 +1719,7 @@ const ModuleHost = struct {
 
 fn throwError(env: *Env, fmt: []const u8, args: anytype) void {
     var buffer: [1024]u8 = undefined;
-    const message = std.fmt.bufPrintZ(&buffer, fmt, args);
+    const message = std.fmt.bufPrintSentinel(&buffer, fmt, args, 0);
     env.throwError(null, message) catch {};
 }
 
