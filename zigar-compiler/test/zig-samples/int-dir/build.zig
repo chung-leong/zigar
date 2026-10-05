@@ -6,7 +6,7 @@ const cfg = @import("build.cfg.zig");
 const extra = @import("build.extra.zig");
 
 pub fn build(b: *std.Build) !void {
-    if (builtin.zig_version.major != 0 or builtin.zig_version.minor != 16) {
+    if (builtin.zig_version.major != 0 or builtin.zig_version.minor != 17) {
         @compileError("Unsupported Zig version");
     }
     const target = b.standardTargetOptions(.{});
@@ -102,6 +102,7 @@ pub fn build(b: *std.Build) !void {
     options.addOption(bool, "omit_variables", cfg.omit_variables);
     options.addOption(bool, "use_redirection", cfg.use_redirection);
     options.addOption(bool, "use_pthread_emulation", cfg.use_pthread_emulation);
+    options.addOption(bool, "persistent", cfg.persistent);
     options.addOption([:0]const u8, "module_path", cfg.module_dir ++ "integers.zig");
     lib.root_module.addOptions("options.zig", options);
     const wf = b.addUpdateSourceFiles();

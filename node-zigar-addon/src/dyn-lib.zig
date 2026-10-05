@@ -22,39 +22,45 @@ pub const DynLib = struct {
         const path_copy = try std.heap.c_allocator.dupeSentinel(u8, path[offset..], 0);
         const handle = switch (builtin.target.os.tag) {
             .windows => load: {
-                break :load c.LoadLibraryA(path_copy.ptr) orelse {
-                    const error_code = c.GetLastError();
-                    var msg_buffer: [*]u8 = undefined;
-                    const len = c.FormatMessageA(
-                        c.FORMAT_MESSAGE_ALLOCATE_BUFFER | c.FORMAT_MESSAGE_FROM_SYSTEM | c.FORMAT_MESSAGE_IGNORE_INSERTS,
-                        null,
-                        error_code,
-                        0,
-                        @ptrCast(&msg_buffer),
-                        0,
-                        null,
-                    );
-                    if (len > 0) {
-                        const msg = msg_buffer[0..len];
-                        std.debug.print("{s}\n", .{msg});
-                    }
-                    return error.UnableToLoadLibrary;
-                };
+                break :load c.LoadLibraryA(path_copy.ptr) orelse return error.UnableToLoadLibrary;
             },
             else => load: {
                 var flags: u32 = c.RTLD_LAZY;
                 if (@hasDecl(c, "RTLD_DEEPBIND")) {
                     flags |= c.RTLD_DEEPBIND;
                 }
-                break :load std.c.dlopen(path_copy, @bitCast(flags)) orelse {
-                    if (std.c.dlerror()) |msg| {
-                        std.debug.print("{s}\n", .{msg});
-                    }
-                    return error.UnableToLoadLibrary;
-                };
+                break :load std.c.dlopen(path_copy, @bitCast(flags)) orelse return error.UnableToLoadLibrary;
             },
         };
         return .{ .handle = handle, .path = path_copy, .is_handle_owner = true };
+    }
+
+    pub fn getLastError(allocator: std.mem.Allocator) ?[:0]const u8 {
+        switch (builtin.target.os.tag) {
+            .windows => {
+                const error_code = c.GetLastError();
+                var msg: [*]u8 = undefined;
+                const len = c.FormatMessageA(
+                    c.FORMAT_MESSAGE_ALLOCATE_BUFFER | c.FORMAT_MESSAGE_FROM_SYSTEM | c.FORMAT_MESSAGE_IGNORE_INSERTS,
+                    null,
+                    error_code,
+                    0,
+                    @ptrCast(&msg),
+                    0,
+                    null,
+                );
+                if (len > 0) {
+                    defer c.LocalFree(msg);
+                    return allocator.dupeSentinel(u8, std.mem.sliceTo(msg, 0), 0) catch null;
+                }
+            },
+            else => {
+                if (std.c.dlerror()) |msg| {
+                    return allocator.dupeSentinel(u8, std.mem.sliceTo(msg, 0), 0) catch null;
+                }
+            },
+        }
+        return null;
     }
 
     pub fn openBySymbol(ptr: *const anyopaque) !@This() {

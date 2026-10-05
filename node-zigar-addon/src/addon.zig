@@ -355,7 +355,13 @@ const ModuleHost = struct {
         defer c_allocator.free(path_bytes);
         _ = try env.getValueStringUtf8(path, path_bytes);
         const path_s = path_bytes[0..path_len];
-        var lib = try DynLib.open(path_s);
+        var lib = DynLib.open(path_s) catch |err| {
+            if (DynLib.getLastError(c_allocator)) |msg| {
+                defer c_allocator.free(msg);
+                env.throwError(null, msg) catch {};
+            }
+            return err;
+        };
         errdefer lib.close();
         const module = lib.lookup(*Module, "zig_module") orelse return error.MissingSymbol;
         if (module.revision != Module.current_revision) return error.IncorrectVersion;
@@ -1713,7 +1719,7 @@ const ModuleHost = struct {
 
 fn throwError(env: *Env, fmt: []const u8, args: anytype) void {
     var buffer: [1024]u8 = undefined;
-    const message = std.fmt.bufPrintZ(&buffer, fmt, args);
+    const message = std.fmt.bufPrintSentinel(&buffer, fmt, args, 0);
     env.throwError(null, message) catch {};
 }
 

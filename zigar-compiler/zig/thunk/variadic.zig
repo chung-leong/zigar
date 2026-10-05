@@ -37,7 +37,11 @@ pub fn call(
             }
             param_types[param_count - 1] = [*]const u8;
             param_attrs[param_count - 1] = .{};
-            break :init @Fn(&param_types, &param_attrs, f.return_type.?, f.attrs);
+            const attrs: std.lang.Type.Fn.Attributes = .{
+                .@"callconv" = f.attrs.@"callconv",
+                .varargs = false,
+            };
+            break :init @Fn(&param_types, &param_attrs, f.return_type.?, attrs);
         };
         var args: std.meta.ArgsTuple(NotVarargFn) = undefined;
         const vararg_offset = switch (arg_count > f.param_types.len) {

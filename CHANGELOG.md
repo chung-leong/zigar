@@ -1,3 +1,9 @@
+## 0.17.0
+
+* Support for Zig 0.17.0
+* Improved error output when loading of shared library failed
+* Fixed out of bound during path resolution
+
 ## 0.16.0
 
 * Support for Zig 0.16.0

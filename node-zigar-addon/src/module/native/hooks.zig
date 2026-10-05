@@ -1,19 +1,20 @@
 const std = @import("std");
 const c_allocator = std.heap.c_allocator;
 const POLL = std.c.POLL;
-const pollfd = switch (builtin.target.os.tag) {
-    .windows => c_int,
-    else => std.c.pollfd,
-};
 const nfds_t = std.c.nfds_t;
 const builtin = @import("builtin");
 
 const c = @import("c");
 const off_t = c.off_t;
-const off64_t = if (@hasDecl(c, "off64_t")) c.off64_t else c.off_t;
 
 const io = @import("../../system.zig").io;
 const fn_transform = @import("../../zigft/fn-transform.zig");
+
+const pollfd = switch (builtin.target.os.tag) {
+    .windows => c_int,
+    else => std.c.pollfd,
+};
+const off64_t = if (@hasDecl(c, "off64_t")) c.off64_t else c.off_t;
 
 const size_t = usize;
 const ssize_t = isize;
@@ -2664,6 +2665,40 @@ pub fn PosixSubstituteLinux(comptime redirector: type) type {
     return struct {
         const posix = PosixSubstitute(redirector);
 
+        pub fn clone(
+            func: *const fn (*anyopaque) callconv(.c) c_int,
+            stack: *anyopaque,
+            flags: u32,
+            arg: *anyopaque,
+            ptid: [*c]c.pid_t,
+            tp: usize, // aka tls
+            ctid: [*c]c.pid_t,
+        ) callconv(.c) c_int {
+            if (flags & c.CLONE_THREAD != 0) {
+                const instance = redirector.Host.getInstance();
+                const info = c_allocator.create(ThreadInfo) catch return @intFromEnum(std.c.E.NOMEM);
+                info.* = .{
+                    .proc = func,
+                    .arg = arg,
+                    .instance = instance,
+                };
+                return Original.clone(setThreadContext, stack, flags, info, ptid, tp, ctid);
+            } else {
+                return Original.clone(func, stack, flags, arg, ptid, tp, ctid);
+            }
+        }
+
+        fn setThreadContext(arg: ?*anyopaque) callconv(.c) c_int {
+            const info: *ThreadInfo = @ptrCast(@alignCast(arg.?));
+            const proc: *const fn (?*anyopaque) callconv(.c) c_int = @ptrCast(@alignCast(info.proc));
+            const orig_arg = info.arg;
+            const instance = info.instance;
+            c_allocator.destroy(info);
+            redirector.Host.initializeThread(instance) catch unreachable;
+            defer redirector.Host.deinitializeThread(instance) catch {};
+            return proc(orig_arg);
+        }
+
         pub const copy_file_range = makeStdHook("copy_file_range");
         pub const sendfile = makeStdHook("sendfile");
         pub const sendfile64 = makeStdHook("sendfile64");
@@ -2675,6 +2710,7 @@ pub fn PosixSubstituteLinux(comptime redirector: type) type {
 
         const Self = @This();
         pub const Original = struct {
+            pub var clone: *const @TypeOf(Self.clone) = undefined;
             pub var copy_file_range: *const @TypeOf(Self.copy_file_range) = undefined;
             pub var sendfile: *const @TypeOf(Self.sendfile) = undefined;
             pub var sendfile64: *const @TypeOf(Self.sendfile64) = undefined;
@@ -4399,7 +4435,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
                                 const path_wtf8 = converter.convertTo(path) catch return c.STATUS_NO_MEMORY;
                                 const fd = toDescriptor(handle);
                                 var fd_path_buf: [128]u8 = undefined;
-                                const fd_path = std.fmt.bufPrintZ(&fd_path_buf, fd_format_string, .{fd}) catch unreachable;
+                                const fd_path = std.fmt.bufPrintSentinel(&fd_path_buf, fd_format_string, .{fd}, 0) catch unreachable;
                                 var result: c_int = undefined;
                                 if (redirector.symlink(path_wtf8, fd_path, &result) and result >= 0) {
                                     return c.STATUS_SUCCESS;
@@ -4647,7 +4683,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
                             const struct_size = @sizeOf(@TypeOf(info.*));
                             if (length > struct_size) {
                                 var wtf8_buf: [128]u8 = undefined;
-                                const n = std.fmt.bufPrintZ(&wtf8_buf, fd_format_string, .{fd}) catch unreachable;
+                                const n = std.fmt.bufPrintSentinel(&wtf8_buf, fd_format_string, .{fd}, 0) catch unreachable;
                                 // copy it if it fits
                                 if (n.len <= length - struct_size) break :get n;
                             }
@@ -4674,7 +4710,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
                             const struct_size = @sizeOf(@TypeOf(info.*));
                             if (length > struct_size) {
                                 var wtf8_buf: [128]u8 = undefined;
-                                const n = std.fmt.bufPrintZ(&wtf8_buf, fd_format_string, .{fd}) catch unreachable;
+                                const n = std.fmt.bufPrintSentinel(&wtf8_buf, fd_format_string, .{fd}, 0) catch unreachable;
                                 // copy it if it fits
                                 if (n.len <= length - struct_size) break :get n;
                             }
@@ -4710,7 +4746,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
                 switch (object_information_class) {
                     c.ObjectNameInformation => {
                         var wtf8_buf: [128]u8 = undefined;
-                        const name = std.fmt.bufPrintZ(&wtf8_buf, fd_format_string, .{fd}) catch unreachable;
+                        const name = std.fmt.bufPrintSentinel(&wtf8_buf, fd_format_string, .{fd}, 0) catch unreachable;
                         const name_offset = @sizeOf(c.OBJECT_NAME_INFORMATION);
                         if (object_information_length > @sizeOf(c.OBJECT_NAME_INFORMATION)) {
                             const info: *c.OBJECT_NAME_INFORMATION = @ptrCast(@alignCast(object_information));
