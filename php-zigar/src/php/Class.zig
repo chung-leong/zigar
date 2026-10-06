@@ -1,4 +1,4 @@
-pub const std = @import("std");
+const std = @import("std");
 
 pub const Custom = @import("Class/Custom.zig").@"fn";
 const php = @import("root.zig");

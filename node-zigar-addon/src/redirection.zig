@@ -4,7 +4,7 @@ const builtin = @import("builtin");
 
 const c = @import("c");
 
-const DynLib = @import("dyn-lib.zig").DynLib;
+const DynLib = @import("DynLib.zig");
 const io = @import("system.zig").io;
 const syscall = @import("syscall.zig");
 

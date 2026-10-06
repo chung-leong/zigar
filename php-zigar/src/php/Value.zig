@@ -209,6 +209,11 @@ pub fn getPointer(self: *const @This()) !*anyopaque {
     };
 }
 
+pub fn getPointerOf(self: *const @This(), comptime T: type) !*T {
+    const ptr = try self.getPointer();
+    return @ptrCast(@alignCast(ptr));
+}
+
 pub fn getDictionary(self: *const @This()) !Dictionary {
     return switch (self.kind()) {
         .array => get: {
@@ -273,9 +278,8 @@ pub fn stringify(self: *const @This()) !*String {
     return copy.string();
 }
 
-pub fn cast(self: *const @This(), comptime desired_kind: Kind) @This() {
-    var tmp = self.*;
-    const zval: *c.zval = @ptrCast(&tmp);
+pub fn convert(self: *@This(), comptime desired_kind: Kind) void {
+    const zval: *c.zval = @ptrCast(self);
     switch (desired_kind) {
         .boolean => pi.convert_to_boolean(zval),
         .integer => pi.convert_to_long(zval),
@@ -286,6 +290,11 @@ pub fn cast(self: *const @This(), comptime desired_kind: Kind) @This() {
         .null => pi.convert_to_null(zval),
         else => @compileError("Illegal casting operation: " ++ @tagName(desired_kind)),
     }
+}
+
+pub fn cast(self: *const @This(), comptime desired_kind: Kind) @This() {
+    var tmp = self.*;
+    tmp.convert(desired_kind);
     return tmp;
 }
 

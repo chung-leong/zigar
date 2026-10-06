@@ -21,6 +21,14 @@ pub fn class(self: *const @This()) *const Class {
     return @ptrCast(self.impl.ce);
 }
 
+pub fn handle(self: *const @This()) c_long {
+    return @ptrCast(self.impl.handle);
+}
+
+pub fn properties(self: *const @This()) *Array {
+    return @ptrCast(self.impl.properties);
+}
+
 pub fn create(ce: *const Class, params: []const Value) !*@This() {
     var zval: c.zval = undefined;
     const result = pi.object_init_ex(&zval, @ptrCast(@constCast(ce)));
@@ -43,6 +51,11 @@ pub fn create(ce: *const Class, params: []const Value) !*@This() {
 pub fn createFromName(name: anytype, params: []const Value) !*@This() {
     const ce = Class.find(name) orelse return error.ClassNotFound;
     return .create(ce, params);
+}
+
+pub fn createStandard() !*@This() {
+    const ce = Class.builtin(.standard);
+    return .create(ce, &.{});
 }
 
 pub fn retain(self: *@This()) *@This() {

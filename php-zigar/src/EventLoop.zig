@@ -12,12 +12,7 @@ const String = php_ng.String;
 const Value = php_ng.Value;
 const N = String.static;
 
-pub const LoopType = enum {
-    temporary,
-    revolt,
-};
-
-pub fn EventLoop(comptime cb: fn () void) type {
+pub fn @"fn"(comptime cb: fn () void) type {
     const Temporary = struct {
         fiber: Value,
         fiber_cache: Object.MethodSet(.{ .start, .@"resume" }).CallCache,
@@ -243,16 +238,6 @@ pub fn EventLoop(comptime cb: fn () void) type {
         }
     };
     return struct {
-        loop: Loop = .{ .temporary = undefined },
-        stream: Value = undefined,
-        ready: bool = false,
-        pendingFiber: ?Value = null,
-
-        const Loop = union(LoopType) {
-            temporary: Temporary,
-            revolt: Revolt,
-        };
-
         pub fn reset(self: *@This()) void {
             self.deinit();
             self.loop = .{ .temporary = undefined };
@@ -359,5 +344,17 @@ pub fn EventLoop(comptime cb: fn () void) type {
             const self: *@This() = @ptrCast(@alignCast(ptr));
             self.deinit();
         }
+
+        pub const LoopType = enum { temporary, revolt };
+
+        const Loop = union(LoopType) {
+            temporary: Temporary,
+            revolt: Revolt,
+        };
+
+        loop: Loop = .{ .temporary = undefined },
+        stream: Value = undefined,
+        ready: bool = false,
+        pendingFiber: ?Value = null,
     };
 }

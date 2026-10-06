@@ -1,28 +1,36 @@
 const std = @import("std");
 
-pub const Boolean = @import("accessor/boolean.zig").Boolean;
-pub const Constant = @import("accessor/constant.zig").Constant;
-pub const Float = @import("accessor/float.zig").Float;
-pub const Gmp = @import("accessor/gmp.zig").Gmp;
-pub const Inaccessible = @import("accessor/inaccessible.zig").Inaccessible;
-pub const Int = @import("accessor/int.zig").Int;
-pub const Null = @import("accessor/null.zig").Null;
-pub const Property = @import("accessor/property.zig").Property;
-pub const Slot = @import("accessor/slot.zig").Slot;
-pub const Vector = @import("accessor/vector.zig").Vector;
-pub const Void = @import("accessor/void.zig").Void;
-const ByteBuffer = @import("buffer.zig").ByteBuffer;
+const interface = @import("./module/native/interface.zig");
+const MemberFlags = interface.MemberFlags;
+const MemberType = interface.MemberType;
+const StructureFlags = interface.StructureFlags;
+const StructurePurpose = interface.StructurePurpose;
+const StructureType = interface.StructureType;
+pub const Boolean = @import("accessor/Boolean.zig").@"fn";
+pub const Constant = @import("accessor/Constant.zig");
+pub const Float = @import("accessor/Float.zig").@"fn";
+pub const Gmp = @import("accessor/gmp.zig");
+pub const Inaccessible = @import("accessor/Inaccessible.zig");
+pub const Int = @import("accessor/Int.zig").@"fn";
+pub const Null = @import("accessor/Null.zig");
+pub const Property = @import("accessor/Property.zig");
+pub const Slot = @import("accessor/Slot.zig").@"fn";
+pub const Vector = @import("accessor/Vector.zig").@"fn";
+pub const Void = @import("accessor/Void.zig");
+const ByteBuffer = @import("ByteBuffer.zig");
 const Error = @import("failure.zig").Error;
-const php = @import("php.zig");
-const HashTable = php.HashTable;
-const Object = php.Object;
-const Value = php.Value;
+const php_ng = @import("php/root.zig");
+const Array = php_ng.Array;
+const Class = php_ng.Class;
+const Object = php_ng.Object;
+const Value = php_ng.Value;
 const structure = @import("structure.zig");
 const invokeMethod = structure.invokeMethod;
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 const ZigObject = @import("object.zig").ZigObject;
 
-pub const Scope = enum { .instance, .static };
+pub const Scope = enum { instance, static };
+pub const SlotUsage = enum(u2) { none, single, multiple };
 pub const Parameters = struct {
     scope: Scope,
     bit_offset: ?usize,
@@ -33,6 +41,8 @@ pub const Parameters = struct {
     flags: MemberFlags,
     slot: usize,
     class: *Class,
+    use_runtime_safety: bool,
+    slot_usage: SlotUsage,
 };
 
 pub fn get(params: Parameters) !Any {
@@ -90,16 +100,16 @@ pub fn get(params: Parameters) !Any {
                                 acc.bit_size = params.bit_size;
                             }
                             if (@hasField(Acc, "runtime_check")) {
-                                acc.runtime_check = self.host.useRuntimeSafety();
+                                acc.runtime_check = params.use_runtime_safety;
                             }
-                            break @unionInit(accessor.Any, field_name, acc);
+                            break @unionInit(Any, field_name, acc);
                         }
                     }
                 }
             },
             .slot => if (params.structure == .object or params.structure == .literal or params.structure == .type) {
                 if (acc.attributes.prebaked == prebaked) {
-                    const slots: @TypeOf(acc.attributes.slots) = switch (slot_usage) {
+                    const slots: @TypeOf(acc.attributes.slots) = switch (params.slot_usage) {
                         .multiple => .multiple,
                         else => .single,
                     };
@@ -116,8 +126,8 @@ pub fn get(params: Parameters) !Any {
                             .typed_array
                         else if (params.flags.is_clamped_array)
                             .clamped_array
-                        else if (member.class.flags.common.has_value)
-                            .none
+                            // else if (member.class.flags.common.has_value)
+                            //     .none
                         else
                             null;
                         if (@hasField(Acc, "slot")) {
@@ -136,10 +146,10 @@ pub fn get(params: Parameters) !Any {
                         if (@hasField(Acc, "byte_offset")) {
                             acc.byte_offset = byte_offset;
                         }
-                        if (@hasField(Acc, "class")) {
-                            acc.class = member.class;
-                        }
-                        break @unionInit(accessor.Any, field_name, acc);
+                        // if (@hasField(Acc, "class")) {
+                        //     acc.class = member.class;
+                        // }
+                        break @unionInit(Any, field_name, acc);
                     }
                 }
             },
@@ -172,32 +182,33 @@ pub fn get(params: Parameters) !Any {
                                 if (@hasField(Acc, "bit_size")) {
                                     acc.bit_size = params.bit_size;
                                 }
-                                break @unionInit(accessor.Any, field_name, acc);
+                                break @unionInit(Any, field_name, acc);
                             }
                         },
                     }
                 }
             },
             .null => if (params.structure == .null or params.structure == .undefined) {
-                break @unionInit(accessor.Any, field_name, acc);
+                break @unionInit(Any, field_name, acc);
             },
             .constant, .property, .inaccessible => {},
         }
     } else .{ .inaccessible = .{} };
     if (accessors == .inaccessible) {
-        if (self.type == .vector and self.flags.common.has_pointer) {
-            self.type = .array;
-            return get(member, scope, .multiple);
-        }
+        // if (self.type == .vector and self.flags.common.has_pointer) {
+        //     self.type = .array;
+        //     return get(member, scope, .multiple);
+        // }
     }
+    _ = &accessors;
     if (params.structure == .int or params.structure == .uint) {
-        if (member.class.type == .@"enum" or member.class.type == .error_set) {
-            // use constant accessor to translate integers to enum and error set objects
-            const int_accessors = accessors;
-            accessors = .{
-                .constant = try .init(int_accessors, member.class),
-            };
-        }
+        // if (member.class.type == .@"enum" or member.class.type == .error_set) {
+        //     // use constant accessor to translate integers to enum and error set objects
+        //     const int_accessors = accessors;
+        //     accessors = .{
+        //         .constant = try .init(int_accessors, member.class),
+        //     };
+        // }
     }
     return accessors;
 }
@@ -230,28 +241,26 @@ pub const Transform = enum {
     clamped_array,
 
     pub fn apply(self: @This(), value: *Value) Error!void {
-        if (php.getValueObject(value) catch null) |obj| {
-            if (ZigClassEntry.isZig(obj.ce)) {
+        if (value.getObject() catch null) |obj| {
+            if (obj.isInstanceOf()) {
                 value.* = try invokeMethod(obj, "getValue", .{self});
-                php.release(obj);
+                obj.release();
                 return;
-            } else if (php.isGmpObject(obj)) {
+            } else if (obj.class().name().match("GMP")) {
                 // leave GMP object as is
                 if (self == .integer) return;
             }
         }
-        const value_type: ?php.ValueType = switch (self) {
+        const value_kind: ?Value.Kind = switch (self) {
             .string => .string,
-            .integer => .long,
-            .float => .double,
+            .integer => .integer,
+            .float => .float,
             .boolean => .boolean,
             .none, .plain => null,
             else => return error.Unsupported,
         };
-        if (value_type) |vt| {
-            if (php.getValueType(value) != vt) {
-                try php.convertValue(value, vt);
-            }
+        if (value_kind) |vk| {
+            if (value.kind() != vk) try value.convert(vk);
         }
     }
 };
@@ -262,16 +271,16 @@ pub fn WithBitOffset(comptime T: type, comptime bit_offset: u3) type {
     return @Struct(.@"packed", null, &field_names, &field_types, &field_attrs);
 }
 
-pub fn getOpaqueTarget(comptime T: type, value: *const Value) !*T {
-    const obj = php.getValueObject(value) catch unreachable;
-    const class = ZigClassEntry.fromObject(obj);
-    if (class.type != .slice) {
-        return error.NotOpaque;
-    }
-    const slice_struct = structure.Slice.fromObject(obj);
-    if (@intFromPtr(slice_struct.buffer.bytes.ptr) == 0) return error.NullPointer;
-    return @ptrCast(@alignCast(slice_struct.buffer.bytes.ptr));
-}
+// pub fn getOpaqueTarget(comptime T: type, value: *const Value) !*T {
+//     const obj = php.getValueObject(value) catch unreachable;
+//     const class = ZigClassEntry.fromObject(obj);
+//     if (class.type != .slice) {
+//         return error.NotOpaque;
+//     }
+//     const slice_struct = structure.Slice.fromObject(obj);
+//     if (@intFromPtr(slice_struct.buffer.bytes.ptr) == 0) return error.NullPointer;
+//     return @ptrCast(@alignCast(slice_struct.buffer.bytes.ptr));
+// }
 
 pub const Any = union(enum) {
     pub fn getType(self: @This()) Type {
@@ -360,7 +369,7 @@ pub const Any = union(enum) {
                         .table => try acc.getEntry(&source.table, vivicate),
                         .buffer, .none, .object => @compileError("Impossible operation"),
                     } orelse return null;
-                    return php.getValueObject(value_ptr) catch null;
+                    return value_ptr.getObject() catch null;
                 } else {
                     return null;
                 }
@@ -477,7 +486,7 @@ pub const Any = union(enum) {
                         .table => try acc.getElementEntry(&source.table, index, vivicate),
                         .buffer, .none, .object => @compileError("Impossible operation"),
                     } orelse return null;
-                    return php.getValueObject(value_ptr) catch null;
+                    return value_ptr.getObject() catch null;
                 } else {
                     return null;
                 }

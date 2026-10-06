@@ -6,12 +6,12 @@ const hooks = @import("module/native/hooks.zig");
 const ModuleGeneric = @import("module/native/interface.zig").Module;
 const ModuleHost = @import("ModuleHost.zig");
 const php_ng = @import("php/root.zig");
-const php_al = php_ng.allocator;
 const Array = php_ng.Array;
 const Object = php_ng.Object;
 const String = php_ng.String;
 const N = String.static;
 const Value = php_ng.Value;
+const php_al = php_ng.allocator;
 
 pub fn init(host: *ModuleHost) !*@This() {
     const self = try php_al.create(@This());
@@ -53,18 +53,19 @@ pub fn activateStructures(self: *@This()) !*Object {
     }
     // the last class to get finalized is the root namespace
     if (self.class_list.items.len == 0) return error.NoRoot;
-    const root_obj = self.class_list.items[0];
+    // const root_obj = self.class_list.items[0];
     // initially, the host holds references to class objects through class_list
     // prior to destroying that list we need to flip the relationship so that
     // these objects own the host instead
-    for (self.class_list.items) |class_obj| {
-        const class = ZigClassEntry.fromObject(class_obj);
-        try class.activate();
-    }
-    const root_class = ZigClassEntry.fromObject(root_obj);
-    const root_static = root_class.getStaticData(structure.Struct);
-    try root_static.markAsRoot();
-    return root_obj.retain();
+    // for (self.class_list.items) |class_obj| {
+    //     const class = ZigClassEntry.fromObject(class_obj);
+    //     try class.activate();
+    // }
+    // const root_class = ZigClassEntry.fromObject(root_obj);
+    // const root_static = root_class.getStaticData(structure.Struct);
+    // try root_static.markAsRoot();
+    // return root_obj.retain();
+    return null;
 }
 
 fn obtainHandle(self: *@This(), value: Value) Handle {
@@ -158,29 +159,33 @@ pub fn createInstance(self: *@This(), structure_h: Handle, dv_h: Handle, prefill
     const structure_v = self.dereference(structure_h);
     const class_value = try structure_v.get(N("class"));
     const class_obj = try class_value.getObject();
+    _ = class_obj;
+    _ = dv_h;
+    _ = prefilled_table_h;
+    return error.ToDo;
     // const class = ZigClassEntry.fromObject(class_obj);
-    if (!class.status.defined) {
-        self.has_deferred = true;
-        const deferred_args = try php.allocator.alloc(?Handle, 3);
-        deferred_args[0] = structure_h;
-        deferred_args[1] = dv_h;
-        deferred_args[2] = prefilled_table_h;
-        const deferred = php.createValuePointer(@ptrCast(deferred_args.ptr));
-        return self.addHandle(deferred);
-    }
-    const memory = self.dereference(dv_h);
-    const prefilled_table = if (prefilled_table_h) |vh| self.dereference(vh) else null;
-    const buf = try php.getValuePointer(*ByteBuffer, memory);
-    const instance = try class.obtainObjectFromBuffer(buf, prefilled_table);
-    const value = php.createValueObject(instance);
-    if (instance.gc.refcount > 1) {
-        if (self.findHandle(value)) |handle| {
-            // existing object--decrement ref count
-            instance.subtractRef;
-            return handle;
-        }
-    }
-    return self.addHandle(value);
+    // if (!class.status.defined) {
+    //     self.has_deferred = true;
+    //     const deferred_args = try php_al.alloc(?Handle, 3);
+    //     deferred_args[0] = structure_h;
+    //     deferred_args[1] = dv_h;
+    //     deferred_args[2] = prefilled_table_h;
+    //     const deferred: Value = .fromPointer(@ptrCast(deferred_args.ptr));
+    //     return self.addHandle(deferred);
+    // }
+    // const memory = self.dereference(dv_h);
+    // const prefilled_table = if (prefilled_table_h) |vh| self.dereference(vh) else null;
+    // const buf = try memory.getPointerOf(ByteBuffer);
+    // const instance = try class.obtainObjectFromBuffer(buf, prefilled_table);
+    // const value: Value = .fromObject(instance);
+    // if (instance.gc.refcount > 1) {
+    //     if (self.findHandle(value)) |handle| {
+    //         // existing object--decrement ref count
+    //         instance.subtractRef;
+    //         return handle;
+    //     }
+    // }
+    // return self.addHandle(value);
 }
 
 pub fn createTemplate(self: *@This(), dv_h: ?Handle, slots_h: ?Handle) !Handle {
@@ -268,10 +273,11 @@ pub fn setStructure(self: *@This(), key_bytes: [*]const u8, key_len: usize, hand
         const structure_v = self.dereference(structure_h);
         const structure = try structure_v.getArray();
         self.structure_map.set(key_str, structure_v);
+        _ = structure;
         // const class_obj = try ZigClassEntry.create(self.host, structure_v);
-        const class_v: Value = .fronObject(class_obj);
-        try structure.set(N("class"), &class_v);
-        try self.class_list.append(php_al, class_obj);
+        // const class_v: Value = .fronObject(class_obj);
+        // try structure.set(N("class"), &class_v);
+        // try self.class_list.append(php_al, class_obj);
     } else {
         self.structure_map.delete.delete(key_str);
     }
@@ -280,39 +286,45 @@ pub fn setStructure(self: *@This(), key_bytes: [*]const u8, key_len: usize, hand
 pub fn beginStructure(self: *@This(), structure_h: Handle) !void {
     const structure_v = self.dereference(structure_h);
     const structure = try structure_v.getArray();
-    const class_v = try structure.get(N("class"));
-    const class_obj = try class_v.getObject();
-    const class = try ZigClassEntry.fromValue(class_value);
-    try class.define(structure_v);
+    _ = structure;
+    // const class_v = try structure.get(N("class"));
+    // const class_obj = try class_v.getObject();
+    // const class = try ZigClassEntry.fromValue(class_value);
+    // try class.define(structure_v);
 }
 
 pub fn finishStructure(self: *@This(), structure_h: Handle) !void {
     const structure_v = self.dereference(structure_h);
     const structure = try structure_v.getArray();
-    const class_value = try structure.get(N("class"));
-    const class_obj = try class_v.getObject();
-    const class = try ZigClassEntry.fromValue(class_value);
-    try class.finalize(structure_v);
+    _ = structure;
+    // const class_value = try structure.get(N("class"));
+    // const class_obj = try class_v.getObject();
+    // const class = try ZigClassEntry.fromValue(class_value);
+    // try class.finalize(structure_v);
 }
 
 pub fn enableCallback(self: *@This(), structure_h: Handle, template_h: Handle, member_flags_h: Handle) !void {
-    const structure_v = self.dereference(structure_h);
-    const structure = try structure_v.getArray();
-    const template = self.dereference(template_h);
-    const member_flags = self.dereference(member_flags_h);
-    // attach static template, which holds the JS controller pointer
-    const class_v = try structure.get(N("class"));
-    const class_obj = try class_v.getObject();
-    const class = try ZigClassEntry.fromValue(class_v);
-    if (class.status.finalized) {
-        try class.setStaticTemplate(template);
-    } else {
-        const func_static_v = try structure_v.get(N("static"));
-        const func_static_obj = try func_static_v.getObject();
-        try func_static_obj.set(N("template"), template);
-    }
-    // set argument flags
-    try class.setArgumentFlags(member_flags);
+    _ = self;
+    _ = structure_h;
+    _ = template_h;
+    _ = member_flags_h;
+    // const structure_v = self.dereference(structure_h);
+    // const structure = try structure_v.getArray();
+    // const template = self.dereference(template_h);
+    // const member_flags = self.dereference(member_flags_h);
+    // // attach static template, which holds the JS controller pointer
+    // const class_v = try structure.get(N("class"));
+    // const class_obj = try class_v.getObject();
+    // const class = try ZigClassEntry.fromValue(class_v);
+    // if (class.status.finalized) {
+    //     try class.setStaticTemplate(template);
+    // } else {
+    //     const func_static_v = try structure_v.get(N("static"));
+    //     const func_static_obj = try func_static_v.getObject();
+    //     try func_static_obj.set(N("template"), template);
+    // }
+    // // set argument flags
+    // try class.setArgumentFlags(member_flags);
 }
 
 pub const Handle = *opaque {};

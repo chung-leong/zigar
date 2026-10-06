@@ -3,11 +3,11 @@ const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
 const AbortSignal = @import("abort-signal.zig").AbortSignal;
-const BufferMap = @import("buffer.zig").BufferMap;
-const ByteBuffer = @import("buffer.zig").ByteBuffer;
-const CallDispatcher = @import("dispatch.zig").CallDispatcher;
-const DynLib = @import("dyn-lib.zig").DynLib;
-const GarbageCollectionBuffer = @import("gc.zig").GarbageCollectionBuffer;
+const BufferMap = @import("BufferMap.zig");
+const ByteBuffer = @import("ByteBuffer.zig");
+const CallDispatcher = @import("CallDispatcher.zig");
+const DynLib = @import("DynLib.zig");
+const GarbageCollectionBuffer = @import("GarbageCollectionBuffer.zig");
 const io = @import("system.zig").io;
 const js_compat = @import("js-compat.zig");
 const ArgStruct = @import("module/arg-struct.zig").ArgStruct;
@@ -20,10 +20,10 @@ const Object = php_ng.Object;
 const String = php_ng.String;
 const N = String.static;
 const Value = php_ng.Value;
+const camelize = php_ng.util.camelize;
+const php_al = php_ng.allocator;
 const structure = @import("structure.zig");
-const StructureImporter = @import("import.zig").StructureImporter;
-const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
-const ZigException = @import("exception.zig").ZigException;
+const StructureImporter = @import("StructureImporter.zig");
 const fn_transform = @import("zigft/fn-transform.zig");
 
 const Module = ModuleGeneric(StructureImporter.Handle);
@@ -32,10 +32,10 @@ const AllocatorMethodId = enum(usize) { alloc = 1, resize, remap, free };
 threadlocal var prev_cache_mask: usize = 0;
 
 pub fn setup() !void {
-    try ZigClassEntry.registerRootClass();
-    errdefer ZigClassEntry.unregisterRootClass();
-    try ZigException.registerClass();
-    errdefer ZigException.unregisterClass();
+    // try ZigClassEntry.registerRootClass();
+    // errdefer ZigClassEntry.unregisterRootClass();
+    // try ZigException.registerClass();
+    // errdefer ZigException.unregisterClass();
     try AbortSignal.registerClass();
     errdefer AbortSignal.unregisterClass();
     try js_compat.registerClasses();
@@ -43,8 +43,8 @@ pub fn setup() !void {
 }
 
 pub fn shutdown() void {
-    ZigClassEntry.unregisterRootClass();
-    ZigException.unregisterClass();
+    // ZigClassEntry.unregisterRootClass();
+    // ZigException.unregisterClass();
     AbortSignal.unregisterClass();
     js_compat.unregisterClasses();
     CallDispatcher.uninstallHandlers();
@@ -58,15 +58,15 @@ pub fn load(path: []const u8) !Value {
     if (module.attributes.persistent) {
         try lib.retain();
     }
-    var self: *@This() = try php.allocator.create(@This());
-    errdefer php.allocator.destroy(self);
+    var self: *@This() = try php_al.create(@This());
+    errdefer php_al.destroy(self);
     const cache_mask = std.hash.CityHash64.hash(std.mem.asBytes(&prev_cache_mask));
     self.* = .{
         .cache_mask = cache_mask,
         .module = module,
-        .module_path = php.createString(std.mem.sliceTo(module.module_path, 0)),
-        .plain_object_table = php.createHashTable(null),
-        .exception_table = php.createHashTable(php.getDestructor(.value)),
+        .module_path = .create(std.mem.sliceTo(module.module_path, 0)),
+        .plain_object_table = .createNonDestructive(),
+        .exception_table = .create(),
         .library = lib,
     };
     // bump ref count to prevent release() from activating when we error out of this function
@@ -86,10 +86,10 @@ pub fn load(path: []const u8) !Value {
     try self.runThunk(thunk_address, 0xDEADC0DE, 0xDEADC0DE);
     // activate acquired structures and get the root
     const root_class_obj = try self.importer.activateStructures();
-    errdefer php.release(root_class_obj);
+    root_class_obj.release();
     // release the ref added above
     self.release();
-    return php.createValueObject(root_class_obj);
+    return .fromObject(root_class_obj);
 }
 
 pub fn addRef(self: *@This()) void {
@@ -100,16 +100,16 @@ pub fn release(self: *@This()) void {
     self.ref_count -= 1;
     if (self.ref_count == 0) {
         // std.debug.print("freeing host\n", .{});
-        php.destroyHashTable(&self.plain_object_table);
-        php.destroyHashTable(&self.exception_table);
-        php.release(self.module_path);
+        self.plain_object_table.release();
+        self.exception_table.release();
+        self.module_path.release();
         self.freeAllocatorVTable();
         self.unclaimed_buffer_map.deinit();
         self.object_map.deinit();
         self.dispatcher.deinit();
         self.gc_buffer.deinit();
         if (self.library) |*lib| lib.close();
-        php.allocator.destroy(self);
+        php_al.destroy(self);
     }
 }
 
@@ -197,44 +197,36 @@ pub fn runVariadicThunk(self: *@This(), thunk_address: usize, fn_address: usize,
 
 const PlainObject = struct {
     value: Value,
-    hash_table: *HashTable,
+    array: *Array,
     status: enum { new, existing },
 
     pub fn add(self: *@This(), name: *String, value: *const Value) void {
-        if (php.getValueType(&self.value) == .array) {
-            _ = php.appendHashEntryRef(self.hash_table, value);
+        if (self.value.kind() == .array) {
+            self.array.append(name, value);
         } else {
-            php.setHashEntryRef(self.hash_table, name, value);
+            self.array.set(name, value);
         }
     }
 };
 
-pub fn getPlainObject(self: *@This(), obj: *Object, is_tuple: bool) PlainObject {
-    const key: i32 = @bitCast(obj.handle);
-    if (php.getHashEntry(&self.plain_object_table, key) catch null) |existing| {
-        php.addRef(existing);
-        return .{
-            .value = existing.*,
-            .hash_table = php.getValueHashTable(existing) catch unreachable,
-            .status = .existing,
-        };
+pub fn getPlainObject(self: *@This(), src_obj: *Object, is_tuple: bool) PlainObject {
+    const key: i32 = @bitCast(src_obj.handle());
+    if (self.plain_object_table.get(key) catch null) |existing| {
+        return .{ .value = existing.retain(), .array = existing.array(), .status = .existing };
     } else {
-        const value = switch (is_tuple) {
-            true => php.createValueArray(null),
-            false => php.createValueObject(null),
-        };
-        php.setHashEntry(&self.plain_object_table, key, &value);
-        return .{
-            .value = value,
-            .hash_table = php.getValueHashTable(&value) catch unreachable,
-            .status = .new,
-        };
+        if (is_tuple) {
+            const arr: *Array = .create();
+            return .{ .value = .fromArray(arr), .array = arr, .status = .new };
+        } else {
+            const obj: *Object = .createStandard();
+            return .{ .value = .fromObject(obj), .array = obj.properties(), .status = .new };
+        }
     }
 }
 
-pub fn removePlainObject(self: *@This(), obj: *Object) void {
-    const key: i32 = @bitCast(obj.handle);
-    _ = php.removeHashEntry(&self.plain_object_table, key);
+pub fn removePlainObject(self: *@This(), src_obj: *Object) void {
+    const key: i32 = @bitCast(src_obj.handle());
+    self.plain_object_table.delete(key);
 }
 
 pub fn isRedirecting(self: *@This()) bool {
@@ -245,57 +237,57 @@ pub fn useRuntimeSafety(self: *@This()) bool {
     return self.module.attributes.runtime_safety;
 }
 
-pub fn findException(self: *@This(), key: anytype) ?*ZigException {
-    const entry = php.getHashEntry(&self.exception_table, key) catch return null;
-    return ZigException.fromValue(entry) catch unreachable;
-}
+// pub fn findException(self: *@This(), key: anytype) ?*ZigException {
+//     const entry = php.getHashEntry(&self.exception_table, key) catch return null;
+//     return ZigException.fromValue(entry) catch unreachable;
+// }
 
-pub fn addException(self: *@This(), name: *String, code: Long) !*ZigException {
-    const ex_obj: *Object = try ZigException.create(name, code);
-    defer php.release(ex_obj);
-    const ex_struct = ZigException.fromObject(ex_obj);
-    const ex_value = php.createValueObject(ex_obj);
-    const message = php.getValueString(&ex_struct.message) catch unreachable;
-    php.setHashEntryRef(&self.exception_table, name, &ex_value);
-    php.setHashEntryRef(&self.exception_table, message, &ex_value);
-    php.setHashEntryRef(&self.exception_table, code, &ex_value);
-    return ex_struct;
-}
+// pub fn addException(self: *@This(), name: *String, code: c_long) !*ZigException {
+//     const ex_obj: *Object = try ZigException.create(name, code);
+//     defer php.release(ex_obj);
+//     const ex_struct = ZigException.fromObject(ex_obj);
+//     const ex_value: Value = .fromObject(ex_obj);
+//     const message = php.getValueString(&ex_struct.message) catch unreachable;
+//     self.exception_table.set(name, ex_value);
+//     self.exception_table.set(message, ex_value);
+//     self.exception_table.set(code, ex_value);
+//     return ex_struct;
+// }
 
-pub fn getAllocator(self: *@This(), allocator_class: *ZigClassEntry) !std.mem.Allocator {
-    if (self.allocator_vtable == null) {
-        const vtable_ptr_class = if (allocator_class.getMember(.instance, N("vtable"))) |m| m.class else |_| return error.Unexpected;
-        const vtable_class = if (vtable_ptr_class.getMember(.instance, 0)) |m| m.class else |_| return error.Unexpected;
-        const exports = self.module.exports;
-        var vtable: std.mem.Allocator.VTable = undefined;
-        var failure_index: usize = undefined;
-        const enum_field_names = @typeInfo(AllocatorMethodId).@"enum".field_names;
-        errdefer {
-            inline for (enum_field_names, 0..) |field_name, i| {
-                if (i == failure_index) break;
-                const thunk_address = @intFromPtr(@field(vtable, field_name));
-                var fn_id: usize = undefined;
-                const controller_address = self.allocator_controllers[i];
-                _ = exports.destroy_js_thunk(controller_address, thunk_address, &fn_id);
-            }
-        }
-        inline for (enum_field_names, 0..) |field_name, i| {
-            errdefer failure_index = i;
-            const ptr_class = if (vtable_class.getMember(.instance, N(field_name))) |m| m.class else |_| return error.Unexpected;
-            const fn_class = if (ptr_class.getMember(.instance, 0)) |m| m.class else |_| return error.Unexpected;
-            const fn_static = fn_class.getStaticData(structure.Function);
-            const fn_id = @intFromEnum(@field(AllocatorMethodId, field_name));
-            const controller_address = fn_static.controller_address;
-            var thunk_address: usize = 0;
-            const result = exports.create_js_thunk(controller_address, fn_id, &thunk_address);
-            if (result != .SUCCESS) return error.Failure;
-            @field(vtable, field_name) = @ptrFromInt(thunk_address);
-            self.allocator_controllers[i] = controller_address;
-        }
-        self.allocator_vtable = vtable;
-    }
-    return .{ .ptr = self, .vtable = &self.allocator_vtable.? };
-}
+// pub fn getAllocator(self: *@This(), allocator_class: *ZigClassEntry) !std.mem.Allocator {
+//     if (self.allocator_vtable == null) {
+//         const vtable_ptr_class = if (allocator_class.getMember(.instance, N("vtable"))) |m| m.class else |_| return error.Unexpected;
+//         const vtable_class = if (vtable_ptr_class.getMember(.instance, 0)) |m| m.class else |_| return error.Unexpected;
+//         const exports = self.module.exports;
+//         var vtable: std.mem.Allocator.VTable = undefined;
+//         var failure_index: usize = undefined;
+//         const enum_field_names = @typeInfo(AllocatorMethodId).@"enum".field_names;
+//         errdefer {
+//             inline for (enum_field_names, 0..) |field_name, i| {
+//                 if (i == failure_index) break;
+//                 const thunk_address = @intFromPtr(@field(vtable, field_name));
+//                 var fn_id: usize = undefined;
+//                 const controller_address = self.allocator_controllers[i];
+//                 _ = exports.destroy_js_thunk(controller_address, thunk_address, &fn_id);
+//             }
+//         }
+//         inline for (enum_field_names, 0..) |field_name, i| {
+//             errdefer failure_index = i;
+//             const ptr_class = if (vtable_class.getMember(.instance, N(field_name))) |m| m.class else |_| return error.Unexpected;
+//             const fn_class = if (ptr_class.getMember(.instance, 0)) |m| m.class else |_| return error.Unexpected;
+//             const fn_static = fn_class.getStaticData(structure.Function);
+//             const fn_id = @intFromEnum(@field(AllocatorMethodId, field_name));
+//             const controller_address = fn_static.controller_address;
+//             var thunk_address: usize = 0;
+//             const result = exports.create_js_thunk(controller_address, fn_id, &thunk_address);
+//             if (result != .SUCCESS) return error.Failure;
+//             @field(vtable, field_name) = @ptrFromInt(thunk_address);
+//             self.allocator_controllers[i] = controller_address;
+//         }
+//         self.allocator_vtable = vtable;
+//     }
+//     return .{ .ptr = self, .vtable = &self.allocator_vtable.? };
+// }
 
 pub fn freeAllocatorVTable(self: *@This()) void {
     const vtable = self.allocator_vtable orelse return;
@@ -409,5 +401,5 @@ allocator_controllers: [4]usize = undefined,
 unclaimed_buffer_map: BufferMap = .{},
 object_map: ObjectMap = .{},
 gc_buffer: GarbageCollectionBuffer = .empty,
-plain_object_table: HashTable,
-exception_table: HashTable,
+plain_object_table: *Array,
+exception_table: *Array,

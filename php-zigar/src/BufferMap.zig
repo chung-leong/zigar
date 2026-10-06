@@ -7,9 +7,6 @@ const php_ng = @import("php/root.zig");
 const String = php_ng.String;
 const php_al = php_ng.allocator;
 
-const Map = MemoryMap(*ByteBuffer, php_al);
-const SearchResult = Map.SearchResult;
-
 pub fn deinit(self: *@This()) void {
     for (self.map.list.items) |buf| buf.release();
     self.map.deinit();
@@ -39,5 +36,8 @@ pub fn clear(self: *@This()) void {
     const buffers = self.map.items();
     for (buffers) |buf| buf.release();
 }
+
+const Map = MemoryMap(*ByteBuffer, php_al);
+const SearchResult = Map.SearchResult;
 
 map: Map = .{},

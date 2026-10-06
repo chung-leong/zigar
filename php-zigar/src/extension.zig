@@ -1,18 +1,17 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const CallDispatcher = @import("dispatch.zig").CallDispatcher;
-const dyn_lib = @import("dyn-lib.zig");
+const CallDispatcher = @import("CallDispatcher.zig");
+const DynLib = @import("DynLib.zig");
 const failure_og = @import("failure.zig");
-const getSharedLibraryPath = @import("compilation.zig").getSharedLibraryPath;
 const interface = @import("module/native/interface.zig");
 const StructFlags = interface.StructureFlags.Struct;
 const StructurePurpose = interface.StructurePurpose;
 const StructureType = interface.StructureType;
 const MemberFlags = interface.MemberFlags;
 const MemberType = interface.MemberType;
-const ModuleHost = @import("host.zig").ModuleHost;
-const Options = @import("options.zig").Options;
+const ModuleHost = @import("ModuleHost.zig");
+const Options = @import("Options.zig");
 const php = @import("php.zig");
 const php_ng = @import("php/root.zig");
 const php_al = php_ng.allocator;
@@ -23,12 +22,12 @@ const Function = php_ng.Function;
 const InfoTable = php_ng.InfoTable;
 const Module = php_ng.Module;
 const Value = php_ng.Value;
-const structure = @import("structure.zig");
 const system = @import("system.zig");
 const io = system.io;
-const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
-const ZigCompiler = @import("compilation.zig").ZigCompiler;
+const ZigCompiler = @import("ZigCompiler.zig");
+const getSharedLibraryPath = ZigCompiler.getSharedLibraryPath;
 
+// const structure = @import("structure.zig");
 pub fn @"call zigar_test"(args: struct {
     dict: Dictionary,
 }) !void {
@@ -118,18 +117,18 @@ pub fn @"call zigar_import"(args: struct {
     const so_path = try getSharedLibraryPath(php_al, mod_path, .this, .this);
     defer php_al.free(so_path);
     const root_og = try ModuleHost.load(so_path);
-    // export symbols from root namespace
-    const root_class = try ZigClassEntry.fromValue(&root_og);
-    const root_static = root_class.getStaticData(structure.Struct);
-    // the method return a list of names, which we don't keep here
-    const callback_og = if (args.callback) |cb| &cb.value.impl else null;
-    const list = try root_static.exportSymbolsToGlobalNamespace(callback_og);
-    php.release(&list);
+    // // export symbols from root namespace
+    // const root_class = try ZigClassEntry.fromValue(&root_og);
+    // const root_static = root_class.getStaticData(structure.Struct);
+    // // the method return a list of names, which we don't keep here
+    // const callback_og = if (args.callback) |cb| &cb.value.impl else null;
+    // const list = try root_static.exportSymbolsToGlobalNamespace(callback_og);
+    // php.release(&list);
     return @as(*const Value, @ptrCast(&root_og)).*;
 }
 
 pub fn onModuleStartup(_: *@This(), _: Module.Type, module_no: c_int) !void {
-    dyn_lib.fixEnvironment();
+    DynLib.fixEnvironment();
     system.init();
     try Options.setup(module_no);
     try ModuleHost.setup();
