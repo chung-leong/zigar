@@ -2,12 +2,11 @@ const std = @import("std");
 const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
-const AbortSignal = @import("abort-signal.zig").AbortSignal;
+const AbortSignal = @import("AbortSignal.zig");
 const BufferMap = @import("BufferMap.zig");
 const ByteBuffer = @import("ByteBuffer.zig");
 const CallDispatcher = @import("CallDispatcher.zig");
 const DynLib = @import("DynLib.zig");
-const GarbageCollectionBuffer = @import("GarbageCollectionBuffer.zig");
 const io = @import("system.zig").io;
 const js_compat = @import("js-compat.zig");
 const ArgStruct = @import("module/arg-struct.zig").ArgStruct;
@@ -22,10 +21,11 @@ const N = String.static;
 const Value = php_ng.Value;
 const camelize = php_ng.util.camelize;
 const php_al = php_ng.allocator;
-const structure = @import("structure.zig");
 const StructureImporter = @import("StructureImporter.zig");
 const fn_transform = @import("zigft/fn-transform.zig");
 
+// const GarbageCollectionBuffer = @import("GarbageCollectionBuffer.zig");
+// const structure = @import("structure.zig");
 const Module = ModuleGeneric(StructureImporter.Handle);
 const AllocatorMethodId = enum(usize) { alloc = 1, resize, remap, free };
 
@@ -36,18 +36,18 @@ pub fn setup() !void {
     // errdefer ZigClassEntry.unregisterRootClass();
     // try ZigException.registerClass();
     // errdefer ZigException.unregisterClass();
-    try AbortSignal.registerClass();
-    errdefer AbortSignal.unregisterClass();
-    try js_compat.registerClasses();
-    errdefer js_compat.registerClasses();
+    // try AbortSignal.registerClass();
+    // errdefer AbortSignal.unregisterClass();
+    // try js_compat.registerClasses();
+    // errdefer js_compat.registerClasses();
 }
 
 pub fn shutdown() void {
     // ZigClassEntry.unregisterRootClass();
     // ZigException.unregisterClass();
-    AbortSignal.unregisterClass();
-    js_compat.unregisterClasses();
-    CallDispatcher.uninstallHandlers();
+    // AbortSignal.unregisterClass();
+    // js_compat.unregisterClasses();
+    // CallDispatcher.uninstallHandlers();
 }
 
 pub fn load(path: []const u8) !Value {
@@ -400,6 +400,6 @@ allocator_vtable: ?std.mem.Allocator.VTable = null,
 allocator_controllers: [4]usize = undefined,
 unclaimed_buffer_map: BufferMap = .{},
 object_map: ObjectMap = .{},
-gc_buffer: GarbageCollectionBuffer = .empty,
+// gc_buffer: GarbageCollectionBuffer = .empty,
 plain_object_table: *Array,
 exception_table: *Array,

@@ -39,7 +39,7 @@ class Settings {
             $this->versions = [ $current_version ];
             $this->targets = [ $current_target ];
             $this->debug = PHP_DEBUG;
-            $this->optimize = 'ReleaseSmall';
+            $this->optimize = (PHP_DEBUG) ? 'Debug' : 'ReleaseSmall';
         }
     }
 

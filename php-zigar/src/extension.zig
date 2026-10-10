@@ -2,6 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const CallDispatcher = @import("CallDispatcher.zig");
+const EventLoopType = CallDispatcher.EventLoopType;
 const DynLib = @import("DynLib.zig");
 const failure_og = @import("failure.zig");
 const interface = @import("module/native/interface.zig");
@@ -11,7 +12,6 @@ const StructureType = interface.StructureType;
 const MemberFlags = interface.MemberFlags;
 const MemberType = interface.MemberType;
 const ModuleHost = @import("ModuleHost.zig");
-const Options = @import("Options.zig");
 const php = @import("php.zig");
 const php_ng = @import("php/root.zig");
 const php_al = php_ng.allocator;
@@ -22,12 +22,13 @@ const Function = php_ng.Function;
 const InfoTable = php_ng.InfoTable;
 const Module = php_ng.Module;
 const Value = php_ng.Value;
+const getter = php_ng.setter;
+const setter = php_ng.setter;
 const system = @import("system.zig");
 const io = system.io;
 const ZigCompiler = @import("ZigCompiler.zig");
 const getSharedLibraryPath = ZigCompiler.getSharedLibraryPath;
 
-// const structure = @import("structure.zig");
 pub fn @"call zigar_test"(args: struct {
     dict: Dictionary,
 }) !void {
@@ -50,114 +51,184 @@ pub fn @"call zigar_test"(args: struct {
     }
 }
 
-pub fn @"call zigar_compile"(args: struct {
-    src_path: []const u8,
-    mod_path: ?[]const u8,
-    params: ?Dictionary,
-}) !bool {
-    if (!options.recompile) return false;
-    const src_path = try createResolvedPath(php_al, args.src_path);
-    defer php_al.free(src_path);
-    const mod_path = if (args.mod_path) |path|
-        try createResolvedPath(php_al, path)
-    else
-        try deriveModulePath(php_al, src_path);
-    defer php_al.free(mod_path);
-    try ZigCompiler.compile(src_path, mod_path, args.params);
-    return true;
+// pub fn @"call zigar_compile"(args: struct {
+//     src_path: []const u8,
+//     mod_path: ?[]const u8,
+//     params: ?Dictionary,
+// }) !bool {
+//     // if (!options.recompile) return false;
+//     const src_path = try createResolvedPath(php_al, args.src_path);
+//     defer php_al.free(src_path);
+//     const mod_path = if (args.mod_path) |path|
+//         try createResolvedPath(php_al, path)
+//     else
+//         try deriveModulePath(php_al, src_path);
+//     defer php_al.free(mod_path);
+//     try ZigCompiler.compile(src_path, mod_path, args.params);
+//     return true;
+// }
+
+// pub fn @"call zigar_use"(args: struct {
+//     src_path: []const u8,
+//     params: ?Dictionary,
+// }) !Value {
+//     const src_path, const mod_path = get: {
+//         const path = try createResolvedPath(php_al, args.src_path);
+//         errdefer php_al.free(path);
+//         var dir = std.Io.Dir.openDirAbsolute(io, path, .{}) catch |err| {
+//             if (err != error.NotDir) return err;
+//             const mod_path = try deriveModulePath(php_al, path);
+//             break :get .{ path, mod_path };
+//         };
+//         dir.close(io);
+//         break :get .{ null, path };
+//     };
+//     defer if (src_path) |path| php_al.free(path);
+//     defer php_al.free(mod_path);
+//     if (src_path) |path| {
+//         // if (options.recompile)
+//         try ZigCompiler.compile(path, mod_path, args.params);
+//     }
+//     const so_path = try getSharedLibraryPath(php_al, mod_path, .this, .this);
+//     defer php_al.free(so_path);
+//     var result = try ModuleHost.load(so_path);
+//     return @as(*Value, @ptrCast(&result)).*;
+// }
+
+// pub fn @"call zigar_import"(args: struct {
+//     src_path: []const u8,
+//     callback: ?Callable,
+//     params: ?Dictionary,
+// }) !Value {
+//     const src_path, const mod_path = get: {
+//         const path = try createResolvedPath(php_al, args.src_path);
+//         errdefer php_al.free(path);
+//         var dir = std.Io.Dir.openDirAbsolute(io, path, .{}) catch |err| {
+//             if (err != error.NotDir) return err;
+//             const mod_path = try deriveModulePath(php_al, path);
+//             break :get .{ path, mod_path };
+//         };
+//         dir.close(io);
+//         break :get .{ null, path };
+//     };
+//     defer if (src_path) |path| php_al.free(path);
+//     defer php_al.free(mod_path);
+//     if (src_path) |path| {
+//         // if (options.recompile)
+//         try ZigCompiler.compile(path, mod_path, args.params);
+//     }
+//     const so_path = try getSharedLibraryPath(php_al, mod_path, .this, .this);
+//     defer php_al.free(so_path);
+//     const root_og = try ModuleHost.load(so_path);
+//     // // export symbols from root namespace
+//     // const root_class = try ZigClassEntry.fromValue(&root_og);
+//     // const root_static = root_class.getStaticData(structure.Struct);
+//     // // the method return a list of names, which we don't keep here
+//     // const callback_og = if (args.callback) |cb| &cb.value.impl else null;
+//     // const list = try root_static.exportSymbolsToGlobalNamespace(callback_og);
+//     // php.release(&list);
+//     return @as(*const Value, @ptrCast(&root_og)).*;
+// }
+
+pub const @"get compile" = getter(@This(), .compile);
+pub const @"set compile (system)" = setter(@This(), .compile);
+
+pub const @"get clean" = getter(@This(), .clean);
+pub const @"set clean" = setter(@This(), .clean);
+
+pub const @"get event_loop" = getter(@This(), .event_loop);
+pub fn @"set event_loop"(self: *@This(), value: EventLoopType) !void {
+    // try CallDispatcher.event_loop.use(value);
+    self.event_loop = value;
 }
 
-pub fn @"call zigar_use"(args: struct {
-    src_path: []const u8,
-    params: ?Dictionary,
-}) !Value {
-    const src_path, const mod_path = get: {
-        const path = try createResolvedPath(php_al, args.src_path);
-        errdefer php_al.free(path);
-        var dir = std.Io.Dir.openDirAbsolute(io, path, .{}) catch |err| {
-            if (err != error.NotDir) return err;
-            const mod_path = try deriveModulePath(php_al, path);
-            break :get .{ path, mod_path };
-        };
-        dir.close(io);
-        break :get .{ null, path };
-    };
-    defer if (src_path) |path| php_al.free(path);
-    defer php_al.free(mod_path);
-    if (src_path) |path| {
-        if (options.recompile) try ZigCompiler.compile(path, mod_path, args.params);
-    }
-    const so_path = try getSharedLibraryPath(php_al, mod_path, .this, .this);
-    defer php_al.free(so_path);
-    var result = try ModuleHost.load(so_path);
-    return @as(*Value, @ptrCast(&result)).*;
-}
+pub const @"get module_rel_path" = getter(@This(), .module_rel_path);
+pub const @"set module_rel_path" = setter(@This(), .module_rel_path);
 
-pub fn @"call zigar_import"(args: struct {
-    src_path: []const u8,
-    callback: ?Callable,
-    params: ?Dictionary,
-}) !Value {
-    const src_path, const mod_path = get: {
-        const path = try createResolvedPath(php_al, args.src_path);
-        errdefer php_al.free(path);
-        var dir = std.Io.Dir.openDirAbsolute(io, path, .{}) catch |err| {
-            if (err != error.NotDir) return err;
-            const mod_path = try deriveModulePath(php_al, path);
-            break :get .{ path, mod_path };
-        };
-        dir.close(io);
-        break :get .{ null, path };
-    };
-    defer if (src_path) |path| php_al.free(path);
-    defer php_al.free(mod_path);
-    if (src_path) |path| {
-        if (options.recompile) try ZigCompiler.compile(path, mod_path, args.params);
-    }
-    const so_path = try getSharedLibraryPath(php_al, mod_path, .this, .this);
-    defer php_al.free(so_path);
-    const root_og = try ModuleHost.load(so_path);
-    // // export symbols from root namespace
-    // const root_class = try ZigClassEntry.fromValue(&root_og);
-    // const root_static = root_class.getStaticData(structure.Struct);
-    // // the method return a list of names, which we don't keep here
-    // const callback_og = if (args.callback) |cb| &cb.value.impl else null;
-    // const list = try root_static.exportSymbolsToGlobalNamespace(callback_og);
-    // php.release(&list);
-    return @as(*const Value, @ptrCast(&root_og)).*;
-}
+pub const @"get build_dir" = getter(@This(), .build_dir);
+pub const @"set build_dir" = setter(@This(), .build_dir);
+
+pub const @"get build_dir_size" = getter(@This(), .build_dir_size);
+pub const @"set build_dir_size" = setter(@This(), .build_dir_size);
+
+pub const @"get eval_branch_quota" = getter(@This(), .eval_branch_quota);
+pub const @"set eval_branch_quota" = setter(@This(), .eval_branch_quota);
+
+pub const @"get optimize" = getter(@This(), .optimize);
+pub const @"set optimize" = setter(@This(), .optimize);
+
+pub const @"get arch" = getter(@This(), .arch);
+pub const @"set arch" = setter(@This(), .arch);
+
+pub const @"get platform" = getter(@This(), .platform);
+pub const @"set platform" = setter(@This(), .platform);
+
+pub const @"get quiet" = getter(@This(), .quiet);
+pub const @"set quiet" = setter(@This(), .quiet);
+
+pub const @"get ignore_build_file" = getter(@This(), .ignore_build_file);
+pub const @"set ignore_build_file" = setter(@This(), .ignore_build_file);
+
+pub const @"get omit_functions" = getter(@This(), .omit_functions);
+pub const @"set omit_functions" = setter(@This(), .omit_functions);
+
+pub const @"get omit_variables" = getter(@This(), .omit_variables);
+pub const @"set omit_variables" = setter(@This(), .omit_variables);
+
+pub const @"get multithreaded" = getter(@This(), .multithreaded);
+pub const @"set multithreaded" = setter(@This(), .multithreaded);
+
+pub const @"get persistent" = getter(@This(), .persistent);
+pub const @"set persistent" = setter(@This(), .persistent);
+
+pub const @"get use_libc" = getter(@This(), .use_libc);
+pub const @"set use_libc" = setter(@This(), .use_libc);
+
+pub const @"get use_llvm" = getter(@This(), .use_llvm);
+pub const @"set use_llvm" = setter(@This(), .use_llvm);
+
+pub const @"get use_redirection" = getter(@This(), .use_redirection);
+pub const @"set use_redirection" = setter(@This(), .use_redirection);
+
+pub const @"get zig_path" = getter(@This(), .zig_path);
+pub const @"set zig_path" = setter(@This(), .zig_path);
+
+pub const @"get zig_args" = getter(@This(), .zig_args);
+pub const @"set zig_args" = setter(@This(), .zig_args);
 
 pub fn onModuleStartup(_: *@This(), _: Module.Type, module_no: c_int) !void {
+    _ = module_no;
     DynLib.fixEnvironment();
     system.init();
-    try Options.setup(module_no);
-    try ModuleHost.setup();
-    options = .init();
-    if (php_ng.use_tsrm) {
-        options_set = true;
-        default_options = &options;
-    }
+    // try Options.setup(module_no);
+    // try ModuleHost.setup();
+    // options = .init();
+    // if (php_ng.use_tsrm) {
+    //     options_set = true;
+    //     default_options = &options;
+    // }
 }
 
 pub fn onModuleShutdown(_: *@This(), _: Module.Type, module_no: c_int) void {
-    ModuleHost.shutdown();
-    Options.shutdown(module_no);
+    _ = module_no;
+    // ModuleHost.shutdown();
+    // Options.shutdown(module_no);
 }
 
 pub fn onRequestStartup(_: *@This(), _: Module.Type, _: c_int) !void {
-    if (php_ng.use_tsrm and !options_set) {
-        options = default_options.*;
-        options_set = true;
-    }
-    try CallDispatcher.installHandler();
+    // if (php_ng.use_tsrm and !options_set) {
+    //     options = default_options.*;
+    //     options_set = true;
+    // }
+    // try CallDispatcher.installHandler();
 }
 
 pub fn onRequestShutdown(_: *@This(), _: Module.Type, _: c_int) void {
-    CallDispatcher.event_loop.reset();
-    shutdown_callbacks.call();
+    // CallDispatcher.event_loop.reset();
+    // shutdown_callbacks.call();
     // free any unclaimed message (just in case)
-    failure_og.clearMessage();
-    php_ng.failure.clearMessage();
+    // failure_og.clearMessage();
+    // php_ng.failure.clearMessage();
 }
 
 pub fn onInfoRequest(_: *@This(), module: *Module) void {
@@ -180,7 +251,8 @@ fn deriveModulePath(allocator: std.mem.Allocator, src_path: []const u8) ![]const
     const src_dir = std.fs.path.dirname(src_path) orelse "";
     const src_name = std.fs.path.stem(src_path);
     const mod_filename = try std.fmt.allocPrint(allocator, "{s}.zigar", .{src_name});
-    const mod_rel_path = std.mem.sliceTo(options.module_rel_path, 0);
+    // const mod_rel_path = std.mem.sliceTo(options.module_rel_path, 0);
+    const mod_rel_path = "../lib";
     defer php_al.free(mod_filename);
     return try std.fs.path.resolve(php_al, &.{ src_dir, mod_rel_path, mod_filename });
 }
@@ -217,15 +289,149 @@ const ShutdownCallbacks = struct {
 
     list: std.ArrayList(Callback) = .empty,
 };
+pub const Arch = enum {
+    arm,
+    arm64,
+    ia32,
+    loong64,
+    mips,
+    mipsel,
+    ppc64,
+    riscv64,
+    s390x,
+    x64,
+    other,
 
-pub threadlocal var shutdown_callbacks: ShutdownCallbacks = .{};
+    pub const this = switch (builtin.target.cpu.arch) {
+        .arm => .arm,
+        .aarch64 => .arm64,
+        .x86 => .ia32,
+        .loongarch64 => .loong64,
+        .mips => .mips,
+        .mipsel => .mipsel,
+        .powerpc => .ppc,
+        .powerpc64 => .ppc64,
+        .powerpc64le => .ppc64,
+        .riscv64 => .riscv64,
+        .s390x => .s390x,
+        .x86_64 => .x64,
+        else => .other,
+    };
 
-pub threadlocal var options: Options = undefined;
-var default_options = switch (php_ng.use_tsrm) {
-    true => @as(*Options, undefined),
-    false => {},
+    pub fn name(self: @This()) []const u8 {
+        return @tagName(self);
+    }
+
+    pub fn zigName(self: @This()) []const u8 {
+        return switch (self) {
+            .arm => "arm",
+            .arm64 => "aarch64",
+            .ia32 => "x86",
+            .loong64 => "loong64",
+            .mips => "mips",
+            .mipsel => "mipsel",
+            .ppc64 => "powerpc64le",
+            .riscv64 => "riscv64",
+            .s390x => "s390x",
+            .x64 => "x86_64",
+            .other => "other",
+        };
+    }
 };
-pub threadlocal var options_set = switch (php_ng.use_tsrm) {
-    true => false,
-    false => {},
+pub const Platform = enum {
+    darwin,
+    freebsd,
+    linux,
+    @"linux-musl",
+    openbsd,
+    win32,
+    other,
+
+    pub const this = switch (builtin.target.os.tag) {
+        .macos, .ios, .tvos, .visionos, .watchos => .darwin,
+        .freebsd => .freebsd,
+        .linux => switch (builtin.target.isMuslLibC()) {
+            true => .@"linux-musl",
+            false => .linux,
+        },
+        .openbsd => .openbsd,
+        .windows => .win32,
+        else => .other,
+    };
+
+    pub fn name(self: @This()) []const u8 {
+        return @tagName(self);
+    }
+
+    pub fn zigName(self: @This()) []const u8 {
+        return switch (self) {
+            .darwin => "macos",
+            .freebsd => "freebsd",
+            .linux => "linux-gnu",
+            .@"linux-musl" => "linux-musl",
+            .openbsd => "openbsd",
+            .win32 => "windows",
+            else => "other",
+        };
+    }
+
+    pub fn ext(self: @This()) []const u8 {
+        return switch (self) {
+            .darwin => "dynlib",
+            .win32 => "dll",
+            else => "so",
+        };
+    }
 };
+pub const Optimize = enum {
+    debug,
+    release_safe,
+    release_small,
+    release_fast,
+
+    pub fn name(self: @This()) []const u8 {
+        return @tagName(self);
+    }
+
+    pub const zigName = name;
+};
+
+recompile: bool = true,
+clean: bool = false,
+event_loop: EventLoopType = .temporary,
+module_rel_path: [:0]const u8 = "../lib",
+build_dir: [:0]const u8,
+build_dir_size: c_long = 4 * 1024 * 1024 * 1024,
+eval_branch_quota: c_long = 2000000,
+optimize: Optimize = .debug,
+arch: Arch = .this,
+platform: Platform = .this,
+quiet: bool = false,
+ignore_build_file: bool = false,
+omit_functions: bool = false,
+omit_variables: bool = false,
+multithreaded: bool = true,
+persistent: bool = false,
+use_libc: bool = true,
+use_llvm: ?bool = null,
+use_redirection: bool = true,
+zig_path: [:0]const u8 = "zig",
+zig_args: [:0]const u8 = "",
+// these aren't applicable to PHP--the fields are only here so we can generate
+// the same config file as on the JavaScript side
+is_wasm: bool = false,
+max_memory: ?c_long = null,
+stack_size: c_long = 256 * 1024,
+use_pthread_emulation: bool = false,
+
+// pub threadlocal var shutdown_callbacks: ShutdownCallbacks = .{};
+
+// pub threadlocal var options: Options = undefined;
+// var default_options = switch (php_ng.use_tsrm) {
+//     true => @as(*Options, undefined),
+//     false => {},
+// };
+// pub threadlocal var options_set = switch (php_ng.use_tsrm) {
+//     true => false,
+//     false => {},
+// };

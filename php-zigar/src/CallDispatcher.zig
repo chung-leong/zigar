@@ -71,30 +71,6 @@ pub fn uninstallHandlers() void {
     redirection_controller.uninstallSignalHandler();
 }
 
-fn createPipes() !void {
-    if (builtin.target.os.tag == .windows) {
-        var read_handle: c.HANDLE = undefined;
-        var write_handle: c.HANDLE = undefined;
-        var security: c.SECURITY_ATTRIBUTES = .{
-            .nLength = @sizeOf(c.SECURITY_ATTRIBUTES),
-            .lpSecurityDescriptor = null,
-            .bInheritHandle = c.TRUE,
-        };
-        if (c.CreatePipe(&read_handle, &write_handle, &security, 0) != c.TRUE) return error.UnableToOpenPipes;
-        pipes[0] = c._open_osfhandle(@bitCast(@intFromPtr(read_handle)), c._O_RDONLY);
-        pipes[1] = c._open_osfhandle(@bitCast(@intFromPtr(write_handle)), c._O_WRONLY);
-    } else {
-        if (c.pipe(&pipes) != 0) return error.UnableToOpenPipes;
-        // set read end of pipe to non-blocking
-        const flags = c.fcntl(pipes[0], c.F_GETFL, @as(c_int, 0));
-        _ = c.fcntl(pipes[0], c.F_SETFL, flags | c.O_NONBLOCK);
-    }
-}
-
-fn destroyPipes() void {
-    for (pipes) |fd| _ = c.close(fd);
-}
-
 pub fn createJsThunk(self: *@This(), class: *Class, callable: Value, buffer: *ByteBuffer) !void {
     const fn_id = try self.saveCallback(class, callable, buffer);
     errdefer self.removeCallback(fn_id);
@@ -209,112 +185,6 @@ pub fn releaseCallingThread(handle: usize, err: E) void {
     Futex.wake(handle, err);
 }
 
-pub fn handleJscall(self: *@This(), call: *Jscall) !E {
-    if (in_main_thread) {
-        const status = self.performJsCall(call) catch |err| switch (err) {
-            error.EarlyRelease => return .SUCCESS,
-            else => handleJsError(err),
-        };
-        Futex.wake(call.futex_handle, status);
-        return status;
-    } else {
-        var futex: Futex = undefined;
-        call.futex_handle = futex.init();
-        self.scheduleTask(.{ .jscall = call }) catch |err| {
-            return switch (err) {
-                error.Disabled => .PERM,
-                else => .FAULT,
-            };
-        };
-        return futex.wait();
-    }
-}
-
-pub fn handleJsError(err: anytype) E {
-    const new_err = failure.report("unable to execute callback: {s}", .{
-        failure.acquireMessage(err),
-    });
-    php.triggerWarning(new_err);
-    return .FAULT;
-}
-
-fn performJsCall(self: *@This(), call: *Jscall) !E {
-    const arg_ptr: [*]u8 = @ptrFromInt(call.arg_address);
-    const arg_bytes = arg_ptr[0..call.arg_size];
-    switch (call.fn_id) {
-        1...4 => |id| return try ModuleHost.handleAllocatorMethodCall(id, arg_bytes),
-        else => {
-            const cb = self.findCallback(call.fn_id) orelse return .FAULT;
-            _ = cb;
-            // use the function structure's static method to run the callback
-            // const fn_static = cb.class.getStaticData(structure.Function);
-            // try fn_static.runCallback(&cb.cache, arg_bytes, call.futex_handle);
-            return .SUCCESS;
-        },
-    }
-}
-
-pub fn handleSyscall(self: *@This(), call: *Syscall) !E {
-    if (in_main_thread) {
-        const status = self.performSyscall(call) catch .FAULT;
-        Futex.wake(call.futex_handle, status);
-        return status;
-    } else {
-        var futex: Futex = undefined;
-        call.futex_handle = futex.init();
-        self.scheduleTask(.{ .syscall = call }) catch |err| {
-            return switch (err) {
-                error.Disabled => .PERM,
-                else => .FAULT,
-            };
-        };
-        return futex.wait();
-    }
-}
-
-fn performSyscall(self: *@This(), call: *Syscall) !E {
-    const status = switch (call.cmd) {
-        .open => try self.handleOpen(&call.u.open),
-        .close => try self.handleClose(&call.u.close),
-        .read => try self.handleRead(&call.u.read),
-        .readv => try self.handleVectorRead(&call.u.readv),
-        .pread => try self.handlePositionalRead(&call.u.pread),
-        .preadv => try self.handlePositionalVectorRead(&call.u.preadv),
-        .write => try self.handleWrite(&call.u.write),
-        .writev => try self.handleVectorWrite(&call.u.writev),
-        .pwrite => try self.handlePositionalWrite(&call.u.pwrite),
-        .pwritev => try self.handlePositionalVectorWrite(&call.u.pwritev),
-        .seek => try self.handleSeek(&call.u.seek),
-        .tell => try self.handleTell(&call.u.tell),
-        .getfl => try self.handleGetDescriptorFlags(&call.u.getfl),
-        .setfl => try self.handleSetDescriptorFlags(&call.u.setfl),
-        .getlk => try self.handleGetLock(&call.u.getlk),
-        .setlk => try self.handleSetLock(&call.u.setlk),
-        .fstat => try self.handleStat(&call.u.fstat),
-        .stat => try self.handleStat(&call.u.stat),
-        .ftruncate => try self.handleTruncate(&call.u.ftruncate),
-        .truncate => try self.handleTruncate(&call.u.truncate),
-        .futimes => try self.handleSettimes(&call.u.futimes),
-        .utimes => try self.handleSettimes(&call.u.utimes),
-        .advise => try self.handleAdvise(&call.u.advise),
-        .allocate => try self.handleAllocate(&call.u.allocate),
-        .sync => try self.handleSync(&call.u.sync),
-        .datasync => try self.handleDatasync(&call.u.datasync),
-        .getdents => try self.handleGetdents(&call.u.getdents),
-        .mkdir => try self.handleMkdir(&call.u.mkdir),
-        .rmdir => try self.handleRmdir(&call.u.rmdir),
-        .unlink => try self.handleUnlink(&call.u.unlink),
-        .readlink => try self.handleReadlink(&call.u.readlink),
-        .symlink => try self.handleSymlink(&call.u.symlink),
-        .rename => try self.handleRename(&call.u.rename),
-        .poll => try self.handlePoll(&call.u.poll),
-        .copyfilerange => try self.handleCopyFileRange(&call.u.copyfilerange),
-        .environ => try self.handleGetEnvironmentStrings(&call.u.environ),
-        .write_stderr => try self.handleWriteStderr(&call.u.write_stderr),
-    };
-    return status;
-}
-
 pub fn installHooks(self: *@This(), lib: *DynLib, redirect_syscalls: bool) !void {
     const pos = try redirection_controller.installHooks(self, lib);
     if (redirect_syscalls) {
@@ -394,26 +264,6 @@ pub fn disableMultithread(self: *@This()) !void {
     } else {
         try self.scheduleTask(.{ .disable = {} });
     }
-}
-
-fn runScheduledTask() void {
-    const fd = pipes[0];
-    var task: ScheduledTask = undefined;
-    if (builtin.target.os.tag == .windows) {
-        const handle: c.HANDLE = @ptrFromInt(@as(usize, @bitCast(c._get_osfhandle(fd))));
-        var available: c.DWORD = undefined;
-        if (c.PeekNamedPipe(handle, null, 0, null, &available, null) == c.FALSE) return;
-        if (available < @sizeOf(ScheduledTask)) return;
-    }
-    const read = c.read(fd, @ptrCast(&task), @sizeOf(ScheduledTask));
-    if (read != @sizeOf(ScheduledTask)) return;
-    const self = task.self;
-    switch (task.operation) {
-        .jscall => |call| _ = self.handleJscall(call) catch unreachable,
-        .syscall => |call| _ = self.handleSyscall(call) catch unreachable,
-        .disable => self.disableMultithread() catch unreachable,
-    }
-    event_loop.resumePendingFiber();
 }
 
 pub fn initializeThread(self: *@This()) !void {
@@ -496,10 +346,6 @@ pub fn setEnvironmentVariables(self: *@This(), array: *Array) !void {
     self.env_variable_bytes = bytes;
 }
 
-pub fn isVirtualStream(_: *@This(), fd: c_long) bool {
-    return fd >= fd_min and fd <= fd_max;
-}
-
 pub fn addStream(self: *@This(), strm: *Stream, is_dir: bool) !c_long {
     return for (self.stream_list.items) |*item| {
         if (item.stream == strm) break item.fd;
@@ -518,6 +364,168 @@ pub fn addStream(self: *@This(), strm: *Stream, is_dir: bool) !c_long {
     };
 }
 
+pub fn removeStream(self: *@This(), strm: *Stream) void {
+    for (self.stream_list.items, 0..) |*item, i| {
+        if (item.stream == strm) {
+            item.deinit();
+            _ = self.stream_list.swapRemove(i);
+            break;
+        }
+    }
+}
+
+pub fn redirectStream(self: *@This(), fd: c_long, arg: Value) !void {
+    if (fd == -1) {
+        if (self.redirection_cb) |*cb| {
+            cb.release();
+            self.redirection_cb = null;
+            self.redirecting_root = false;
+        }
+        if (Function.CallCache.init(arg) catch null) |cache| {
+            self.redirection_cb = arg.retain();
+            self.redirection_cache = cache;
+            self.redirecting_root = true;
+            self.closeDescriptor(fd) catch {};
+            return;
+        }
+    }
+    const strm = try arg.getStream();
+    const path = try getStreamPath(strm);
+    defer path.release();
+    const fdstat = getStreamStat(strm, fd == -1);
+    self.closeDescriptor(fd) catch {};
+    _ = try self.addStreamEntry(fd, path, strm, &fdstat);
+    if (fd == -1) self.redirecting_root = true;
+}
+
+pub const EventLoopType = EventLoopForScheduledTask.LoopType;
+
+fn handleJscall(self: *@This(), call: *Jscall) !E {
+    if (in_main_thread) {
+        const status = self.performJsCall(call) catch |err| switch (err) {
+            error.EarlyRelease => return .SUCCESS,
+            else => handleJsError(err),
+        };
+        Futex.wake(call.futex_handle, status);
+        return status;
+    } else {
+        var futex: Futex = undefined;
+        call.futex_handle = futex.init();
+        self.scheduleTask(.{ .jscall = call }) catch |err| {
+            return switch (err) {
+                error.Disabled => .PERM,
+                else => .FAULT,
+            };
+        };
+        return futex.wait();
+    }
+}
+
+fn handleJsError(err: anytype) E {
+    const new_err = failure.report("unable to execute callback: {s}", .{
+        failure.acquireMessage(err),
+    });
+    php.triggerWarning(new_err);
+    return .FAULT;
+}
+
+fn performJsCall(self: *@This(), call: *Jscall) !E {
+    const arg_ptr: [*]u8 = @ptrFromInt(call.arg_address);
+    const arg_bytes = arg_ptr[0..call.arg_size];
+    switch (call.fn_id) {
+        1...4 => |id| return try ModuleHost.handleAllocatorMethodCall(id, arg_bytes),
+        else => {
+            const cb = self.findCallback(call.fn_id) orelse return .FAULT;
+            _ = cb;
+            // use the function structure's static method to run the callback
+            // const fn_static = cb.class.getStaticData(structure.Function);
+            // try fn_static.runCallback(&cb.cache, arg_bytes, call.futex_handle);
+            return .SUCCESS;
+        },
+    }
+}
+
+fn handleSyscall(self: *@This(), call: *Syscall) !E {
+    if (in_main_thread) {
+        const status = self.performSyscall(call) catch .FAULT;
+        Futex.wake(call.futex_handle, status);
+        return status;
+    } else {
+        var futex: Futex = undefined;
+        call.futex_handle = futex.init();
+        self.scheduleTask(.{ .syscall = call }) catch |err| {
+            return switch (err) {
+                error.Disabled => .PERM,
+                else => .FAULT,
+            };
+        };
+        return futex.wait();
+    }
+}
+
+fn performSyscall(self: *@This(), call: *Syscall) !E {
+    const status = switch (call.cmd) {
+        .open => try self.handleOpen(&call.u.open),
+        .close => try self.handleClose(&call.u.close),
+        .read => try self.handleRead(&call.u.read),
+        .readv => try self.handleVectorRead(&call.u.readv),
+        .pread => try self.handlePositionalRead(&call.u.pread),
+        .preadv => try self.handlePositionalVectorRead(&call.u.preadv),
+        .write => try self.handleWrite(&call.u.write),
+        .writev => try self.handleVectorWrite(&call.u.writev),
+        .pwrite => try self.handlePositionalWrite(&call.u.pwrite),
+        .pwritev => try self.handlePositionalVectorWrite(&call.u.pwritev),
+        .seek => try self.handleSeek(&call.u.seek),
+        .tell => try self.handleTell(&call.u.tell),
+        .getfl => try self.handleGetDescriptorFlags(&call.u.getfl),
+        .setfl => try self.handleSetDescriptorFlags(&call.u.setfl),
+        .getlk => try self.handleGetLock(&call.u.getlk),
+        .setlk => try self.handleSetLock(&call.u.setlk),
+        .fstat => try self.handleStat(&call.u.fstat),
+        .stat => try self.handleStat(&call.u.stat),
+        .ftruncate => try self.handleTruncate(&call.u.ftruncate),
+        .truncate => try self.handleTruncate(&call.u.truncate),
+        .futimes => try self.handleSettimes(&call.u.futimes),
+        .utimes => try self.handleSettimes(&call.u.utimes),
+        .advise => try self.handleAdvise(&call.u.advise),
+        .allocate => try self.handleAllocate(&call.u.allocate),
+        .sync => try self.handleSync(&call.u.sync),
+        .datasync => try self.handleDatasync(&call.u.datasync),
+        .getdents => try self.handleGetdents(&call.u.getdents),
+        .mkdir => try self.handleMkdir(&call.u.mkdir),
+        .rmdir => try self.handleRmdir(&call.u.rmdir),
+        .unlink => try self.handleUnlink(&call.u.unlink),
+        .readlink => try self.handleReadlink(&call.u.readlink),
+        .symlink => try self.handleSymlink(&call.u.symlink),
+        .rename => try self.handleRename(&call.u.rename),
+        .poll => try self.handlePoll(&call.u.poll),
+        .copyfilerange => try self.handleCopyFileRange(&call.u.copyfilerange),
+        .environ => try self.handleGetEnvironmentStrings(&call.u.environ),
+        .write_stderr => try self.handleWriteStderr(&call.u.write_stderr),
+    };
+    return status;
+}
+
+fn runScheduledTask() void {
+    const fd = pipes[0];
+    var task: ScheduledTask = undefined;
+    if (builtin.target.os.tag == .windows) {
+        const handle: c.HANDLE = @ptrFromInt(@as(usize, @bitCast(c._get_osfhandle(fd))));
+        var available: c.DWORD = undefined;
+        if (c.PeekNamedPipe(handle, null, 0, null, &available, null) == c.FALSE) return;
+        if (available < @sizeOf(ScheduledTask)) return;
+    }
+    const read = c.read(fd, @ptrCast(&task), @sizeOf(ScheduledTask));
+    if (read != @sizeOf(ScheduledTask)) return;
+    const self = task.self;
+    switch (task.operation) {
+        .jscall => |call| _ = self.handleJscall(call) catch unreachable,
+        .syscall => |call| _ = self.handleSyscall(call) catch unreachable,
+        .disable => self.disableMultithread() catch unreachable,
+    }
+    event_loop.resumePendingFiber();
+}
+
 fn addStreamEntry(self: *@This(), fd: c_long, path: *String, strm: *Stream, stat: *const std.os.wasi.fdstat_t) !*StreamEntry {
     const entry = try self.stream_list.addOne(php_al);
     entry.* = .{
@@ -530,36 +538,6 @@ fn addStreamEntry(self: *@This(), fd: c_long, path: *String, strm: *Stream, stat
         entry.dir_iter = try DirEntryIterator.create();
     }
     return entry;
-}
-
-pub fn removeStream(self: *@This(), strm: *Stream) void {
-    for (self.stream_list.items, 0..) |*item, i| {
-        if (item.stream == strm) {
-            item.deinit();
-            _ = self.stream_list.swapRemove(i);
-            break;
-        }
-    }
-}
-
-pub fn closeDescriptor(self: *@This(), fd: c_long) !void {
-    if (fd == -1) self.redirecting_root = false;
-    for (self.stream_list.items, 0..) |*item, i| {
-        if (item.fd == fd) {
-            const has_alias_still = item.flags.has_alias and for (self.stream_list.items) |*other| {
-                if (other.fd != fd and other.stream == item.stream) break true;
-            } else false;
-            if (has_alias_still) {
-                // just remove entry
-                item.deinit();
-                _ = self.stream_list.swapRemove(i);
-            } else {
-                // close the stream--the stream's close handler will call removeStream()
-                item.stream.close(item.flags.is_owner);
-            }
-            break;
-        }
-    } else return error.Unexpected;
 }
 
 fn duplicateStreamEntry(self: *@This(), entry: *StreamEntry) !*StreamEntry {
@@ -611,7 +589,7 @@ fn removeAllStreams(self: *@This()) void {
     list.deinit(php_al);
 }
 
-pub fn getStreamPath(strm: *Stream) !*String {
+fn getStreamPath(strm: *Stream) !*String {
     if (strm.getPath()) |path| return .create(path);
     const value = strm.readWrapperProperty("path") catch {
         return failure.report("stream wrapper does not have the property 'path'", .{});
@@ -623,7 +601,7 @@ pub fn getStreamPath(strm: *Stream) !*String {
     return path.retain();
 }
 
-pub fn getStreamStat(strm: *Stream, is_dir: bool) std.os.wasi.fdstat_t {
+fn getStreamStat(strm: *Stream, is_dir: bool) std.os.wasi.fdstat_t {
     const filetype: std.os.wasi.filetype_t = get: {
         var stat: std.os.wasi.filestat_t = undefined;
         break :get if (strm.stat(&stat))
@@ -653,30 +631,6 @@ pub fn getStreamStat(strm: *Stream, is_dir: bool) std.os.wasi.fdstat_t {
     }
     fdstat.fs_rights_base.FD_READDIR = is_dir;
     return fdstat;
-}
-
-pub fn redirectStream(self: *@This(), fd: c_long, arg: Value) !void {
-    if (fd == -1) {
-        if (self.redirection_cb) |*cb| {
-            cb.release();
-            self.redirection_cb = null;
-            self.redirecting_root = false;
-        }
-        if (Function.CallCache.init(arg) catch null) |cache| {
-            self.redirection_cb = arg.retain();
-            self.redirection_cache = cache;
-            self.redirecting_root = true;
-            self.closeDescriptor(fd) catch {};
-            return;
-        }
-    }
-    const strm = try arg.getStream();
-    const path = try getStreamPath(strm);
-    defer path.release();
-    const fdstat = getStreamStat(strm, fd == -1);
-    self.closeDescriptor(fd) catch {};
-    _ = try self.addStreamEntry(fd, path, strm, &fdstat);
-    if (fd == -1) self.redirecting_root = true;
 }
 
 fn findStreamEntry(self: *@This(), fd: c_long) !*StreamEntry {
@@ -763,16 +717,6 @@ fn getWrapperUrl(path: []const u8) ?*String {
     return null;
 }
 
-const PathInfo = struct {
-    url: *String,
-    context: ?*Stream.Context = null,
-
-    pub fn deinit(self: *const @This()) void {
-        self.url.release();
-        if (self.context) |cxt| cxt.resource().release();
-    }
-};
-
 fn resolvePath(self: *@This(), dirfd: i32, path_c: [*:0]const u8) !?PathInfo {
     const path = path_c[0..std.mem.len(path_c)];
     var context: ?*Stream.Context = null;
@@ -830,6 +774,26 @@ fn joinPath(parent_path: []const u8, path: []const u8) *String {
     if (slash_count == 1) slice[parent_path.len] = '/';
     @memcpy(slice[parent_path.len + slash_count .. len], path);
     return str;
+}
+
+fn closeDescriptor(self: *@This(), fd: c_long) !void {
+    if (fd == -1) self.redirecting_root = false;
+    for (self.stream_list.items, 0..) |*item, i| {
+        if (item.fd == fd) {
+            const has_alias_still = item.flags.has_alias and for (self.stream_list.items) |*other| {
+                if (other.fd != fd and other.stream == item.stream) break true;
+            } else false;
+            if (has_alias_still) {
+                // just remove entry
+                item.deinit();
+                _ = self.stream_list.swapRemove(i);
+            } else {
+                // close the stream--the stream's close handler will call removeStream()
+                item.stream.close(item.flags.is_owner);
+            }
+            break;
+        }
+    } else return error.Unexpected;
 }
 
 fn handleOpen(self: *@This(), args: anytype) !E {
@@ -1286,6 +1250,36 @@ fn releaseResources(self: *@This()) void {
     }
 }
 
+fn createPipes() !void {
+    if (builtin.target.os.tag == .windows) {
+        var read_handle: c.HANDLE = undefined;
+        var write_handle: c.HANDLE = undefined;
+        var security: c.SECURITY_ATTRIBUTES = .{
+            .nLength = @sizeOf(c.SECURITY_ATTRIBUTES),
+            .lpSecurityDescriptor = null,
+            .bInheritHandle = c.TRUE,
+        };
+        if (c.CreatePipe(&read_handle, &write_handle, &security, 0) != c.TRUE) return error.UnableToOpenPipes;
+        pipes[0] = c._open_osfhandle(@bitCast(@intFromPtr(read_handle)), c._O_RDONLY);
+        pipes[1] = c._open_osfhandle(@bitCast(@intFromPtr(write_handle)), c._O_WRONLY);
+    } else {
+        if (c.pipe(&pipes) != 0) return error.UnableToOpenPipes;
+        // set read end of pipe to non-blocking
+        const flags = c.fcntl(pipes[0], c.F_GETFL, @as(c_int, 0));
+        _ = c.fcntl(pipes[0], c.F_SETFL, flags | c.O_NONBLOCK);
+    }
+}
+
+fn destroyPipes() void {
+    for (pipes) |fd| _ = c.close(fd);
+}
+
+fn isVirtualStream(_: *@This(), fd: c_long) bool {
+    return fd >= fd_min and fd <= fd_max;
+}
+
+const fd_min = 0x00f0_0000;
+const fd_max = 0x00ff_ffff;
 const redirection_controller = redirection.Controller(@This());
 const CallbackEntry = struct {
     id: usize,
@@ -1481,12 +1475,20 @@ const Futex = struct {
         std.Io.futexWake(io, u32, &self.value.raw, 1);
     }
 };
+const PathInfo = struct {
+    url: *String,
+    context: ?*Stream.Context = null,
+
+    pub fn deinit(self: *const @This()) void {
+        self.url.release();
+        if (self.context) |cxt| cxt.resource().release();
+    }
+};
+const EventLoopForScheduledTask = EventLoop(runScheduledTask);
 const CallDispatcher = @This();
-const fd_min = 0x00f0_0000;
-const fd_max = 0x00ff_ffff;
 
 pub threadlocal var trapping_syscalls: bool = true;
-pub threadlocal var event_loop: EventLoop(runScheduledTask) = .{};
+pub threadlocal var event_loop: EventLoopForScheduledTask = .{};
 
 threadlocal var thread_initialized: bool = false;
 threadlocal var in_main_thread: bool = false;
