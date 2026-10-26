@@ -230,7 +230,7 @@ foreach ($settings->versions as $version) {
             if (count($links) === 0) {
                 $dir_url = "https://downloads.php.net/~windows/releases/";
                 $dir_contents = file_get_contents($dir_url);
-                if (preg_match_all('/href="(php-devel\-pack\-(8\.\d)\.\d+-nts\-.*?\-x64\.zip)"/', $dir_contents, $matches, PREG_SET_ORDER)) {
+                if (preg_match_all('/href="(php-devel\-pack\-(8\.\d)\.\d+(.*?)-nts\-.*?\-x64\.zip)"/', $dir_contents, $matches, PREG_SET_ORDER)) {
                     foreach ($matches as $m) {
                         $links[$m[2]] = $dir_url . $m[1];
                     }
@@ -250,7 +250,6 @@ foreach ($settings->versions as $version) {
                     }
                 }
                 $links = array_merge($qa_links, $links);
-                print_r($links);
             }
             $link = $links[$version];
             if (!in_array('https', stream_get_wrappers())) {
